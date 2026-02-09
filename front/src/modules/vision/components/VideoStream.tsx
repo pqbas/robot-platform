@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { Video } from "lucide-react"
 
 type VideoStreamProps = {
   videoRef: React.RefObject<HTMLVideoElement | null>
@@ -20,8 +21,11 @@ export default function VideoStream({
         className="max-h-full max-w-full"
       />
       {!connected && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <p className="text-muted-foreground">Sin conexion</p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+          <Video className="text-muted-foreground size-10 opacity-40" />
+          <p className="text-muted-foreground text-sm">
+            Presiona <span className="font-medium text-foreground">Conectar</span> para iniciar la camara
+          </p>
         </div>
       )}
       {children}

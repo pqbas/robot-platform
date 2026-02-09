@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from "react"
 import { useBlocker } from "react-router-dom"
 import { toast } from "sonner"
+import { Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import type { MapLocation } from "@/types"
+import { getLocations } from "@/api/locations"
 import { useWebRTC } from "@/hooks/useWebRTC"
 import { useCounting } from "@/hooks/useCounting"
 import VideoStream from "./components/VideoStream"
 import ClassSelector from "./components/ClassSelector"
 import CountOverlay from "./components/CountOverlay"
+import CountingConfigDialog from "./components/CountingConfigDialog"
 import SaveDialog from "./components/SaveDialog"
 
 function formatDuration(start: Date | null): string {
@@ -26,6 +30,12 @@ export default function VisionPage() {
 
   const [selectedClass, setSelectedClass] = useState("person")
   const [durationStr, setDurationStr] = useState("0s")
+  const [locations, setLocations] = useState<MapLocation[]>([])
+  const [configOpen, setConfigOpen] = useState(false)
+
+  useEffect(() => {
+    getLocations().then(setLocations).catch(console.error)
+  }, [])
 
   const connected = connectionState === "connected"
   const isCounting = counting.state === "COUNTING"
@@ -66,13 +76,21 @@ export default function VisionPage() {
     return "0s"
   }, [counting.state, durationStr])
 
-  const handleStart = () => {
-    counting.startCounting(selectedClass)
+  const handleStart = async () => {
+    try {
+      await counting.startCounting(selectedClass)
+    } catch (e) {
+      toast.error("Error al iniciar conteo: " + (e instanceof Error ? e.message : "desconocido"))
+    }
   }
 
-  const handleStop = () => {
+  const handleStop = async () => {
     setDurationStr(formatDuration(counting.startTime))
-    counting.stopCounting()
+    try {
+      await counting.stopCounting()
+    } catch (e) {
+      toast.error("Error al detener conteo: " + (e instanceof Error ? e.message : "desconocido"))
+    }
   }
 
   const handleSave = async (camellon: string) => {
@@ -90,6 +108,7 @@ export default function VisionPage() {
         {isCounting && frameData && (
           <CountOverlay
             count={frameData.count}
+            sessionTotal={counting.sessionTotal}
             targetClass={selectedClass}
           />
         )}
@@ -107,15 +126,17 @@ export default function VisionPage() {
           </Button>
         )}
 
-        <Badge variant="outline">
-          {connected
-            ? "Conectado"
-            : connectionState === "connecting"
-              ? "Conectando"
-              : connectionState === "failed"
-                ? "Error"
-                : "Desconectado"}
-        </Badge>
+        {connected ? (
+          <Badge className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+            Conectado
+          </Badge>
+        ) : connectionState === "failed" ? (
+          <Badge variant="destructive">Error</Badge>
+        ) : connectionState === "connecting" ? (
+          <Badge variant="outline">Conectando</Badge>
+        ) : (
+          <Badge variant="outline">Desconectado</Badge>
+        )}
 
         {connected && (
           <>
@@ -143,12 +164,27 @@ export default function VisionPage() {
             )}
           </>
         )}
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="ml-auto"
+          onClick={() => setConfigOpen(true)}
+          disabled={isCounting}
+          title="Configuracion de conteo"
+          aria-label="Configuracion de conteo"
+        >
+          <Settings className="size-4" />
+        </Button>
       </div>
+
+      <CountingConfigDialog open={configOpen} onOpenChange={setConfigOpen} />
 
       <SaveDialog
         open={counting.state === "SAVING"}
-        lastFrameCount={counting.lastFrameCount}
+        totalCount={counting.sessionTotal}
         duration={savedDuration}
+        locations={locations}
         onSave={handleSave}
         onDiscard={counting.discard}
       />

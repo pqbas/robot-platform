@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react"
 import type { CountingState, FrameData } from "@/types"
 import { findOrCreateCamellon } from "@/api/camellones"
-import { startSession, stopSession } from "@/api/sessions"
+import { startCounting as apiStart, stopCounting as apiStop, saveSession } from "@/api/sessions"
 
 export type UseCountingReturn = {
   state: CountingState
@@ -9,8 +9,8 @@ export type UseCountingReturn = {
   lastFrameCount: number
   sessionTotal: number
   targetClass: string | null
-  startCounting: (targetClass: string) => void
-  stopCounting: () => void
+  startCounting: (targetClass: string) => Promise<void>
+  stopCounting: () => Promise<void>
   save: (camellon: string) => Promise<void>
   discard: () => void
   updateFrame: (data: FrameData) => void
@@ -24,8 +24,10 @@ export function useCounting(): UseCountingReturn {
   const [targetClass, setTargetClass] = useState<string | null>(null)
 
   const targetClassRef = useRef<string | null>(null)
+  const stopResultRef = useRef<{ total_count: number; target_class: string } | null>(null)
 
-  const startCounting = useCallback((cls: string) => {
+  const startCounting = useCallback(async (cls: string) => {
+    await apiStart(cls)
     setTargetClass(cls)
     targetClassRef.current = cls
     setStartTime(new Date())
@@ -34,18 +36,21 @@ export function useCounting(): UseCountingReturn {
     setState("COUNTING")
   }, [])
 
-  const stopCounting = useCallback(() => {
+  const stopCounting = useCallback(async () => {
+    const result = await apiStop()
+    stopResultRef.current = result
+    setSessionTotal(result.total_count)
     setState("SAVING")
   }, [])
 
   const save = useCallback(
     async (camellon: string) => {
       const cam = await findOrCreateCamellon(camellon)
-      const cls = targetClassRef.current ?? "person"
-      const sess = await startSession(cam.id, cls)
-      await stopSession()
-      // session saved with backend-tracked count
-      void sess
+      const result = stopResultRef.current
+      const cls = result?.target_class ?? targetClassRef.current ?? "person"
+      const total = result?.total_count ?? 0
+      await saveSession(cam.id, cls, total)
+      stopResultRef.current = null
       setState("IDLE")
       setStartTime(null)
       setTargetClass(null)
@@ -54,6 +59,7 @@ export function useCounting(): UseCountingReturn {
   )
 
   const discard = useCallback(() => {
+    stopResultRef.current = null
     setState("IDLE")
     setStartTime(null)
     setLastFrameCount(0)

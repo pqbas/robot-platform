@@ -36,3 +36,14 @@ export type Camellon = {
 export type CamellonGeoSummary = Camellon & {
   total_count: number
 }
+
+export type PolygonPoint = { lat: number; lng: number }
+
+export type MapLocation = {
+  id: number
+  label: string
+  lat: number
+  lng: number
+  zoom: number
+  polygon: PolygonPoint[] | null
+}
