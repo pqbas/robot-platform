@@ -6,6 +6,17 @@ class Base(DeclarativeBase):
     pass
 
 
+class Location(Base):
+    __tablename__ = "locations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lng: Mapped[float] = mapped_column(Float, nullable=False)
+    zoom: Mapped[int] = mapped_column(Integer, default=17)
+    polygon: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class Camellon(Base):
     __tablename__ = "camellones"
 

@@ -1,27 +1,61 @@
 import csv
 import io
 import logging
+from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.database import get_db
-from back.schemas import EventOut, SessionOut, SessionStart, SessionStopOut
+from back.schemas import (
+    CountingStartRequest,
+    CountingStatusOut,
+    CountingStopOut,
+    EventOut,
+    SessionOut,
+    SessionSave,
+)
 from back.services import storage
 from back.services.perception import counter
 
 logger = logging.getLogger("counting")
 
-router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+router = APIRouter(prefix="/api", tags=["sessions"])
 
 
-@router.get("", response_model=list[SessionOut])
-async def list_sessions(db: AsyncSession = Depends(get_db)):
-    return await storage.list_sessions(db)
+# --- Live counting (in-memory, no DB) ---
 
 
-@router.get("/{session_id}", response_model=SessionOut)
+@router.post("/counting/start", response_model=CountingStatusOut)
+async def start_counting(body: CountingStartRequest):
+    if counter.is_session_active():
+        raise HTTPException(409, "Counting is already active")
+    counter.start_counting(body.target_class)
+    return CountingStatusOut(active=True, target_class=body.target_class)
+
+
+@router.post("/counting/stop", response_model=CountingStopOut)
+async def stop_counting():
+    if not counter.is_session_active():
+        raise HTTPException(409, "No counting is active")
+    total_count, target_class = counter.stop_counting()
+    return CountingStopOut(total_count=total_count, target_class=target_class)
+
+
+# --- Sessions (DB persistence) ---
+
+
+@router.get("/sessions", response_model=list[SessionOut])
+async def list_sessions(
+    date_from: date | None = Query(None, alias="from"),
+    date_to: date | None = Query(None, alias="to"),
+    db: AsyncSession = Depends(get_db),
+):
+    return await storage.list_sessions(db, date_from, date_to)
+
+
+@router.get("/sessions/{session_id}", response_model=SessionOut)
 async def get_session(session_id: int, db: AsyncSession = Depends(get_db)):
     sess = await storage.get_session(db, session_id)
     if sess is None:
@@ -29,7 +63,7 @@ async def get_session(session_id: int, db: AsyncSession = Depends(get_db)):
     return sess
 
 
-@router.get("/{session_id}/events", response_model=list[EventOut])
+@router.get("/sessions/{session_id}/events", response_model=list[EventOut])
 async def get_session_events(session_id: int, db: AsyncSession = Depends(get_db)):
     sess = await storage.get_session(db, session_id)
     if sess is None:
@@ -37,7 +71,7 @@ async def get_session_events(session_id: int, db: AsyncSession = Depends(get_db)
     return await storage.get_session_events(db, session_id)
 
 
-@router.get("/{session_id}/export")
+@router.get("/sessions/{session_id}/export")
 async def export_session_csv(session_id: int, db: AsyncSession = Depends(get_db)):
     sess = await storage.get_session(db, session_id)
     if sess is None:
@@ -58,31 +92,13 @@ async def export_session_csv(session_id: int, db: AsyncSession = Depends(get_db)
     )
 
 
-@router.post("/start", response_model=SessionOut)
-async def start_session(body: SessionStart, db: AsyncSession = Depends(get_db)):
-    if counter.is_session_active():
-        raise HTTPException(409, "A counting session is already active")
-
+@router.post("/sessions/save", response_model=SessionOut)
+async def save_session(body: SessionSave, db: AsyncSession = Depends(get_db)):
+    """Create a completed session record in the DB."""
     cam = await storage.get_camellon(db, body.camellon_id)
     if cam is None:
         raise HTTPException(404, "Camellon not found")
-
-    sess = await storage.create_session(db, body.camellon_id, body.target_class)
-    counter.start_session(sess.id, body.camellon_id, body.target_class)
-    return sess
-
-
-@router.post("/stop", response_model=SessionStopOut)
-async def stop_session(db: AsyncSession = Depends(get_db)):
-    if not counter.is_session_active():
-        raise HTTPException(409, "No counting session is active")
-
-    session_id, total_count = counter.stop_session()
-    sess = await storage.finish_session(db, session_id, total_count)
-    if sess is None:
-        raise HTTPException(500, "Session record not found in database")
-    return SessionStopOut(
-        id=sess.id,
-        total_count=sess.total_count,
-        end_time=sess.end_time,
+    sess = await storage.create_completed_session(
+        db, body.camellon_id, body.target_class, body.total_count
     )
+    return sess
