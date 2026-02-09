@@ -1,0 +1,19 @@
+[project]
+name = "robot-platform"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "opencv-python>=4.13.0.90",
+    "requests>=2.32.5",
+    "pyzed @ https://download.stereolabs.com/zedsdk/5.1/whl/linux_x86_64/pyzed-5.1-cp313-cp313-linux_x86_64.whl",
+    "aiortc>=1.14.0",
+    "aiohttp>=3.13.3",
+    "fastapi>=0.128.0",
+    "uvicorn>=0.40.0",
+    "ultralytics>=8.4.11",
+    "aiosqlite>=0.22.1",
+    "sqlalchemy>=2.0.46",
+    "alembic>=1.18.3",
+]

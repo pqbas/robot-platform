@@ -1,0 +1,83 @@
+import { useCallback, useRef, useState } from "react"
+import type { CountingState, FrameData } from "@/types"
+import { findOrCreateCamellon } from "@/api/camellones"
+import { startSession, stopSession } from "@/api/sessions"
+
+export type UseCountingReturn = {
+  state: CountingState
+  startTime: Date | null
+  lastFrameCount: number
+  sessionTotal: number
+  targetClass: string | null
+  startCounting: (targetClass: string) => void
+  stopCounting: () => void
+  save: (camellon: string) => Promise<void>
+  discard: () => void
+  updateFrame: (data: FrameData) => void
+}
+
+export function useCounting(): UseCountingReturn {
+  const [state, setState] = useState<CountingState>("IDLE")
+  const [startTime, setStartTime] = useState<Date | null>(null)
+  const [lastFrameCount, setLastFrameCount] = useState(0)
+  const [sessionTotal, setSessionTotal] = useState(0)
+  const [targetClass, setTargetClass] = useState<string | null>(null)
+
+  const targetClassRef = useRef<string | null>(null)
+
+  const startCounting = useCallback((cls: string) => {
+    setTargetClass(cls)
+    targetClassRef.current = cls
+    setStartTime(new Date())
+    setLastFrameCount(0)
+    setSessionTotal(0)
+    setState("COUNTING")
+  }, [])
+
+  const stopCounting = useCallback(() => {
+    setState("SAVING")
+  }, [])
+
+  const save = useCallback(
+    async (camellon: string) => {
+      const cam = await findOrCreateCamellon(camellon)
+      const cls = targetClassRef.current ?? "person"
+      const sess = await startSession(cam.id, cls)
+      await stopSession()
+      // session saved with backend-tracked count
+      void sess
+      setState("IDLE")
+      setStartTime(null)
+      setTargetClass(null)
+    },
+    [],
+  )
+
+  const discard = useCallback(() => {
+    setState("IDLE")
+    setStartTime(null)
+    setLastFrameCount(0)
+    setSessionTotal(0)
+    setTargetClass(null)
+  }, [])
+
+  const updateFrame = useCallback((data: FrameData) => {
+    setLastFrameCount(data.count)
+    if (data.session_active) {
+      setSessionTotal(data.session_total)
+    }
+  }, [])
+
+  return {
+    state,
+    startTime,
+    lastFrameCount,
+    sessionTotal,
+    targetClass,
+    startCounting,
+    stopCounting,
+    save,
+    discard,
+    updateFrame,
+  }
+}

@@ -1,0 +1,30 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+*.pt
+
+# Frontend
+front/node_modules/
+front/dist/
+front/.vite/
+
+# Environment variables
+.env
+front/.env
+
+# Database
+*.db
+
+# Claude/agents config
+.agents/
+.claude/
+
+# Misc
+hello.py
