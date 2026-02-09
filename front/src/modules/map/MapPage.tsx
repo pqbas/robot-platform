@@ -1,54 +1,105 @@
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-import type { CamellonGeoSummary } from "@/types"
-import { getGeoSummary, updateLocation } from "@/api/camellones"
+import type { Session, Camellon, MapLocation, PolygonPoint } from "@/types"
+import { getCamellones } from "@/api/camellones"
+import { getSessions } from "@/api/sessions"
+import {
+  getLocations,
+  createLocation,
+  deleteLocation,
+  updateLocationPolygon,
+} from "@/api/locations"
 import GoogleMap from "./components/GoogleMap"
-import InfoPanel from "./components/InfoPanel"
-import UnlocatedList from "./components/UnlocatedList"
+import SidePanel from "./components/SidePanel"
 
 export default function MapPage() {
-  const [camellones, setCamellones] = useState<CamellonGeoSummary[]>([])
-  const [selected, setSelected] = useState<CamellonGeoSummary | null>(null)
-  const [locatingId, setLocatingId] = useState<number | null>(null)
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [camellones, setCamellones] = useState<Map<number, Camellon>>(new Map())
+  const [locations, setLocations] = useState<MapLocation[]>([])
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null)
+  const [locationFilter, setLocationFilter] = useState<string>("all")
   const [loading, setLoading] = useState(true)
+  const [dateFrom, setDateFrom] = useState<string | null>(null)
+  const [dateTo, setDateTo] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
+  const loadBase = useCallback(async () => {
     try {
-      const data = await getGeoSummary()
-      setCamellones(data)
+      const [camData, locData] = await Promise.all([
+        getCamellones(),
+        getLocations(),
+      ])
+      setCamellones(new Map(camData.map((c) => [c.id, c])))
+      setLocations(locData)
     } catch (e) {
-      console.error("Error loading geo summary:", e)
+      console.error("Error loading map data:", e)
     } finally {
       setLoading(false)
     }
   }, [])
 
+  const loadSessions = useCallback(async () => {
+    try {
+      const params: { from?: string; to?: string } = {}
+      if (dateFrom) params.from = dateFrom
+      if (dateTo) params.to = dateTo
+      const sessData = await getSessions(params)
+      setSessions(sessData)
+    } catch (e) {
+      console.error("Error loading sessions:", e)
+    }
+  }, [dateFrom, dateTo])
+
   useEffect(() => {
-    load()
-  }, [load])
+    loadBase()
+  }, [loadBase])
 
-  const unlocated = camellones.filter((c) => c.lat == null || c.lng == null)
+  useEffect(() => {
+    loadSessions()
+  }, [loadSessions])
 
-  const handleMarkerClick = useCallback((c: CamellonGeoSummary) => {
-    setSelected(c)
-  }, [])
-
-  const handleMapClick = useCallback(
-    async (lat: number, lng: number) => {
-      if (locatingId == null) return
+  const handleSaveLocation = useCallback(
+    async (label: string, lat: number, lng: number, zoom: number, polygon?: PolygonPoint[] | null) => {
       try {
-        await updateLocation(locatingId, lat, lng)
-        toast.success("Ubicacion asignada")
-        setLocatingId(null)
-        load()
+        const loc = await createLocation({ label, lat, lng, zoom, polygon })
+        setLocations((prev) => [...prev, loc])
+        toast.success("Ubicacion guardada")
       } catch (e) {
         toast.error(
-          "Error al asignar ubicacion: " +
+          "Error al guardar ubicacion: " +
             (e instanceof Error ? e.message : "desconocido"),
         )
       }
     },
-    [locatingId, load],
+    [],
+  )
+
+  const handleDeleteLocation = useCallback(async (id: number) => {
+    try {
+      await deleteLocation(id)
+      setLocations((prev) => prev.filter((l) => l.id !== id))
+      toast.success("Ubicacion eliminada")
+    } catch (e) {
+      toast.error(
+        "Error al eliminar ubicacion: " +
+          (e instanceof Error ? e.message : "desconocido"),
+      )
+    }
+  }, [])
+
+  const handleUpdatePolygon = useCallback(
+    async (id: number, polygon: PolygonPoint[] | null) => {
+      try {
+        const updated = await updateLocationPolygon(id, polygon)
+        setLocations((prev) => prev.map((l) => (l.id === id ? updated : l)))
+        toast.success("Poligono actualizado")
+      } catch (e) {
+        toast.error(
+          "Error al actualizar poligono: " +
+            (e instanceof Error ? e.message : "desconocido"),
+        )
+      }
+    },
+    [],
   )
 
   if (loading) {
@@ -60,29 +111,40 @@ export default function MapPage() {
   }
 
   return (
-    <div className="relative flex flex-1">
-      <GoogleMap
-        camellones={camellones}
-        locatingId={locatingId}
-        onMarkerClick={handleMarkerClick}
-        onMapClick={handleMapClick}
-      />
+    <div className="flex flex-1">
+      {/* Left: Map */}
+      <div className="relative flex-1">
+        <GoogleMap
+          locations={locations}
+          activeLocationId={
+            locationFilter !== "all"
+              ? locations.find((l) => l.label === locationFilter)?.id ?? null
+              : null
+          }
+          onSaveLocation={handleSaveLocation}
+          onDeleteLocation={handleDeleteLocation}
+          onUpdatePolygon={handleUpdatePolygon}
+        />
+      </div>
 
-      {selected && (
-        <InfoPanel camellon={selected} onClose={() => setSelected(null)} />
-      )}
-
-      <UnlocatedList
-        camellones={unlocated}
-        locatingId={locatingId}
-        onLocate={setLocatingId}
-      />
-
-      {locatingId != null && (
-        <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">
-          Haz click en el mapa para ubicar el camellon
-        </div>
-      )}
+      {/* Right: Side Panel */}
+      <div className="w-1/2 shrink-0">
+        <SidePanel
+          sessions={sessions}
+          camellones={camellones}
+          locations={locations}
+          locationFilter={locationFilter}
+          onLocationFilterChange={setLocationFilter}
+          selectedSession={selectedSession}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onSelectSession={setSelectedSession}
+          onDateChange={(from, to) => {
+            setDateFrom(from)
+            setDateTo(to)
+          }}
+        />
+      </div>
     </div>
   )
 }
