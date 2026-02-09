@@ -54,13 +54,13 @@ class CameraStreamTrack(VideoStreamTrack):
             session = counter.get_active_session()
             target_class = session.target_class if session else None
 
-            annotated, detections, count = await loop.run_in_executor(
+            annotated, detections, count, results_raw = await loop.run_in_executor(
                 None, detector.detect, left, target_class
             )
             left = annotated
 
             if session is not None:
-                counter.update(count)
+                counter.update(results_raw)
 
             # send detections over data channel
             if self._data_channel is not None:

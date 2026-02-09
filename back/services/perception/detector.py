@@ -17,13 +17,14 @@ def get_class_names() -> list[str]:
 
 def detect(
     frame: np.ndarray, target_class: str | None = None
-) -> tuple[np.ndarray, list[dict], int]:
-    """Run YOLO on *frame* and return (annotated_frame, detections, count).
+) -> tuple[np.ndarray, list[dict], int, list]:
+    """Run YOLO tracking on *frame*.
 
-    If *target_class* is given, *count* only reflects objects of that class.
-    *detections* always contains every detected object.
+    Returns (annotated_frame, detections, count, results_raw).
+    *results_raw* is the raw YOLO result list for ObjectCounter.
     """
-    results = model(frame, verbose=False)
+    conf = config.counting.confidence_threshold
+    results = model.track(frame, conf=conf, persist=True, verbose=False)
     result = results[0]
     annotated = result.plot()
 
@@ -33,18 +34,22 @@ def detect(
     for box in result.boxes:
         cls_id = int(box.cls[0])
         cls_name = model.names[cls_id]
-        conf = float(box.conf[0])
+        box_conf = float(box.conf[0])
         xyxy = box.xyxy[0].tolist()
+
+        track_id = None
+        if box.id is not None:
+            track_id = int(box.id[0])
 
         det = {
             "class_name": cls_name,
-            "confidence": round(conf, 3),
+            "confidence": round(box_conf, 3),
             "bbox": [round(v, 1) for v in xyxy],
-            "track_id": None,
+            "track_id": track_id,
         }
         detections.append(det)
 
         if target_class is None or cls_name == target_class:
             count += 1
 
-    return annotated, detections, count
+    return annotated, detections, count, results

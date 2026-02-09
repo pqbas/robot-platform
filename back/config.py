@@ -28,9 +28,18 @@ class ServerConfig:
 
 
 @dataclass
+class CountingConfig:
+    count_mode: str = "vertical"        # "vertical" | "horizontal"
+    threshold: int = 360                # position in px of the counting line
+    direction: str = "top2down"         # "top2down" | "down2top" | "left2right" | "right2left"
+    confidence_threshold: float = 0.5
+
+
+@dataclass
 class Config:
     camera: CameraConfig = field(default_factory=CameraConfig)
     perception: PerceptionConfig = field(default_factory=PerceptionConfig)
+    counting: CountingConfig = field(default_factory=CountingConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
 
