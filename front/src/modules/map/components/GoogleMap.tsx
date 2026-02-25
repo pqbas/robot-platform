@@ -340,11 +340,6 @@ export default function GoogleMap({
     setDrawingMode(null)
   }
 
-  function handleDelete(e: React.MouseEvent, id: number) {
-    e.stopPropagation()
-    onDeleteLocation(id)
-  }
-
   const currentLoc = items.find((l) => String(l.id) === selectedLocation)
   const canEditPolygon = currentLoc && currentLoc.id > 0 && drawingMode === null
 
@@ -361,8 +356,8 @@ export default function GoogleMap({
       </div>
 
       {apiKey && (
-        <Card className="absolute top-4 left-4 z-10 p-3">
-          <p className="mb-1.5 text-sm font-medium">Ubicacion</p>
+        <Card className="absolute top-4 left-4 z-10 gap-2 p-3">
+          <p className="mb-0 text-sm font-medium">Ubicacion</p>
           <div className="flex items-center gap-1.5">
             <Select value={selectedLocation} onValueChange={handleLocationChange}>
               <SelectTrigger className="h-8 w-48 text-xs">
@@ -371,17 +366,7 @@ export default function GoogleMap({
               <SelectContent>
                 {items.map((loc) => (
                   <SelectItem key={loc.id} value={String(loc.id)} className="text-xs">
-                    <span className="flex w-full items-center justify-between gap-2">
-                      {loc.label}
-                      {loc.id > 0 && (
-                        <button
-                          className="ml-2 text-muted-foreground hover:text-destructive"
-                          onClick={(e) => handleDelete(e, loc.id)}
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </span>
+                    {loc.label}
                   </SelectItem>
                 ))}
               </SelectContent>
