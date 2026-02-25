@@ -21,7 +21,7 @@ export default function ClassSelector({
 }: ClassSelectorProps) {
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className="w-40">
+      <SelectTrigger className="w-32 md:w-40">
         <SelectValue placeholder="Clase" />
       </SelectTrigger>
       <SelectContent>

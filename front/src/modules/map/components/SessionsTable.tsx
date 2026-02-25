@@ -58,7 +58,7 @@ export default function SessionsTable({
             <TableRow>
               <TableHead>Camellon</TableHead>
               <TableHead>Fecha</TableHead>
-              <TableHead>Clase</TableHead>
+              <TableHead className="hidden md:table-cell">Clase</TableHead>
               <TableHead className="text-right">Conteo</TableHead>
             </TableRow>
           </TableHeader>
@@ -76,8 +76,8 @@ export default function SessionsTable({
                 <TableCell>
                   {camellones.get(s.camellon_id)?.nombre ?? `#${s.camellon_id}`}
                 </TableCell>
-                <TableCell>{formatDate(s.start_time)}</TableCell>
-                <TableCell>
+                <TableCell className="whitespace-nowrap">{formatDate(s.start_time)}</TableCell>
+                <TableCell className="hidden md:table-cell">
                   <Badge variant="outline">{s.target_class}</Badge>
                 </TableCell>
                 <TableCell className="text-right">{s.total_count}</TableCell>

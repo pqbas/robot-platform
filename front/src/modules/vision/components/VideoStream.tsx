@@ -13,7 +13,7 @@ export default function VideoStream({
   children,
 }: VideoStreamProps) {
   return (
-    <div className="relative flex flex-1 items-center justify-center bg-black">
+    <div className="relative flex min-h-0 flex-1 items-center justify-center bg-black">
       <video
         ref={videoRef}
         autoPlay

@@ -9,6 +9,7 @@ from back.database import close_db, init_db
 from back.routes.camellones import router as camellones_router
 from back.routes.config_routes import router as config_router
 from back.routes.counting import router as counting_router
+from back.routes.dashboard import router as dashboard_router
 from back.routes.locations import router as locations_router
 from back.routes.stream import router as stream_router
 from back.services.camera import close_all_connections
@@ -39,6 +40,7 @@ app.include_router(counting_router)
 app.include_router(camellones_router)
 app.include_router(locations_router)
 app.include_router(config_router)
+app.include_router(dashboard_router)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8080)

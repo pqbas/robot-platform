@@ -115,7 +115,7 @@ export default function SidePanel({
         </div>
 
         {/* Filters */}
-        <div className="mb-4 flex items-end gap-1.5">
+        <div className="mb-4 grid grid-cols-2 gap-1.5 md:flex md:items-end">
           <div className="min-w-0 flex-1 space-y-0.5">
             <Label className="text-xs text-muted-foreground">Ubicacion</Label>
             <Select value={locationFilter} onValueChange={onLocationFilterChange}>

@@ -111,9 +111,9 @@ export default function MapPage() {
   }
 
   return (
-    <div className="flex flex-1">
+    <div className="flex flex-1 flex-col md:flex-row">
       {/* Left: Map */}
-      <div className="relative flex-1">
+      <div className="relative h-[40vh] md:h-auto md:flex-1">
         <GoogleMap
           locations={locations}
           activeLocationId={
@@ -128,7 +128,7 @@ export default function MapPage() {
       </div>
 
       {/* Right: Side Panel */}
-      <div className="w-1/2 shrink-0">
+      <div className="min-h-0 flex-1 md:w-1/2 md:flex-none md:shrink-0">
         <SidePanel
           sessions={sessions}
           camellones={camellones}

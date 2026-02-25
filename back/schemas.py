@@ -164,3 +164,36 @@ class LocationOut(BaseModel):
         if isinstance(v, str):
             return json.loads(v)
         return v
+
+
+# --- Dashboard ---
+
+
+class DashboardKPIs(BaseModel):
+    total_count: int
+    session_count: int
+    camellon_count: int
+    avg_per_session: float
+
+
+class DailyTrendItem(BaseModel):
+    date: str
+    count: int
+
+
+class CamellonBreakdownItem(BaseModel):
+    camellon_id: int
+    nombre: str
+    count: int
+
+
+class ClassBreakdownItem(BaseModel):
+    target_class: str
+    count: int
+
+
+class DashboardStatsOut(BaseModel):
+    kpis: DashboardKPIs
+    daily_trend: list[DailyTrendItem]
+    by_camellon: list[CamellonBreakdownItem]
+    by_class: list[ClassBreakdownItem]

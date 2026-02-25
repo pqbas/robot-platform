@@ -11,6 +11,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,
     proxy: {
       "/offer": "http://localhost:8080",
       "/toggle_processing": "http://localhost:8080",

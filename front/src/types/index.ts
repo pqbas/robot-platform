@@ -47,3 +47,35 @@ export type MapLocation = {
   zoom: number
   polygon: PolygonPoint[] | null
 }
+
+// --- Dashboard ---
+
+export type DashboardKPIs = {
+  total_count: number
+  session_count: number
+  camellon_count: number
+  avg_per_session: number
+}
+
+export type DailyTrendItem = {
+  date: string
+  count: number
+}
+
+export type CamellonBreakdownItem = {
+  camellon_id: number
+  nombre: string
+  count: number
+}
+
+export type ClassBreakdownItem = {
+  target_class: string
+  count: number
+}
+
+export type DashboardStats = {
+  kpis: DashboardKPIs
+  daily_trend: DailyTrendItem[]
+  by_camellon: CamellonBreakdownItem[]
+  by_class: ClassBreakdownItem[]
+}

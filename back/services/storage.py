@@ -242,3 +242,95 @@ async def save_event(
     db.add(ev)
     await db.flush()
     return ev
+
+
+# --- Dashboard ---
+
+
+async def get_dashboard_stats(
+    db: AsyncSession,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    target_class: str | None = None,
+    camellon_id: int | None = None,
+) -> dict:
+    """Return KPIs + trend + breakdowns for the dashboard."""
+
+    # Base filter applied to all queries
+    def _apply_filters(stmt):  # noqa: ANN001, ANN202
+        if date_from:
+            stmt = stmt.where(Session.start_time >= date_from.isoformat())
+        if date_to:
+            stmt = stmt.where(Session.start_time <= date_to.isoformat() + "T23:59:59")
+        if target_class:
+            stmt = stmt.where(Session.target_class == target_class)
+        if camellon_id:
+            stmt = stmt.where(Session.camellon_id == camellon_id)
+        return stmt
+
+    # 1) KPIs
+    kpi_stmt = _apply_filters(
+        select(
+            func.coalesce(func.sum(Session.total_count), 0).label("total_count"),
+            func.count(Session.id).label("session_count"),
+            func.count(func.distinct(Session.camellon_id)).label("camellon_count"),
+        )
+    )
+    kpi_row = (await db.execute(kpi_stmt)).one()
+    avg = (
+        round(kpi_row.total_count / kpi_row.session_count, 1)
+        if kpi_row.session_count
+        else 0.0
+    )
+
+    # 2) Daily trend (aggregate by date substring of start_time)
+    date_col = func.substr(Session.start_time, 1, 10).label("date")
+    trend_stmt = _apply_filters(
+        select(date_col, func.sum(Session.total_count).label("count"))
+        .group_by(date_col)
+        .order_by(date_col)
+    )
+    trend_rows = (await db.execute(trend_stmt)).all()
+
+    # 3) By camellon
+    cam_stmt = _apply_filters(
+        select(
+            Camellon.id.label("camellon_id"),
+            Camellon.nombre,
+            func.coalesce(func.sum(Session.total_count), 0).label("count"),
+        )
+        .join(Camellon, Session.camellon_id == Camellon.id)
+        .group_by(Camellon.id)
+        .order_by(func.sum(Session.total_count).desc())
+    )
+    cam_rows = (await db.execute(cam_stmt)).all()
+
+    # 4) By class
+    cls_stmt = _apply_filters(
+        select(
+            Session.target_class,
+            func.sum(Session.total_count).label("count"),
+        )
+        .group_by(Session.target_class)
+        .order_by(func.sum(Session.total_count).desc())
+    )
+    cls_rows = (await db.execute(cls_stmt)).all()
+
+    return {
+        "kpis": {
+            "total_count": kpi_row.total_count,
+            "session_count": kpi_row.session_count,
+            "camellon_count": kpi_row.camellon_count,
+            "avg_per_session": avg,
+        },
+        "daily_trend": [
+            {"date": r.date, "count": r.count} for r in trend_rows
+        ],
+        "by_camellon": [
+            {"camellon_id": r.camellon_id, "nombre": r.nombre, "count": r.count}
+            for r in cam_rows
+        ],
+        "by_class": [
+            {"target_class": r.target_class, "count": r.count} for r in cls_rows
+        ],
+    }

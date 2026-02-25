@@ -103,7 +103,7 @@ export default function VisionPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col md:h-auto md:flex-1">
       <VideoStream videoRef={videoRef} connected={connected}>
         {isCounting && frameData && (
           <CountOverlay
@@ -114,7 +114,7 @@ export default function VisionPage() {
         )}
       </VideoStream>
 
-      <div className="flex items-center gap-3 border-t px-4 py-3">
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-t px-4 py-3">
         {/* Connection controls */}
         {connectionState === "disconnected" || connectionState === "failed" ? (
           <Button onClick={connect}>Conectar</Button>
@@ -140,7 +140,7 @@ export default function VisionPage() {
 
         {connected && (
           <>
-            <Separator orientation="vertical" className="h-6" />
+            <Separator orientation="vertical" className="hidden h-6 md:block" />
 
             <ClassSelector
               value={selectedClass}

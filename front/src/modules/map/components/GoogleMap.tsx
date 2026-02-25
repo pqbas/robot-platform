@@ -360,7 +360,7 @@ export default function GoogleMap({
           <p className="mb-0 text-sm font-medium">Ubicacion</p>
           <div className="flex items-center gap-1.5">
             <Select value={selectedLocation} onValueChange={handleLocationChange}>
-              <SelectTrigger className="h-8 w-48 text-xs">
+              <SelectTrigger className="h-8 w-36 text-xs md:w-48">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
