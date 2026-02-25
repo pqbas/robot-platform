@@ -93,9 +93,9 @@ export default function SidePanel({
 
   return (
     <div className="flex h-full flex-col overflow-hidden border-l">
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex min-h-0 flex-1 flex-col p-4">
         {/* Header */}
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <h3 className="text-sm font-semibold">
             Sesiones
             <span className="ml-1.5 text-xs font-normal text-muted-foreground">
@@ -115,71 +115,71 @@ export default function SidePanel({
         </div>
 
         {/* Filters */}
-        <div className="mb-4 rounded-lg border bg-muted/40 p-3">
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Ubicacion</Label>
-              <Select value={locationFilter} onValueChange={onLocationFilterChange}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.label}>
-                      {loc.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="mb-4 flex items-end gap-1.5">
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <Label className="text-xs text-muted-foreground">Ubicacion</Label>
+            <Select value={locationFilter} onValueChange={onLocationFilterChange}>
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {locations.map((loc) => (
+                  <SelectItem key={loc.id} value={loc.label}>
+                    {loc.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Clase</Label>
-              <Select value={classFilter} onValueChange={setClassFilter}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {targetClasses.map((cls) => (
-                    <SelectItem key={cls} value={cls}>
-                      {cls}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <Label className="text-xs text-muted-foreground">Clase</Label>
+            <Select value={classFilter} onValueChange={setClassFilter}>
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {targetClasses.map((cls) => (
+                  <SelectItem key={cls} value={cls}>
+                    {cls}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Desde</Label>
-              <Input
-                type="date"
-                className="h-8 text-xs"
-                value={dateFrom ?? ""}
-                onChange={(e) => onDateChange(e.target.value || null, dateTo)}
-              />
-            </div>
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <Label className="text-xs text-muted-foreground">Desde</Label>
+            <Input
+              type="date"
+              className="h-7 text-xs"
+              value={dateFrom ?? ""}
+              onChange={(e) => onDateChange(e.target.value || null, dateTo)}
+            />
+          </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Hasta</Label>
-              <Input
-                type="date"
-                className="h-8 text-xs"
-                value={dateTo ?? ""}
-                onChange={(e) => onDateChange(dateFrom, e.target.value || null)}
-              />
-            </div>
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <Label className="text-xs text-muted-foreground">Hasta</Label>
+            <Input
+              type="date"
+              className="h-7 text-xs"
+              value={dateTo ?? ""}
+              onChange={(e) => onDateChange(dateFrom, e.target.value || null)}
+            />
           </div>
         </div>
 
         {/* Table */}
-        <SessionsTable
-          sessions={filteredSessions}
-          camellones={camellones}
-          selectedId={selectedSession?.id ?? null}
-          onSelect={onSelectSession}
-        />
+        <div className="min-h-0 flex-1">
+          <SessionsTable
+            sessions={filteredSessions}
+            camellones={camellones}
+            selectedId={selectedSession?.id ?? null}
+            onSelect={onSelectSession}
+          />
+        </div>
       </div>
 
       {selectedSession && (
