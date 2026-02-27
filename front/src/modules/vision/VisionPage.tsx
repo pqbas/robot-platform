@@ -4,7 +4,6 @@ import { toast } from "sonner"
 import { Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import type { MapLocation } from "@/types"
 import { getLocations } from "@/api/locations"
 import { useWebRTC } from "@/hooks/useWebRTC"
@@ -104,67 +103,13 @@ export default function VisionPage() {
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col md:h-auto md:flex-1">
-      <VideoStream videoRef={videoRef} connected={connected}>
-        {isCounting && frameData && (
-          <CountOverlay
-            count={frameData.count}
-            sessionTotal={counting.sessionTotal}
-            targetClass={selectedClass}
-          />
-        )}
-      </VideoStream>
-
-      <div className="flex shrink-0 flex-wrap items-center gap-3 border-t px-4 py-3">
-        {/* Connection controls */}
-        {connectionState === "disconnected" || connectionState === "failed" ? (
-          <Button onClick={connect}>Conectar</Button>
-        ) : connectionState === "connecting" ? (
-          <Button disabled>Conectando...</Button>
-        ) : (
-          <Button variant="destructive" onClick={disconnect}>
-            Desconectar
-          </Button>
-        )}
-
-        {connected ? (
-          <Badge className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
-            Conectado
-          </Badge>
-        ) : connectionState === "failed" ? (
-          <Badge variant="destructive">Error</Badge>
-        ) : connectionState === "connecting" ? (
-          <Badge variant="outline">Conectando</Badge>
-        ) : (
-          <Badge variant="outline">Desconectado</Badge>
-        )}
-
-        {connected && (
-          <>
-            <Separator orientation="vertical" className="hidden h-6 md:block" />
-
-            <ClassSelector
-              value={selectedClass}
-              onChange={setSelectedClass}
-              disabled={isCounting}
-            />
-
-            {counting.state === "IDLE" && (
-              <Button onClick={handleStart}>Iniciar conteo</Button>
-            )}
-
-            {isCounting && (
-              <>
-                <Button variant="destructive" onClick={handleStop}>
-                  Detener conteo
-                </Button>
-                <Badge variant="secondary">
-                  {durationStr}
-                </Badge>
-              </>
-            )}
-          </>
-        )}
-
+      {/* Config bar: class selector + settings */}
+      <div className="flex shrink-0 items-center gap-3 border-b px-4 py-2">
+        <ClassSelector
+          value={selectedClass}
+          onChange={setSelectedClass}
+          disabled={isCounting}
+        />
         <Button
           variant="ghost"
           size="icon"
@@ -176,6 +121,44 @@ export default function VisionPage() {
         >
           <Settings className="size-4" />
         </Button>
+      </div>
+
+      <VideoStream videoRef={videoRef} connected={connected}>
+        {isCounting && frameData && (
+          <CountOverlay
+            count={frameData.count}
+            sessionTotal={counting.sessionTotal}
+            targetClass={selectedClass}
+          />
+        )}
+      </VideoStream>
+
+      {/* Action bar: connect + counting controls */}
+      <div className="flex shrink-0 items-center gap-3 border-t px-4 py-3">
+        {connectionState === "disconnected" || connectionState === "failed" ? (
+          <Button onClick={connect}>Conectar</Button>
+        ) : connectionState === "connecting" ? (
+          <Button disabled>Conectando...</Button>
+        ) : (
+          <Button variant="destructive" onClick={disconnect}>
+            Desconectar
+          </Button>
+        )}
+
+        {connected && counting.state === "IDLE" && (
+          <Button onClick={handleStart}>Iniciar conteo</Button>
+        )}
+
+        {connected && isCounting && (
+          <>
+            <Button variant="destructive" onClick={handleStop}>
+              Detener conteo
+            </Button>
+            <Badge variant="secondary">
+              {durationStr}
+            </Badge>
+          </>
+        )}
       </div>
 
       <CountingConfigDialog open={configOpen} onOpenChange={setConfigOpen} />
