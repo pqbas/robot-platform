@@ -50,17 +50,16 @@ class CameraStreamTrack(VideoStreamTrack):
         crop = config.camera.crop_width
         left = frame[:, :crop] if crop > 0 else frame
 
-        if detector.enabled:
-            session = counter.get_active_session()
-            target_class = session.target_class if session else None
+        session = counter.get_active_session()
+
+        if detector.enabled and session is not None:
+            target_class = session.target_class
 
             annotated, detections, count, results_raw = await loop.run_in_executor(
                 None, detector.detect, left, target_class
             )
             left = annotated
-
-            if session is not None:
-                counter.update(results_raw)
+            counter.update(results_raw)
 
             # send detections over data channel
             if self._data_channel is not None:
@@ -68,12 +67,12 @@ class CameraStreamTrack(VideoStreamTrack):
                     if self._data_channel.readyState == "open":
                         payload = FrameDetectionPayload(
                             count=count,
-                            target_class=target_class or config.perception.default_target_class,
+                            target_class=target_class,
                             detections=[
                                 DetectionItem(**d) for d in detections
                             ],
-                            session_active=session is not None,
-                            session_total=session.last_frame_count if session else 0,
+                            session_active=True,
+                            session_total=session.last_frame_count,
                         )
                         self._data_channel.send(payload.model_dump_json())
                 except Exception:
