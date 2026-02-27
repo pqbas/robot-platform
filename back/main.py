@@ -13,12 +13,14 @@ from back.routes.dashboard import router as dashboard_router
 from back.routes.locations import router as locations_router
 from back.routes.stream import router as stream_router
 from back.services.camera import close_all_connections
+from back.services.nvenc_init import init_nvenc
 
 logging.basicConfig(level=logging.INFO)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_nvenc()
     await init_db()
     yield
     await close_all_connections()
