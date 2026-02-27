@@ -76,7 +76,7 @@ export default function SessionsTable({
                 <TableCell>
                   {camellones.get(s.camellon_id)?.nombre ?? `#${s.camellon_id}`}
                 </TableCell>
-                <TableCell className="whitespace-nowrap">{formatDate(s.start_time)}</TableCell>
+                <TableCell>{formatDate(s.start_time)}</TableCell>
                 <TableCell className="hidden md:table-cell">
                   <Badge variant="outline">{s.target_class}</Badge>
                 </TableCell>

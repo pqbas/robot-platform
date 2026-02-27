@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
+import { MapIcon, List } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import type { Session, Camellon, MapLocation, PolygonPoint } from "@/types"
 import { getCamellones } from "@/api/camellones"
 import { getSessions } from "@/api/sessions"
@@ -21,6 +23,7 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true)
   const [dateFrom, setDateFrom] = useState<string | null>(null)
   const [dateTo, setDateTo] = useState<string | null>(null)
+  const [mobileView, setMobileView] = useState<"table" | "map">("table")
 
   const loadBase = useCallback(async () => {
     try {
@@ -111,9 +114,29 @@ export default function MapPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col md:flex-row">
-      {/* Left: Map */}
-      <div className="relative h-[40vh] md:h-auto md:flex-1">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+      {/* Mobile toggle */}
+      <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2 md:hidden">
+        <Button
+          variant={mobileView === "table" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setMobileView("table")}
+        >
+          <List className="mr-1.5 size-4" />
+          Sesiones
+        </Button>
+        <Button
+          variant={mobileView === "map" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setMobileView("map")}
+        >
+          <MapIcon className="mr-1.5 size-4" />
+          Mapa
+        </Button>
+      </div>
+
+      {/* Map */}
+      <div className={`relative flex-1 ${mobileView === "map" ? "block" : "hidden"} md:block md:flex-1`}>
         <GoogleMap
           locations={locations}
           activeLocationId={
@@ -127,8 +150,8 @@ export default function MapPage() {
         />
       </div>
 
-      {/* Right: Side Panel */}
-      <div className="min-h-0 flex-1 md:w-1/2 md:flex-none md:shrink-0">
+      {/* Side Panel */}
+      <div className={`min-h-0 flex-1 overflow-hidden ${mobileView === "table" ? "flex" : "hidden"} md:flex md:w-1/3 md:flex-none md:shrink-0`}>
         <SidePanel
           sessions={sessions}
           camellones={camellones}

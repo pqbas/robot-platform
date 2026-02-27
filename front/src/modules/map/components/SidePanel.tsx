@@ -92,7 +92,7 @@ export default function SidePanel({
     : ""
 
   return (
-    <div className="flex h-full flex-col overflow-hidden border-l">
+    <div className="flex h-full w-full flex-col overflow-hidden border-l">
       <div className="flex min-h-0 flex-1 flex-col p-4">
         {/* Header */}
         <div className="mb-3 flex shrink-0 items-center justify-between">
@@ -115,11 +115,11 @@ export default function SidePanel({
         </div>
 
         {/* Filters */}
-        <div className="mb-4 grid grid-cols-2 gap-1.5 md:flex md:items-end">
-          <div className="min-w-0 flex-1 space-y-0.5">
-            <Label className="text-xs text-muted-foreground">Ubicacion</Label>
+        <div className="mb-4 grid grid-cols-2 items-end gap-3 md:flex md:gap-4">
+          <div className="space-y-1 md:min-w-0 md:flex-1">
+            <Label className="text-xs">Ubicacion</Label>
             <Select value={locationFilter} onValueChange={onLocationFilterChange}>
-              <SelectTrigger className="h-7 text-xs">
+              <SelectTrigger className="h-9 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -133,10 +133,10 @@ export default function SidePanel({
             </Select>
           </div>
 
-          <div className="min-w-0 flex-1 space-y-0.5">
-            <Label className="text-xs text-muted-foreground">Clase</Label>
+          <div className="space-y-1 md:min-w-0 md:flex-1">
+            <Label className="text-xs">Clase</Label>
             <Select value={classFilter} onValueChange={setClassFilter}>
-              <SelectTrigger className="h-7 text-xs">
+              <SelectTrigger className="h-9 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -150,21 +150,21 @@ export default function SidePanel({
             </Select>
           </div>
 
-          <div className="min-w-0 flex-1 space-y-0.5">
-            <Label className="text-xs text-muted-foreground">Desde</Label>
+          <div className="space-y-1 md:min-w-0 md:flex-1">
+            <Label className="text-xs">Desde</Label>
             <Input
               type="date"
-              className="h-7 text-xs"
+              className="h-9"
               value={dateFrom ?? ""}
               onChange={(e) => onDateChange(e.target.value || null, dateTo)}
             />
           </div>
 
-          <div className="min-w-0 flex-1 space-y-0.5">
-            <Label className="text-xs text-muted-foreground">Hasta</Label>
+          <div className="space-y-1 md:min-w-0 md:flex-1">
+            <Label className="text-xs">Hasta</Label>
             <Input
               type="date"
-              className="h-7 text-xs"
+              className="h-9"
               value={dateTo ?? ""}
               onChange={(e) => onDateChange(dateFrom, e.target.value || null)}
             />

@@ -22,32 +22,32 @@ export default function DashboardFilters({ filters, onChange, classes, camellone
   const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch })
 
   return (
-    <div className="grid grid-cols-2 items-end gap-3 md:flex md:flex-wrap md:gap-4">
-      <div className="space-y-1">
+    <div className="grid grid-cols-2 items-end gap-3 md:flex md:gap-4">
+      <div className="space-y-1 md:min-w-0 md:flex-1">
         <Label className="text-xs">Desde</Label>
         <Input
           type="date"
-          className="h-9 w-full md:w-40"
+          className="h-9"
           value={filters.from ?? ""}
           onChange={(e) => set({ from: e.target.value || undefined })}
         />
       </div>
-      <div className="space-y-1">
+      <div className="space-y-1 md:min-w-0 md:flex-1">
         <Label className="text-xs">Hasta</Label>
         <Input
           type="date"
-          className="h-9 w-full md:w-40"
+          className="h-9"
           value={filters.to ?? ""}
           onChange={(e) => set({ to: e.target.value || undefined })}
         />
       </div>
-      <div className="space-y-1">
+      <div className="space-y-1 md:min-w-0 md:flex-1">
         <Label className="text-xs">Clase</Label>
         <Select
           value={filters.target_class ?? "__all__"}
           onValueChange={(v) => set({ target_class: v === "__all__" ? undefined : v })}
         >
-          <SelectTrigger className="h-9 w-full md:w-36">
+          <SelectTrigger className="h-9 w-full">
             <SelectValue placeholder="Todas" />
           </SelectTrigger>
           <SelectContent>
@@ -60,7 +60,7 @@ export default function DashboardFilters({ filters, onChange, classes, camellone
           </SelectContent>
         </Select>
       </div>
-      <div className="space-y-1">
+      <div className="space-y-1 md:min-w-0 md:flex-1">
         <Label className="text-xs">Camellón</Label>
         <Select
           value={filters.camellon_id != null ? String(filters.camellon_id) : "__all__"}
@@ -68,7 +68,7 @@ export default function DashboardFilters({ filters, onChange, classes, camellone
             set({ camellon_id: v === "__all__" ? undefined : Number(v) })
           }
         >
-          <SelectTrigger className="h-9 w-full md:w-44">
+          <SelectTrigger className="h-9 w-full">
             <SelectValue placeholder="Todos" />
           </SelectTrigger>
           <SelectContent>
