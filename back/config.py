@@ -36,12 +36,19 @@ class CountingConfig:
 
 
 @dataclass
+class EncoderConfig:
+    bitrate: int = 1_000_000        # target bitrate in bps (1 Mbps)
+    preset: str = "low-latency"     # "low-latency" | "high-quality"
+
+
+@dataclass
 class Config:
     camera: CameraConfig = field(default_factory=CameraConfig)
     perception: PerceptionConfig = field(default_factory=PerceptionConfig)
     counting: CountingConfig = field(default_factory=CountingConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
+    encoder: EncoderConfig = field(default_factory=EncoderConfig)
 
 
 config = Config()
