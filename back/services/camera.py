@@ -31,19 +31,32 @@ class CameraStreamTrack(VideoStreamTrack):
         self._cap = cv2.VideoCapture(cfg.index)
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.frame_width)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.frame_height)
+        self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if not self._cap.isOpened():
             raise RuntimeError("Could not open camera")
         logger.info("Camera opened (index=%d)", cfg.index)
         self._data_channel = None
+        self._first_frame = True
 
     def set_data_channel(self, dc):
         self._data_channel = dc
+
+    def _drain_and_read(self):
+        """Discard buffered frames and return only the latest one."""
+        for _ in range(4):
+            self._cap.grab()
+        ret, frame = self._cap.read()
+        return ret, frame
 
     async def recv(self):
         pts, time_base = await self.next_timestamp()
 
         loop = asyncio.get_event_loop()
-        ret, frame = await loop.run_in_executor(None, self._cap.read)
+        if self._first_frame:
+            self._first_frame = False
+            ret, frame = await loop.run_in_executor(None, self._drain_and_read)
+        else:
+            ret, frame = await loop.run_in_executor(None, self._cap.read)
         if not ret:
             raise RuntimeError("Failed to read frame from camera")
 
