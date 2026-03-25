@@ -23,7 +23,7 @@ function formatDuration(start: Date | null): string {
 }
 
 export default function VisionPage() {
-  const { videoRef, connectionState, frameData, connect, disconnect } =
+  const { videoRef, connectionState, frameData, fps, connect, disconnect } =
     useWebRTC()
   const counting = useCounting()
 
@@ -146,6 +146,18 @@ export default function VisionPage() {
             sessionTotal={counting.sessionTotal}
             targetClass={selectedClass}
           />
+        )}
+        {connected && (
+          <div className="absolute top-2 right-2 flex gap-2">
+            <Badge variant="outline" className="bg-black/60 text-white border-none text-xs">
+              Stream: {fps.streamFps} FPS
+            </Badge>
+            {isCounting && (
+              <Badge variant="outline" className="bg-black/60 text-white border-none text-xs">
+                YOLO: {fps.inferenceFps} FPS
+              </Badge>
+            )}
+          </div>
         )}
       </VideoStream>
 
