@@ -206,6 +206,7 @@ class FrameDetection(Base):
     frame_uuid: Mapped[str] = mapped_column(
         ForeignKey("capture_frames.uuid"), nullable=False
     )
+    track_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     class_name: Mapped[str] = mapped_column(Text, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     x: Mapped[float] = mapped_column(Float, nullable=False)
