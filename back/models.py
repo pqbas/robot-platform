@@ -1,5 +1,13 @@
+from uuid import uuid4
+
 from sqlalchemy import ForeignKey, Float, Integer, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from back.config import get_device_id
+
+
+def _new_uuid() -> str:
+    return str(uuid4())
 
 
 class Base(DeclarativeBase):
@@ -10,6 +18,8 @@ class Location(Base):
     __tablename__ = "locations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(Text, unique=True, default=_new_uuid)
+    device_id: Mapped[str] = mapped_column(Text, default=get_device_id)
     label: Mapped[str] = mapped_column(Text, nullable=False)
     lat: Mapped[float] = mapped_column(Float, nullable=False)
     lng: Mapped[float] = mapped_column(Float, nullable=False)
@@ -21,6 +31,8 @@ class Camellon(Base):
     __tablename__ = "camellones"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(Text, unique=True, default=_new_uuid)
+    device_id: Mapped[str] = mapped_column(Text, default=get_device_id)
     nombre: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     lng: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -31,6 +43,8 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(Text, unique=True, default=_new_uuid)
+    device_id: Mapped[str] = mapped_column(Text, default=get_device_id)
     camellon_id: Mapped[int] = mapped_column(
         ForeignKey("camellones.id"), nullable=False
     )
@@ -46,6 +60,8 @@ class Event(Base):
     __tablename__ = "events"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(Text, unique=True, default=_new_uuid)
+    device_id: Mapped[str] = mapped_column(Text, default=get_device_id)
     session_id: Mapped[int] = mapped_column(
         ForeignKey("sessions.id"), nullable=False
     )

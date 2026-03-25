@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 
 
@@ -52,3 +53,12 @@ class Config:
 
 
 config = Config()
+
+
+def get_device_id() -> str:
+    """Auto-detect robot ID from Jetson serial number, fallback to env var."""
+    try:
+        with open("/sys/firmware/devicetree/base/serial-number") as f:
+            return f"jetson-{f.read().strip()}"
+    except FileNotFoundError:
+        return os.getenv("ROBOT_ID", "dev-local")
