@@ -38,16 +38,21 @@ export function useWebRTC() {
       }
     }
 
-    pc.ondatachannel = (event) => {
-      const dc = event.channel
-      console.log("Data channel received:", dc.label)
-      dc.onmessage = (msg) => {
-        try {
-          const data: FrameData = JSON.parse(msg.data)
-          setFrameData(data)
-        } catch (e) {
-          console.error("Data channel parse error:", e)
-        }
+    // Create data channel from the frontend side
+    const dc = pc.createDataChannel("detections")
+    console.log("[WebRTC] Data channel created:", dc.label, "state:", dc.readyState)
+    dc.onopen = () => {
+      console.log("[WebRTC] Data channel opened:", dc.label)
+    }
+    dc.onclose = () => {
+      console.log("[WebRTC] Data channel closed:", dc.label)
+    }
+    dc.onmessage = (msg) => {
+      try {
+        const data: FrameData = JSON.parse(msg.data)
+        setFrameData(data)
+      } catch (e) {
+        console.error("[WebRTC] Data channel parse error:", e)
       }
     }
 
