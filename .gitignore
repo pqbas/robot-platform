@@ -26,5 +26,14 @@ front/.env
 .agents/
 .claude/
 
+# Docs and plans
+docs/
+plans/
+reference/
+
+# Mobile (WIP)
+mobile/
+
 # Misc
 hello.py
+skills-lock.json
