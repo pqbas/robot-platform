@@ -20,8 +20,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  type CameraConfig,
+  type CameraDevice,
   type CountingConfig,
+  getCameraConfig,
   getCountingConfig,
+  listCameras,
+  updateCameraConfig,
   updateCountingConfig,
 } from "@/api/config"
 
@@ -46,6 +51,8 @@ export default function CountingConfigDialog({
   onOpenChange,
 }: CountingConfigDialogProps) {
   const [config, setConfig] = useState<CountingConfig | null>(null)
+  const [cameras, setCameras] = useState<CameraDevice[]>([])
+  const [cameraConfig, setCameraConfig] = useState<CameraConfig | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -53,6 +60,12 @@ export default function CountingConfigDialog({
       getCountingConfig()
         .then(setConfig)
         .catch(() => toast.error("Error al cargar configuracion"))
+      listCameras()
+        .then(setCameras)
+        .catch(() => {})
+      getCameraConfig()
+        .then(setCameraConfig)
+        .catch(() => {})
     }
   }, [open])
 
@@ -68,6 +81,9 @@ export default function CountingConfigDialog({
     try {
       const updated = await updateCountingConfig(config)
       setConfig(updated)
+      if (cameraConfig) {
+        await updateCameraConfig(cameraConfig)
+      }
       toast.success("Configuracion guardada")
       onOpenChange(false)
     } catch {
@@ -94,6 +110,35 @@ export default function CountingConfigDialog({
 
         {config && (
           <div className="space-y-4">
+            {cameras.length > 0 && cameraConfig && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="camera-select">Camara</Label>
+                  <Select
+                    value={String(cameraConfig.index)}
+                    onValueChange={(v) =>
+                      setCameraConfig({ ...cameraConfig, index: Number(v) })
+                    }
+                  >
+                    <SelectTrigger id="camera-select" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cameras.map((cam) => (
+                        <SelectItem key={cam.index} value={String(cam.index)}>
+                          {cam.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-muted-foreground text-xs">
+                    Dispositivo de captura de video. El cambio se aplica en la proxima conexion.
+                  </p>
+                </div>
+                <Separator />
+              </>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="count-mode">Modo de conteo</Label>
               <Select

@@ -112,6 +112,28 @@ class FrameDetectionPayload(BaseModel):
     session_total: int = 0
 
 
+# --- Camera config ---
+
+class CameraDevice(BaseModel):
+    index: int
+    name: str
+    available: bool
+
+
+class CameraConfigOut(BaseModel):
+    index: int
+    frame_width: int
+    frame_height: int
+    crop_width: int
+
+
+class CameraConfigUpdate(BaseModel):
+    index: int | None = None
+    frame_width: int | None = None
+    frame_height: int | None = None
+    crop_width: int | None = None
+
+
 # --- Counting config ---
 
 class CountingConfigOut(BaseModel):
