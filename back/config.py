@@ -2,6 +2,10 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 class AppMode(str, Enum):
     ROBOT = "robot"
