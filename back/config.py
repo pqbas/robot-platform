@@ -1,5 +1,11 @@
 import os
 from dataclasses import dataclass, field
+from enum import Enum
+
+
+class AppMode(str, Enum):
+    ROBOT = "robot"
+    SERVER = "server"
 
 
 @dataclass
@@ -19,7 +25,7 @@ class PerceptionConfig:
 
 @dataclass
 class DatabaseConfig:
-    url: str = "sqlite+aiosqlite:///counting.db"
+    url: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///counting.db")
 
 
 @dataclass
@@ -43,13 +49,30 @@ class EncoderConfig:
 
 
 @dataclass
+class SyncConfig:
+    server_url: str = os.getenv("SYNC_SERVER_URL", "")
+    api_key: str = os.getenv("SYNC_API_KEY", "")
+    interval_seconds: int = int(os.getenv("SYNC_INTERVAL", "300"))
+
+
+@dataclass
+class AuthConfig:
+    secret_key: str = os.getenv("AUTH_SECRET_KEY", "dev-secret-change-me")
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 1440  # 24h
+
+
+@dataclass
 class Config:
+    mode: AppMode = AppMode(os.getenv("ROBOT_MODE", "robot"))
     camera: CameraConfig = field(default_factory=CameraConfig)
     perception: PerceptionConfig = field(default_factory=PerceptionConfig)
     counting: CountingConfig = field(default_factory=CountingConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
+    sync: SyncConfig = field(default_factory=SyncConfig)
+    auth: AuthConfig = field(default_factory=AuthConfig)
 
 
 config = Config()
