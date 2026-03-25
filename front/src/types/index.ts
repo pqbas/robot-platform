@@ -15,6 +15,7 @@ export type FrameData = {
   detections: Detection[]
   session_active: boolean
   session_total: number
+  error?: string | null
 }
 
 export type Session = {

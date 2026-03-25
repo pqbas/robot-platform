@@ -110,6 +110,7 @@ class FrameDetectionPayload(BaseModel):
     detections: list[DetectionItem]
     session_active: bool = False
     session_total: int = 0
+    error: str | None = None
 
 
 # --- Camera config ---

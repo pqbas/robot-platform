@@ -36,9 +36,11 @@ async def offer(request: Request):
 
     track = camera.CameraStreamTrack()
 
-    # create data channel for sending detection metadata to frontend
-    dc = pc.createDataChannel("detections")
-    track.set_data_channel(dc)
+    # receive data channel created by the frontend
+    @pc.on("datachannel")
+    def on_datachannel(channel):
+        logger.info("Data channel received: %s", channel.label)
+        track.set_data_channel(channel)
 
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():

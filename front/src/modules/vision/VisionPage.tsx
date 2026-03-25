@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useBlocker } from "react-router-dom"
 import { toast } from "sonner"
 import { Settings } from "lucide-react"
@@ -23,7 +23,7 @@ function formatDuration(start: Date | null): string {
 }
 
 export default function VisionPage() {
-  const { videoRef, connectionState, frameData, connect, disconnect } =
+  const { videoRef, connectionState, frameData, fps, connect, disconnect } =
     useWebRTC()
   const counting = useCounting()
 
@@ -59,6 +59,17 @@ export default function VisionPage() {
       counting.updateFrame(frameData)
     }
   }, [frameData, isCounting, counting.updateFrame])
+
+  // Show inference errors as toast (debounced to avoid spam)
+  const lastErrorRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (frameData?.error && frameData.error !== lastErrorRef.current) {
+      lastErrorRef.current = frameData.error
+      toast.error(`Error de inferencia: ${frameData.error}`)
+      // Reset after 10s so the same error can show again if persistent
+      setTimeout(() => { lastErrorRef.current = null }, 10_000)
+    }
+  }, [frameData?.error])
 
   // Update duration display while counting
   useEffect(() => {
@@ -123,13 +134,30 @@ export default function VisionPage() {
         </Button>
       </div>
 
-      <VideoStream videoRef={videoRef} connected={connected}>
+      <VideoStream
+        videoRef={videoRef}
+        connected={connected}
+        detections={frameData?.detections}
+        showDetections={isCounting && !!frameData}
+      >
         {isCounting && frameData && (
           <CountOverlay
             count={frameData.count}
             sessionTotal={counting.sessionTotal}
             targetClass={selectedClass}
           />
+        )}
+        {connected && (
+          <div className="absolute top-2 right-2 flex gap-2">
+            <Badge variant="outline" className="bg-black/60 text-white border-none text-xs">
+              Stream: {fps.streamFps} FPS
+            </Badge>
+            {isCounting && (
+              <Badge variant="outline" className="bg-black/60 text-white border-none text-xs">
+                YOLO: {fps.inferenceFps} FPS
+              </Badge>
+            )}
+          </div>
         )}
       </VideoStream>
 
