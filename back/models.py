@@ -40,17 +40,17 @@ class FruitType(Base):
     created_at: Mapped[str] = mapped_column(Text, default=_now_iso)
 
 
-class YoloModel(Base):
-    __tablename__ = "yolo_models"
+class DetectionModel(Base):
+    __tablename__ = "detection_models"
 
     uuid: Mapped[str] = mapped_column(Text, primary_key=True, default=_new_uuid)
     fruit_type_uuid: Mapped[str] = mapped_column(
         ForeignKey("fruit_types.uuid"), nullable=False
     )
+    object_type: Mapped[str] = mapped_column(Text, nullable=False)  # e.g. "arándano", "uva"
     version: Mapped[str] = mapped_column(Text, nullable=False)
     filename: Mapped[str] = mapped_column(Text, nullable=False)
     file_hash: Mapped[str] = mapped_column(Text, nullable=False)
-    classes: Mapped[str | None] = mapped_column(Text, nullable=True)
     epochs: Mapped[int | None] = mapped_column(Integer, nullable=True)
     map50: Mapped[float | None] = mapped_column(Float, nullable=True)
     map50_95: Mapped[float | None] = mapped_column(Float, nullable=True)
