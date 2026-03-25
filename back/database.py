@@ -39,7 +39,7 @@ async def init_db() -> None:
             # Migrations for each table: add missing columns
             migrations = {
                 "locations": ["polygon", "uuid", "device_id"],
-                "camellones": ["uuid", "device_id"],
+                "camellones": ["uuid", "device_id", "fundo_uuid"],
                 "sessions": ["uuid", "device_id"],
                 "events": ["uuid", "device_id"],
             }
