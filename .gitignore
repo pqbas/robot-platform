@@ -17,10 +17,13 @@ front/.vite/
 
 # Environment variables
 .env
+.env.robot
+.env.server
 front/.env
 
 # Database
 *.db
+data/
 
 # Claude/agents config
 .agents/
