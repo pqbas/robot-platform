@@ -220,3 +220,74 @@ class DashboardStatsOut(BaseModel):
     daily_trend: list[DailyTrendItem]
     by_camellon: list[CamellonBreakdownItem]
     by_class: list[ClassBreakdownItem]
+
+
+# --- Sync ---
+
+
+class SyncEmpresa(BaseModel):
+    uuid: str
+    name: str
+    is_active: bool = True
+    created_at: str | None = None
+
+
+class SyncFruitType(BaseModel):
+    uuid: str
+    name: str
+    created_at: str | None = None
+
+
+class SyncFundo(BaseModel):
+    uuid: str
+    empresa_uuid: str
+    fruit_type_uuid: str | None = None
+    name: str
+    region: str | None = None
+    is_active: bool = True
+    created_at: str | None = None
+
+
+class SyncLocation(BaseModel):
+    uuid: str
+    device_id: str | None = None
+    label: str
+    lat: float
+    lng: float
+    zoom: int = 17
+    polygon: str | None = None
+
+
+class SyncCamellon(BaseModel):
+    uuid: str
+    device_id: str | None = None
+    fundo_uuid: str | None = None
+    nombre: str
+    lat: float | None = None
+    lng: float | None = None
+
+
+class SyncSession(BaseModel):
+    uuid: str
+    device_id: str | None = None
+    camellon_uuid: str  # resolved on server side
+    start_time: str
+    end_time: str | None = None
+    target_class: str
+    total_count: int = 0
+
+
+class SyncEvent(BaseModel):
+    uuid: str
+    device_id: str | None = None
+    session_uuid: str  # resolved on server side
+    timestamp: str
+    object_class: str
+    track_id: int | None = None
+
+
+class SyncResult(BaseModel):
+    received: int
+    inserted: int
+    skipped: int
+    errors: list[str] = []
