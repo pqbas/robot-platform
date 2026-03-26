@@ -24,7 +24,7 @@ async def pull_models() -> None:
     """Check server for active models, download any new or updated ones."""
     models_dir = Path(config.storage.models_dir)
     url = f"{config.sync.server_url}/api/sync/models"
-    headers = {"X-API-Key": config.sync.api_key}
+    headers = {"Authorization": f"Bearer {config.sync.api_key}"}
 
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as session:
