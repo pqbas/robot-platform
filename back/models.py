@@ -244,3 +244,30 @@ class FruitClassification(Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     classified_at: Mapped[str] = mapped_column(Text, default=_now_iso)
     crop: Mapped["FruitCrop"] = relationship(back_populates="classifications")
+
+
+# --- Sync models ---
+
+
+class SyncLog(Base):
+    """Tracks which records have been synced to the server."""
+    __tablename__ = "sync_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    table_name: Mapped[str] = mapped_column(Text, nullable=False)
+    record_uuid: Mapped[str] = mapped_column(Text, nullable=False)
+    synced_at: Mapped[str] = mapped_column(Text, default=_now_iso)
+
+
+class Command(Base):
+    """Server-to-robot command queue. Robot polls for pending commands."""
+    __tablename__ = "commands"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(Text, unique=True, default=_new_uuid)
+    device_id: Mapped[str] = mapped_column(Text, nullable=False)
+    command_type: Mapped[str] = mapped_column(Text, nullable=False)  # e.g. "upload_frames"
+    payload: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON with params
+    status: Mapped[str] = mapped_column(Text, default="pending")  # pending | completed | failed
+    created_at: Mapped[str] = mapped_column(Text, default=_now_iso)
+    completed_at: Mapped[str | None] = mapped_column(Text, nullable=True)
