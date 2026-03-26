@@ -45,4 +45,6 @@ app.include_router(config_router)
 app.include_router(dashboard_router)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    from back.config import config as app_config
+
+    uvicorn.run(app, host="0.0.0.0", port=app_config.server.port)

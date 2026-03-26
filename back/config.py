@@ -4,7 +4,8 @@ from enum import Enum
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# Allow selecting a specific .env file via ENV_FILE variable
+load_dotenv(os.getenv("ENV_FILE", ".env"))
 
 
 class AppMode(str, Enum):
@@ -28,14 +29,20 @@ class PerceptionConfig:
 
 
 @dataclass
+class StorageConfig:
+    models_dir: str = os.getenv("MODELS_DIR", "data/robot/models")
+    frames_dir: str = os.getenv("FRAMES_DIR", "data/server/frames")
+
+
+@dataclass
 class DatabaseConfig:
-    url: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///counting.db")
+    url: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///data/robot/robot.db")
 
 
 @dataclass
 class ServerConfig:
     host: str = "0.0.0.0"
-    port: int = 8080
+    port: int = int(os.getenv("PORT", "8080"))
 
 
 @dataclass
@@ -73,6 +80,7 @@ class Config:
     perception: PerceptionConfig = field(default_factory=PerceptionConfig)
     counting: CountingConfig = field(default_factory=CountingConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
+    storage: StorageConfig = field(default_factory=StorageConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     sync: SyncConfig = field(default_factory=SyncConfig)
