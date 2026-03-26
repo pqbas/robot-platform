@@ -14,6 +14,7 @@ from back.routes.counting import router as counting_router
 from back.routes.dashboard import router as dashboard_router
 from back.routes.locations import router as locations_router
 from back.routes.stream import router as stream_router
+from back.routes.auth import router as auth_router
 from back.routes.sync import router as sync_router
 from back.services.camera import close_all_connections
 from back.services.nvenc_init import init_nvenc
@@ -58,6 +59,7 @@ app.include_router(locations_router)
 app.include_router(config_router)
 app.include_router(dashboard_router)
 app.include_router(sync_router)
+app.include_router(auth_router)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=app_config.server.port)

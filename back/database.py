@@ -22,9 +22,16 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
 
 async def init_db() -> None:
     """Create all tables from ORM models. For production use Alembic migrations."""
+    import logging
     from pathlib import Path
 
-    from back.models import Base
+    from sqlalchemy import select
+
+    from back.config import AppMode
+    from back.models import Base, User
+    from back.services.auth import hash_password
+
+    logger = logging.getLogger(__name__)
 
     # Ensure data directories exist
     Path(config.storage.models_dir).mkdir(parents=True, exist_ok=True)
@@ -32,6 +39,20 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Seed admin user in server mode if no users exist
+    if config.mode == AppMode.SERVER:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(User))
+            if not result.scalar_one_or_none():
+                admin = User(
+                    username="admin",
+                    password_hash=hash_password("admin"),
+                    role="admin",
+                )
+                session.add(admin)
+                await session.commit()
+                logger.info("Seeded admin user (username=admin, password=admin)")
 
 
 async def close_db() -> None:
