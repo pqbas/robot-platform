@@ -37,12 +37,14 @@ async def _sync_cycle() -> None:
     if not server_ok:
         return
 
+    from back.services.sync_pull import pull_models
     from back.services.sync_push import push_all
 
     async with AsyncSessionLocal() as db:
         await push_all(db)
 
-    # Future: pull models (feature/sync-pull)
+    await pull_models()
+
     # Future: execute commands (feature/sync-commands)
     logger.info("Sync: cycle complete")
 
