@@ -68,10 +68,13 @@ if app_config.mode == AppMode.SERVER:
     from back.routes.fundos import router as fundos_router
     from back.routes.users import router as users_router
 
+    from back.routes.devices import router as devices_router
+
     app.include_router(users_router)
     app.include_router(empresas_router)
     app.include_router(fundos_router)
     app.include_router(admin_models_router)
+    app.include_router(devices_router)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=app_config.server.port)

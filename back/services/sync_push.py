@@ -46,7 +46,7 @@ async def _post_batch(session: aiohttp.ClientSession, endpoint: str, data: list[
     if not data:
         return None
     url = f"{config.sync.server_url}/api/sync/{endpoint}"
-    headers = {"X-API-Key": config.sync.api_key}
+    headers = {"Authorization": f"Bearer {config.sync.api_key}"}
     try:
         async with session.post(url, json=data, headers=headers) as resp:
             if resp.status == 200:

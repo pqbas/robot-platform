@@ -2,14 +2,15 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from back.config import config
+from back.config import AppMode, config
 from back.database import get_db
 from back.models import DetectionModel
+from back.services.auth import verify_device_key
 from back.schemas import (
     SyncCamellon,
     SyncEmpresa,
@@ -32,6 +33,9 @@ from back.services.sync_receive import (
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
 
+# Device auth dependency — only enforced in server mode
+_device_dep = [Depends(verify_device_key)] if config.mode == AppMode.SERVER else []
+
 
 @router.get("/health")
 async def health():
@@ -39,48 +43,48 @@ async def health():
     return {"status": "ok", "mode": config.mode.value}
 
 
-# --- Receive endpoints (server mode) ---
+# --- Receive endpoints (server mode, protected by device API key) ---
 
 
-@router.post("/empresas", response_model=SyncResult)
+@router.post("/empresas", response_model=SyncResult, dependencies=_device_dep)
 async def sync_empresas(items: list[SyncEmpresa], db: AsyncSession = Depends(get_db)):
     return await receive_empresas(db, items)
 
 
-@router.post("/fruit-types", response_model=SyncResult)
+@router.post("/fruit-types", response_model=SyncResult, dependencies=_device_dep)
 async def sync_fruit_types(items: list[SyncFruitType], db: AsyncSession = Depends(get_db)):
     return await receive_fruit_types(db, items)
 
 
-@router.post("/fundos", response_model=SyncResult)
+@router.post("/fundos", response_model=SyncResult, dependencies=_device_dep)
 async def sync_fundos(items: list[SyncFundo], db: AsyncSession = Depends(get_db)):
     return await receive_fundos(db, items)
 
 
-@router.post("/locations", response_model=SyncResult)
+@router.post("/locations", response_model=SyncResult, dependencies=_device_dep)
 async def sync_locations(items: list[SyncLocation], db: AsyncSession = Depends(get_db)):
     return await receive_locations(db, items)
 
 
-@router.post("/camellones", response_model=SyncResult)
+@router.post("/camellones", response_model=SyncResult, dependencies=_device_dep)
 async def sync_camellones(items: list[SyncCamellon], db: AsyncSession = Depends(get_db)):
     return await receive_camellones(db, items)
 
 
-@router.post("/sessions", response_model=SyncResult)
+@router.post("/sessions", response_model=SyncResult, dependencies=_device_dep)
 async def sync_sessions(items: list[SyncSession], db: AsyncSession = Depends(get_db)):
     return await receive_sessions(db, items)
 
 
-@router.post("/events", response_model=SyncResult)
+@router.post("/events", response_model=SyncResult, dependencies=_device_dep)
 async def sync_events(items: list[SyncEvent], db: AsyncSession = Depends(get_db)):
     return await receive_events(db, items)
 
 
-# --- Model endpoints (server serves models to robots) ---
+# --- Model endpoints (protected by device API key in server mode) ---
 
 
-@router.get("/models")
+@router.get("/models", dependencies=_device_dep)
 async def list_models(db: AsyncSession = Depends(get_db)):
     """List active detection models with their file hashes."""
     result = await db.execute(
@@ -99,7 +103,7 @@ async def list_models(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/models/{model_uuid}")
+@router.get("/models/{model_uuid}", dependencies=_device_dep)
 async def download_model(model_uuid: str, db: AsyncSession = Depends(get_db)):
     """Download a model .pt file by UUID."""
     result = await db.execute(
@@ -107,12 +111,10 @@ async def download_model(model_uuid: str, db: AsyncSession = Depends(get_db)):
     )
     model = result.scalar_one_or_none()
     if not model:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Model not found")
 
     file_path = Path(config.storage.models_dir) / model.filename
     if not file_path.exists():
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Model file not found on disk")
 
     return FileResponse(
