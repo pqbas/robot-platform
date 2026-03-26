@@ -1,7 +1,7 @@
 """Background sync loop — runs only in robot mode.
 
-Periodically checks server connectivity and will execute sync tasks
-(push data, pull models, execute commands) in future branches.
+Periodically checks server connectivity and executes sync tasks:
+push data, pull models (future), execute commands (future).
 """
 
 import asyncio
@@ -10,6 +10,7 @@ import logging
 import aiohttp
 
 from back.config import config
+from back.database import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +32,16 @@ async def _check_server() -> bool:
 
 
 async def _sync_cycle() -> None:
-    """Single sync cycle. Will be extended in future branches."""
+    """Single sync cycle."""
     server_ok = await _check_server()
     if not server_ok:
         return
 
-    # Future: push data (feature/sync-push)
+    from back.services.sync_push import push_all
+
+    async with AsyncSessionLocal() as db:
+        await push_all(db)
+
     # Future: pull models (feature/sync-pull)
     # Future: execute commands (feature/sync-commands)
     logger.info("Sync: cycle complete")
