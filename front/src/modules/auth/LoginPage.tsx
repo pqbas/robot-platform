@@ -12,15 +12,15 @@ export default function LoginPage() {
   const { mode } = useAppMode()
   const { login, isAuthenticated } = useAuth()
   const navigate = useNavigate()
+  const [username, setUsername] = useState("")
+  const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
 
   // Robot mode: login not needed
   if (mode === "robot") return <Navigate to="/vision" replace />
 
   // Already authenticated: go to dashboard
   if (isAuthenticated) return <Navigate to="/dashboard" replace />
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
