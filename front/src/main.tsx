@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client"
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom"
 import "./index.css"
 import App from "./App"
+import { AppModeProvider } from "./context/AppModeContext"
+import { AuthProvider } from "./context/AuthContext"
 import VisionPage from "./modules/vision/VisionPage"
 import MapPage from "./modules/map/MapPage"
 import DashboardPage from "./modules/dashboard/DashboardPage"
@@ -21,6 +23,10 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <AppModeProvider>
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
+    </AppModeProvider>
   </StrictMode>,
 )
