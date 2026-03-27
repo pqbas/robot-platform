@@ -13,18 +13,12 @@ import DashboardPage from "./modules/dashboard/DashboardPage"
 import UsersPage from "./modules/admin/UsersPage"
 import EmpresasPage from "./modules/admin/EmpresasPage"
 import FundosPage from "./modules/admin/FundosPage"
+import DevicesPage from "./modules/admin/DevicesPage"
+import ModelsPage from "./modules/admin/ModelsPage"
 
 function ModeRedirect() {
   const { mode } = useAppMode()
   return <Navigate to={mode === "robot" ? "/vision" : "/dashboard"} replace />
-}
-
-function AdminPlaceholder({ title }: { title: string }) {
-  return (
-    <div className="flex flex-1 items-center justify-center text-muted-foreground">
-      {title} — proximamente
-    </div>
-  )
 }
 
 const router = createBrowserRouter([
@@ -68,7 +62,7 @@ const router = createBrowserRouter([
         path: "admin/devices",
         element: (
           <ProtectedRoute requiredRole="admin">
-            <AdminPlaceholder title="Dispositivos" />
+            <DevicesPage />
           </ProtectedRoute>
         ),
       },
@@ -76,7 +70,7 @@ const router = createBrowserRouter([
         path: "admin/models",
         element: (
           <ProtectedRoute requiredRole="admin">
-            <AdminPlaceholder title="Modelos" />
+            <ModelsPage />
           </ProtectedRoute>
         ),
       },
