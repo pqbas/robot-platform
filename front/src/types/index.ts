@@ -88,7 +88,7 @@ export type AppMode = "robot" | "server"
 export type UserInfo = {
   id: number
   username: string
-  role: "admin" | "viewer"
+  role: string
   empresa_uuid: string | null
 }
 

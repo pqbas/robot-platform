@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -10,7 +11,6 @@ import type { UserInfo } from "@/types"
 import * as authApi from "@/api/auth"
 
 type AuthState = {
-  token: string | null
   user: UserInfo | null
   isAuthenticated: boolean
   loading: boolean
@@ -19,7 +19,6 @@ type AuthState = {
 }
 
 const AuthContext = createContext<AuthState>({
-  token: null,
   user: null,
   isAuthenticated: false,
   loading: true,
@@ -32,18 +31,20 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() =>
-    localStorage.getItem("auth_token"),
-  )
   const [user, setUser] = useState<UserInfo | null>(null)
-  const [loading, setLoading] = useState(!!localStorage.getItem("auth_token"))
+  const [loading, setLoading] = useState(
+    !!localStorage.getItem("auth_token"),
+  )
+  const didValidate = useRef(false)
 
-  // On mount, if token exists, validate it by fetching /me
+  // On mount only, if token exists, validate it by fetching /me
   useEffect(() => {
-    if (!token) {
+    const token = localStorage.getItem("auth_token")
+    if (!token || didValidate.current) {
       setLoading(false)
       return
     }
+    didValidate.current = true
     authApi
       .getMe()
       .then((u) => {
@@ -51,25 +52,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false)
       })
       .catch(() => {
-        // Token invalid/expired — clear silently
         localStorage.removeItem("auth_token")
-        setToken(null)
         setUser(null)
         setLoading(false)
       })
-  }, [token])
+  }, [])
 
   const login = useCallback(async (username: string, password: string) => {
     const res = await authApi.login(username, password)
     localStorage.setItem("auth_token", res.access_token)
-    setToken(res.access_token)
     const me = await authApi.getMe()
     setUser(me)
   }, [])
 
   const logout = useCallback(() => {
     localStorage.removeItem("auth_token")
-    setToken(null)
     setUser(null)
     window.location.replace("/login")
   }, [])
@@ -77,7 +74,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        token,
         user,
         isAuthenticated: !!user,
         loading,

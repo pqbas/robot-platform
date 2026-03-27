@@ -24,7 +24,9 @@ export async function apiFetch<T>(
 
   if (res.status === 401) {
     localStorage.removeItem("auth_token")
-    window.location.replace("/login")
+    if (window.location.pathname !== "/login") {
+      window.location.replace("/login")
+    }
     throw new ApiError(401, "Unauthorized")
   }
 
