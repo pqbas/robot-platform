@@ -132,12 +132,12 @@ export default function FundoFormDialog({
           </div>
           <div className="space-y-2">
             <Label>Tipo de fruta</Label>
-            <Select value={fruitTypeUuid} onValueChange={setFruitTypeUuid}>
+            <Select value={fruitTypeUuid || "__none__"} onValueChange={(v) => setFruitTypeUuid(v === "__none__" ? "" : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Sin tipo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Sin tipo</SelectItem>
+                <SelectItem value="__none__">Sin tipo</SelectItem>
                 {fruitTypes.map((ft) => (
                   <SelectItem key={ft.uuid} value={ft.uuid}>
                     {ft.name}

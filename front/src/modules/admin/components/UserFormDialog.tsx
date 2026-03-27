@@ -125,12 +125,12 @@ export default function UserFormDialog({
           </div>
           <div className="space-y-2">
             <Label>Empresa</Label>
-            <Select value={empresaUuid} onValueChange={setEmpresaUuid}>
+            <Select value={empresaUuid || "__none__"} onValueChange={(v) => setEmpresaUuid(v === "__none__" ? "" : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Sin empresa" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Sin empresa</SelectItem>
+                <SelectItem value="__none__">Sin empresa</SelectItem>
                 {empresas.map((e) => (
                   <SelectItem key={e.uuid} value={e.uuid}>
                     {e.name}
