@@ -27,6 +27,14 @@ export async function uploadDetectionModel(formData: FormData) {
     body: formData,
   })
 
+  if (res.status === 401) {
+    localStorage.removeItem("auth_token")
+    if (window.location.pathname !== "/login") {
+      window.location.replace("/login")
+    }
+    throw new Error("Unauthorized")
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
     throw new Error(text)

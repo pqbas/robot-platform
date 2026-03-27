@@ -46,7 +46,7 @@ export default function ModelsPage() {
   }, [load])
 
   const handleAddFruit = async () => {
-    if (!newFruitName.trim()) return
+    if (!newFruitName.trim() || addingFruit) return
     setAddingFruit(true)
     try {
       await createFruitType({ name: newFruitName.trim() })
@@ -71,6 +71,7 @@ export default function ModelsPage() {
   }
 
   const handleDelete = async (uuid: string) => {
+    if (!window.confirm("Eliminar este modelo permanentemente?")) return
     try {
       await deleteModel(uuid)
       toast.success("Modelo eliminado")

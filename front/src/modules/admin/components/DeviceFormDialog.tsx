@@ -49,6 +49,10 @@ export default function DeviceFormDialog({
   }, [editing, open])
 
   const handleSubmit = async () => {
+    if (!editing && (!deviceId.trim() || !label.trim())) {
+      toast.error("ID y Label son obligatorios")
+      return
+    }
     setSaving(true)
     try {
       if (editing) {
@@ -71,8 +75,8 @@ export default function DeviceFormDialog({
 
   if (createdApiKey) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
+      <Dialog open={open} onOpenChange={() => {}}>
+        <DialogContent onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>Dispositivo registrado</DialogTitle>
           </DialogHeader>
