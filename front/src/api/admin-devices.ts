@@ -2,12 +2,12 @@ import type { Device } from "@/types"
 import { apiFetch } from "./client"
 
 export function getDevices() {
-  return apiFetch<Device[]>("/api/devices")
+  return apiFetch<Device[]>("/api/devices/")
 }
 
 export function createDevice(data: { id: string; label: string }) {
   return apiFetch<{ id: string; label: string; api_key: string }>(
-    "/api/devices",
+    "/api/devices/",
     {
       method: "POST",
       body: JSON.stringify(data),
