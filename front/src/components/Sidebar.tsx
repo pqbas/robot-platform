@@ -1,39 +1,87 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
-import { Eye, Map, BarChart3, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import {
+  Eye,
+  Map,
+  BarChart3,
+  Users,
+  Building2,
+  MapPin,
+  HardDrive,
+  Brain,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react"
+import { useAppMode } from "@/context/AppModeContext"
+import { useAuth } from "@/context/AuthContext"
+import UserMenu from "./UserMenu"
+import { Separator } from "@/components/ui/separator"
 
-const items = [
-  { label: "Vision", path: "/vision", icon: Eye },
-  { label: "Mapa", path: "/mapa", icon: Map },
-  { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
-]
+type NavItem = {
+  label: string
+  path: string
+  icon: typeof Eye
+  separator?: boolean
+}
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
+  const { mode } = useAppMode()
+  const { user } = useAuth()
+
+  const items = useMemo<NavItem[]>(() => {
+    if (mode === "robot") {
+      return [
+        { label: "Vision", path: "/vision", icon: Eye },
+        { label: "Mapa", path: "/mapa", icon: Map },
+        { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
+      ]
+    }
+
+    const base: NavItem[] = [
+      { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
+      { label: "Mapa", path: "/mapa", icon: Map },
+    ]
+
+    if (user?.role === "admin") {
+      base.push(
+        { label: "Usuarios", path: "/admin/users", icon: Users, separator: true },
+        { label: "Empresas", path: "/admin/empresas", icon: Building2 },
+        { label: "Fundos", path: "/admin/fundos", icon: MapPin },
+        { label: "Dispositivos", path: "/admin/devices", icon: HardDrive },
+        { label: "Modelos", path: "/admin/models", icon: Brain },
+      )
+    }
+
+    return base
+  }, [mode, user?.role])
 
   return (
     <>
       {/* Mobile: fixed bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-14 items-center justify-around border-t bg-sidebar text-sidebar-foreground md:hidden">
-        {items.map((item) => {
-          const active = location.pathname.startsWith(item.path)
-          return (
-            <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                active
-                  ? "text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70"
-              }`}
-            >
-              <item.icon className="size-5" />
-              <span>{item.label}</span>
-            </button>
-          )
-        })}
+        {items
+          .filter((item) => !item.separator)
+          .slice(0, 5)
+          .map((item) => {
+            const active = location.pathname.startsWith(item.path)
+            return (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                  active
+                    ? "text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70"
+                }`}
+              >
+                <item.icon className="size-5" />
+                <span>{item.label}</span>
+              </button>
+            )
+          })}
       </nav>
 
       {/* Desktop: side bar */}
@@ -46,23 +94,26 @@ export default function Sidebar() {
           {items.map((item) => {
             const active = location.pathname.startsWith(item.path)
             return (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                }`}
-              >
-                <item.icon className="size-5 shrink-0" />
-                {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
-              </button>
+              <div key={item.path}>
+                {item.separator && <Separator className="my-2" />}
+                <button
+                  onClick={() => navigate(item.path)}
+                  className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  }`}
+                >
+                  <item.icon className="size-5 shrink-0" />
+                  {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+                </button>
+              </div>
             )
           })}
         </nav>
 
         <div className="border-t border-sidebar-border p-2">
+          {mode === "server" && user && <UserMenu collapsed={collapsed} />}
           <button
             onClick={() => setCollapsed(!collapsed)}
             className="flex w-full items-center justify-center rounded-md px-3 py-2 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
