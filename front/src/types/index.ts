@@ -80,3 +80,74 @@ export type DashboardStats = {
   by_camellon: CamellonBreakdownItem[]
   by_class: ClassBreakdownItem[]
 }
+
+// --- Auth ---
+
+export type AppMode = "robot" | "server"
+
+export type UserInfo = {
+  id: number
+  username: string
+  role: string
+  empresa_uuid: string | null
+}
+
+// --- Admin entities ---
+
+export type User = {
+  id: number
+  username: string
+  role: string
+  empresa_uuid: string | null
+  is_active: boolean
+  created_at: string | null
+}
+
+export type Empresa = {
+  uuid: string
+  name: string
+  is_active: boolean
+  created_at: string | null
+}
+
+export type Fundo = {
+  uuid: string
+  empresa_uuid: string
+  fruit_type_uuid: string | null
+  name: string
+  region: string | null
+  is_active: boolean
+  created_at: string | null
+}
+
+export type Device = {
+  id: string
+  label: string
+  last_sync_at: string | null
+  is_active: boolean
+}
+
+export type FruitType = {
+  uuid: string
+  name: string
+  created_at: string | null
+}
+
+export type DetectionModel = {
+  uuid: string
+  fruit_type_uuid: string
+  object_type: string
+  version: string
+  filename: string
+  file_hash: string
+  epochs: number | null
+  map50: number | null
+  map50_95: number | null
+  precision: number | null
+  recall: number | null
+  dataset_size: number | null
+  notes: string | null
+  uploaded_by: string
+  is_active: boolean
+  created_at: string | null
+}
