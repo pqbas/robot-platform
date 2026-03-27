@@ -10,6 +10,9 @@ import LoginPage from "./modules/auth/LoginPage"
 import VisionPage from "./modules/vision/VisionPage"
 import MapPage from "./modules/map/MapPage"
 import DashboardPage from "./modules/dashboard/DashboardPage"
+import UsersPage from "./modules/admin/UsersPage"
+import EmpresasPage from "./modules/admin/EmpresasPage"
+import FundosPage from "./modules/admin/FundosPage"
 
 function ModeRedirect() {
   const { mode } = useAppMode()
@@ -41,7 +44,7 @@ const router = createBrowserRouter([
         path: "admin/users",
         element: (
           <ProtectedRoute requiredRole="admin">
-            <AdminPlaceholder title="Usuarios" />
+            <UsersPage />
           </ProtectedRoute>
         ),
       },
@@ -49,7 +52,7 @@ const router = createBrowserRouter([
         path: "admin/empresas",
         element: (
           <ProtectedRoute requiredRole="admin">
-            <AdminPlaceholder title="Empresas" />
+            <EmpresasPage />
           </ProtectedRoute>
         ),
       },
@@ -57,7 +60,7 @@ const router = createBrowserRouter([
         path: "admin/fundos",
         element: (
           <ProtectedRoute requiredRole="admin">
-            <AdminPlaceholder title="Fundos" />
+            <FundosPage />
           </ProtectedRoute>
         ),
       },
