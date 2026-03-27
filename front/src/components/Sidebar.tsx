@@ -61,10 +61,9 @@ export default function Sidebar() {
   return (
     <>
       {/* Mobile: fixed bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-14 items-center justify-around border-t bg-sidebar text-sidebar-foreground md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-14 items-center justify-around overflow-x-auto border-t bg-sidebar text-sidebar-foreground md:hidden">
         {items
           .filter((item) => !item.separator)
-          .slice(0, 5)
           .map((item) => {
             const active = location.pathname.startsWith(item.path)
             return (

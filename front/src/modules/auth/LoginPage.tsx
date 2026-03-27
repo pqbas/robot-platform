@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { Navigate, useNavigate } from "react-router-dom"
+import { useAppMode } from "@/context/AppModeContext"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,8 +9,15 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 
 export default function LoginPage() {
-  const { login } = useAuth()
+  const { mode } = useAppMode()
+  const { login, isAuthenticated } = useAuth()
   const navigate = useNavigate()
+
+  // Robot mode: login not needed
+  if (mode === "robot") return <Navigate to="/vision" replace />
+
+  // Already authenticated: go to dashboard
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
