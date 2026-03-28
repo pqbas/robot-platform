@@ -15,6 +15,7 @@ from back.routes.dashboard import router as dashboard_router
 from back.routes.locations import router as locations_router
 from back.routes.stream import router as stream_router
 from back.routes.auth import router as auth_router
+from back.routes.setup import router as setup_router
 from back.routes.sync import router as sync_router
 from back.services.camera import close_all_connections
 from back.services.nvenc_init import init_nvenc
@@ -59,6 +60,7 @@ app.include_router(locations_router)
 app.include_router(config_router)
 app.include_router(dashboard_router)
 app.include_router(sync_router)
+app.include_router(setup_router)
 app.include_router(auth_router)
 
 # Admin CRUD routes — server mode only

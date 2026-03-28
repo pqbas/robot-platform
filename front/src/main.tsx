@@ -15,14 +15,17 @@ import EmpresasPage from "./modules/admin/EmpresasPage"
 import FundosPage from "./modules/admin/FundosPage"
 import DevicesPage from "./modules/admin/DevicesPage"
 import ModelsPage from "./modules/admin/ModelsPage"
+import SetupPage from "./modules/setup/SetupPage"
 
 function ModeRedirect() {
-  const { mode } = useAppMode()
+  const { mode, configured } = useAppMode()
+  if (mode === "robot" && !configured) return <Navigate to="/setup" replace />
   return <Navigate to={mode === "robot" ? "/vision" : "/dashboard"} replace />
 }
 
 const router = createBrowserRouter([
   { path: "login", element: <LoginPage /> },
+  { path: "setup", element: <SetupPage /> },
   {
     element: (
       <ProtectedRoute>

@@ -9,11 +9,13 @@ import type { AppMode } from "@/types"
 
 type AppModeState = {
   mode: AppMode | null
+  configured: boolean
   loading: boolean
 }
 
 const AppModeContext = createContext<AppModeState>({
   mode: null,
+  configured: true,
   loading: true,
 })
 
@@ -24,18 +26,18 @@ export function useAppMode() {
 export function AppModeProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppModeState>({
     mode: null,
+    configured: true,
     loading: true,
   })
 
   useEffect(() => {
-    fetch("/api/sync/health")
+    fetch("/api/config/setup-status")
       .then((res) => res.json())
-      .then((data: { mode: AppMode }) => {
-        setState({ mode: data.mode, loading: false })
+      .then((data: { mode: AppMode; configured: boolean }) => {
+        setState({ mode: data.mode, configured: data.configured, loading: false })
       })
       .catch(() => {
-        // If health check fails, default to robot mode (offline/local)
-        setState({ mode: "robot", loading: false })
+        setState({ mode: "robot", configured: true, loading: false })
       })
   }, [])
 

@@ -9,6 +9,7 @@ import {
   MapPin,
   HardDrive,
   Brain,
+  Settings,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react"
@@ -28,16 +29,20 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
-  const { mode } = useAppMode()
+  const { mode, configured } = useAppMode()
   const { user } = useAuth()
 
   const items = useMemo<NavItem[]>(() => {
     if (mode === "robot") {
-      return [
+      const robotItems: NavItem[] = [
         { label: "Vision", path: "/vision", icon: Eye },
         { label: "Mapa", path: "/mapa", icon: Map },
         { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
       ]
+      if (!configured) {
+        robotItems.push({ label: "Servidor", path: "/setup", icon: Settings, separator: true })
+      }
+      return robotItems
     }
 
     const base: NavItem[] = [
