@@ -26,6 +26,7 @@ class PerceptionConfig:
     model_name: str = "yolo11n.pt"
     default_target_class: str = "person"
     confidence_threshold: float = 0.5
+    socket_path: str = os.getenv("INFERENCE_SOCKET", "/tmp/inference.sock")
 
 
 @dataclass

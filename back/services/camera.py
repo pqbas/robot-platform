@@ -9,11 +9,13 @@ from aiortc import VideoStreamTrack
 
 from back.config import config
 from back.schemas import DetectionItem, FrameDetectionPayload
-from back.services.perception import counter, detector
+from back.services.perception import counter
+from back.services.perception.inference_client import InferenceClient
 
 logger = logging.getLogger("webrtc")
 
 pcs = set()
+processing_enabled = True
 
 
 async def close_all_connections() -> None:
@@ -25,7 +27,7 @@ async def close_all_connections() -> None:
 
 
 class _InferenceWorker:
-    """Runs YOLO inference in a background thread, decoupled from the stream."""
+    """Runs inference via the socket-based worker, decoupled from the stream."""
 
     def __init__(self) -> None:
         self._frame: np.ndarray | None = None
@@ -33,6 +35,7 @@ class _InferenceWorker:
         self._event = threading.Event()
         self._running = False
         self._thread: threading.Thread | None = None
+        self._client = InferenceClient(config.perception.socket_path)
 
         # Latest result, consumed by recv() in the event loop
         self._result: FrameDetectionPayload | None = None
@@ -77,14 +80,21 @@ class _InferenceWorker:
                 continue
 
             session = counter.get_active_session()
-            if not detector.enabled or session is None:
+            if not processing_enabled or session is None:
                 continue
 
             try:
                 target_class = session.target_class
-                _annotated, detections, count, tracking_data = detector.detect(
-                    frame, target_class
-                )
+                conf = config.counting.confidence_threshold
+                response = self._client.detect(frame, target_class, conf)
+
+                if response is None:
+                    continue
+
+                detections = response.get("detections", [])
+                tracking_data = response.get("tracking_data", [])
+                count = response.get("count", 0)
+
                 counter.update(tracking_data)
                 logger.info("Inference: %d detections, count=%d", len(detections), count)
 
@@ -98,14 +108,14 @@ class _InferenceWorker:
                 with self._result_lock:
                     self._result = payload
 
-            except Exception as exc:
+            except Exception:
                 logger.warning("Inference failed, stream continues", exc_info=True)
                 error_payload = FrameDetectionPayload(
                     count=0,
                     target_class="",
                     detections=[],
                     session_active=True,
-                    error=str(exc),
+                    error="inference error",
                 )
                 with self._result_lock:
                     self._result = error_payload
