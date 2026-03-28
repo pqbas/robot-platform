@@ -11,10 +11,15 @@ from back.config import AppMode, config
 router = APIRouter(prefix="/api/config", tags=["setup"])
 
 
+_DEFAULT_VALUES = {"", "http://localhost:9090", "dev-sync-key"}
+
+
 @router.get("/setup-status")
 async def setup_status():
-    """Check if the robot is configured (has server URL and API key)."""
-    configured = bool(config.sync.server_url and config.sync.api_key)
+    """Check if the robot is configured (has real server URL and API key)."""
+    url = config.sync.server_url.strip()
+    key = config.sync.api_key.strip()
+    configured = url not in _DEFAULT_VALUES and key not in _DEFAULT_VALUES
     return {"configured": configured, "mode": config.mode.value}
 
 
