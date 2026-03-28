@@ -67,7 +67,6 @@ export default function GoogleMap({
   locations,
   activeLocationId,
   onSaveLocation,
-  onDeleteLocation,
   onUpdatePolygon,
 }: GoogleMapProps) {
   const items = locations.length > 0 ? locations : FALLBACK_LOCATIONS

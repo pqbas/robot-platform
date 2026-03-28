@@ -15,5 +15,13 @@
 - Backend server: `PORT=8080 ENV_FILE=.env.server uv run python -m back.main` (o levantar PostgreSQL primero con `docker compose -f docker-compose.server.yml up -d`)
 - Frontend: `cd front && npm run dev`
 
+## Deploy (producción)
+- Instalar robot: `make deploy-robot` (nginx + systemd, SQLite, port 8080)
+- Instalar server: `make deploy-server` (nginx + systemd + PostgreSQL, port 9090)
+- Logs: `make logs` | Status: `make status` | Restart: `make restart`
+- Nginx sirve `front/dist/` y hace proxy a uvicorn en 127.0.0.1
+- Systemd ejecuta uvicorn directo (sin tmux), `Restart=on-failure`
+- `.env.active` es symlink a `.env.robot` o `.env.server`
+
 ## Credenciales dev
 - Server admin seed: `admin` / `admin`
