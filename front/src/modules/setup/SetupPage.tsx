@@ -91,6 +91,14 @@ export default function SetupPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Conectando..." : "Conectar"}
             </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={() => navigate("/vision", { replace: true })}
+            >
+              Saltar por ahora
+            </Button>
           </form>
         </CardContent>
       </Card>
