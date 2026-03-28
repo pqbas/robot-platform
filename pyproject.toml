@@ -21,4 +21,5 @@ dependencies = [
     "python-jose[cryptography]>=3.5.0",
     "bcrypt>=5.0.0",
     "python-multipart>=0.0.22",
+    "lap>=0.5.13",
 ]
