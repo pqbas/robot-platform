@@ -1,0 +1,17 @@
+[Unit]
+Description=Robot Platform Backend
+After=network.target
+
+[Service]
+Type=simple
+User=DEPLOY_USER
+WorkingDirectory=/opt/robot-platform
+EnvironmentFile=/opt/robot-platform/.env.active
+Environment=ENV_FILE=/opt/robot-platform/.env.active
+ExecStart=DEPLOY_UV_PATH run uvicorn back.main:app --host 127.0.0.1 --port ${PORT} --workers 1
+Restart=on-failure
+RestartSec=5
+ReadWritePaths=/opt/robot-platform/data
+
+[Install]
+WantedBy=multi-user.target
