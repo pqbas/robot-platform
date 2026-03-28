@@ -6,7 +6,6 @@ from fastapi.requests import Request
 from fastapi.responses import JSONResponse
 
 from back.services import camera
-from back.services.perception import detector
 
 logger = logging.getLogger("webrtc")
 
@@ -55,9 +54,9 @@ async def offer(request: Request):
 
 @router.post("/toggle_processing")
 async def toggle_processing():
-    detector.enabled = not detector.enabled
+    camera.processing_enabled = not camera.processing_enabled
     logger.info(
         "Processing %s",
-        "enabled" if detector.enabled else "disabled",
+        "enabled" if camera.processing_enabled else "disabled",
     )
-    return JSONResponse({"processing": detector.enabled})
+    return JSONResponse({"processing": camera.processing_enabled})
