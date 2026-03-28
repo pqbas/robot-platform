@@ -67,10 +67,10 @@ def is_session_active() -> bool:
     return _active is not None
 
 
-def update(results_raw: list) -> None:
-    """Called every frame with raw YOLO results to update line-crossing count."""
+def update(tracking_data: list[dict]) -> None:
+    """Called every frame with tracking data to update line-crossing count."""
     global _last_results
     if _active is not None and _object_counter is not None:
-        _object_counter.update(results_raw)
+        _object_counter.update(tracking_data)
         _active.last_frame_count = _object_counter.get_count()
-        _last_results = results_raw
+        _last_results = tracking_data

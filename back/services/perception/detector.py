@@ -52,4 +52,10 @@ def detect(
         if target_class is None or cls_name == target_class:
             count += 1
 
-    return annotated, detections, count, results
+    tracking_data = []
+    for box in result.boxes:
+        if box.id is not None:
+            xywh = box.xywh[0].tolist()
+            tracking_data.append({"track_id": int(box.id[0]), "cx": xywh[0], "cy": xywh[1]})
+
+    return annotated, detections, count, tracking_data

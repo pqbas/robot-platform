@@ -1,6 +1,3 @@
-import torch
-
-
 class ObjectCounter:
     def __init__(self, count_mode: str, threshold: int, direction: str):
         self.LIST_0: list[int] = []
@@ -20,35 +17,26 @@ class ObjectCounter:
         else:
             raise ValueError(f"Invalid direction: {direction}")
 
-    def update(self, prediction: list) -> None:
-        if not isinstance(prediction, list):
-            return
-        if prediction[0].boxes.shape[0] == 0:
-            return
-        if prediction[0].boxes.id is None:
+    def update(self, tracking_data: list[dict]) -> None:
+        if not tracking_data:
             return
 
-        boxes = prediction[0].boxes.xywh.cpu()
-        centers = boxes[:, :2]
-        track_ids = prediction[0].boxes.id.int().cpu().reshape(-1, 1)
-        to_count = torch.cat((track_ids, centers), 1)
         set_0, set_1 = set(self.LIST_0), set(self.LIST_1)
 
-        for obj_id, x, y in to_count:
-            self._process_object(obj_id, x, y, set_0, set_1)
+        for obj in tracking_data:
+            self._process_object(obj["track_id"], obj["cx"], obj["cy"], set_0, set_1)
 
         self.LIST_0, self.LIST_1 = list(set_0), list(set_1)
 
-    def _process_object(self, obj_id, x, y, set_0: set, set_1: set) -> None:
-        obj_id = obj_id.item()
+    def _process_object(self, obj_id: int, x: float, y: float, set_0: set, set_1: set) -> None:
         if self.count_mode == "horizontal":
-            if self.count_condition(x.item()):
+            if self.count_condition(x):
                 set_0.add(obj_id)
                 set_1.discard(obj_id)
             elif obj_id in set_0:
                 set_1.add(obj_id)
         elif self.count_mode == "vertical":
-            if self.count_condition(y.item()):
+            if self.count_condition(y):
                 set_0.add(obj_id)
                 set_1.discard(obj_id)
             elif obj_id in set_0:
@@ -57,18 +45,12 @@ class ObjectCounter:
     def get_count(self) -> int:
         return len(self.LIST_1)
 
-    def get_pending_count(self, prediction: list) -> int:
-        """Count objects currently tracked but not yet in LIST_1 (crossed but not counted)."""
-        if not isinstance(prediction, list):
+    def get_pending_count(self, tracking_data: list[dict]) -> int:
+        """Count objects currently tracked but not yet in LIST_1."""
+        if not tracking_data:
             return 0
-        if prediction[0].boxes.shape[0] == 0:
-            return 0
-        if prediction[0].boxes.id is None:
-            return 0
-
         set_1 = set(self.LIST_1)
-        track_ids = prediction[0].boxes.id.int().cpu().flatten().tolist()
-        return sum(1 for tid in track_ids if tid not in set_1)
+        return sum(1 for obj in tracking_data if obj["track_id"] not in set_1)
 
     def reset(self) -> None:
         self.LIST_0.clear()

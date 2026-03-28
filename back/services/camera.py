@@ -82,10 +82,10 @@ class _InferenceWorker:
 
             try:
                 target_class = session.target_class
-                _annotated, detections, count, results_raw = detector.detect(
+                _annotated, detections, count, tracking_data = detector.detect(
                     frame, target_class
                 )
-                counter.update(results_raw)
+                counter.update(tracking_data)
                 logger.info("Inference: %d detections, count=%d", len(detections), count)
 
                 payload = FrameDetectionPayload(
