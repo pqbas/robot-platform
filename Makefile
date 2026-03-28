@@ -1,4 +1,4 @@
-.PHONY: start run-robot run-server db-up db-down db-migrate build-front deploy-robot deploy-server restart logs status
+.PHONY: start run-robot run-server db-up db-down db-migrate build-front deploy-robot deploy-server restart logs status update
 
 start:
 	uv run uvicorn back.main:app --host 0.0.0.0 --port 8080 --reload
@@ -37,3 +37,9 @@ status:
 	@sudo systemctl status robot-platform --no-pager
 	@echo "---"
 	@sudo systemctl status nginx --no-pager
+
+update:
+	git pull
+	uv sync
+	cd front && npm ci && npm run build
+	sudo systemctl restart robot-platform
