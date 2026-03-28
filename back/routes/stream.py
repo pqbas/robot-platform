@@ -1,10 +1,9 @@
 import logging
-import os
 
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from fastapi import APIRouter
 from fastapi.requests import Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 
 from back.services import camera
 from back.services.perception import detector
@@ -12,13 +11,6 @@ from back.services.perception import detector
 logger = logging.getLogger("webrtc")
 
 router = APIRouter()
-
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "scripts", "static")
-
-
-@router.get("/")
-async def index():
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 @router.post("/offer")
