@@ -40,7 +40,7 @@ export default function Sidebar() {
         { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
       ]
       if (!configured) {
-        robotItems.push({ label: "Configurar", path: "/setup", icon: Settings, separator: true })
+        robotItems.push({ label: "Servidor", path: "/setup", icon: Settings, separator: true })
       }
       return robotItems
     }
