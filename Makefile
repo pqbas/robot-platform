@@ -1,4 +1,4 @@
-.PHONY: start run-robot run-server db-up db-down db-migrate
+.PHONY: start run-robot run-server db-up db-down db-migrate build-front deploy-robot deploy-server restart logs status
 
 start:
 	uv run uvicorn back.main:app --host 0.0.0.0 --port 8080 --reload
@@ -17,3 +17,23 @@ db-down:
 
 db-migrate:
 	ENV_FILE=.env.server uv run alembic -c back/alembic.ini upgrade head
+
+build-front:
+	cd front && npm ci && npm run build
+
+deploy-robot:
+	./deploy/install.sh robot
+
+deploy-server:
+	./deploy/install.sh server
+
+restart:
+	sudo systemctl restart robot-platform
+
+logs:
+	sudo journalctl -u robot-platform -f
+
+status:
+	@sudo systemctl status robot-platform --no-pager
+	@echo "---"
+	@sudo systemctl status nginx --no-pager

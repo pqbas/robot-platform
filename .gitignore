@@ -19,6 +19,7 @@ front/.vite/
 .env
 .env.robot
 .env.server
+.env.active
 front/.env
 
 # Database
