@@ -62,9 +62,16 @@ else
 fi
 
 # --- 4. Python dependencies ---
-info "Installing Python dependencies..."
+info "Installing Python dependencies (backend)..."
 cd "$INSTALL_DIR"
 uv sync
+
+if [[ "$MODE" == "robot" ]]; then
+    info "Installing Python dependencies (inference worker)..."
+    cd "$INSTALL_DIR/inference"
+    uv sync
+    cd "$INSTALL_DIR"
+fi
 
 # --- 5. Build frontend ---
 info "Building frontend..."
@@ -146,7 +153,21 @@ sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
     "$INSTALL_DIR/deploy/robot-platform.service" \
     | sudo tee /etc/systemd/system/robot-platform.service > /dev/null
 
+if [[ "$MODE" == "robot" ]]; then
+    sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
+        -e "s|DEPLOY_UV_PATH|${DEPLOY_UV_PATH}|g" \
+        "$INSTALL_DIR/deploy/inference-worker.service" \
+        | sudo tee /etc/systemd/system/inference-worker.service > /dev/null
+fi
+
 sudo systemctl daemon-reload
+
+if [[ "$MODE" == "robot" ]]; then
+    sudo systemctl enable inference-worker
+    sudo systemctl restart inference-worker
+    info "Inference worker service enabled and started"
+fi
+
 sudo systemctl enable robot-platform
 sudo systemctl restart robot-platform
 info "Systemd service enabled and started"
