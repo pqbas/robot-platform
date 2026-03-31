@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Length-prefixed protocol for Unix socket communication.
 
 Request (backend -> worker):

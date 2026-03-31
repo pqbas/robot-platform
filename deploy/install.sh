@@ -151,7 +151,15 @@ sudo nginx -t
 sudo systemctl reload nginx
 info "Nginx configured and reloaded"
 
-# --- 8. Systemd ---
+# --- 8. Disable old robot-movil services (if present) ---
+for OLD_SVC in robot_backend robot_front robot_movil_backend_server robot_movil_front_server; do
+    if systemctl is-enabled "$OLD_SVC" &>/dev/null; then
+        sudo systemctl disable --now "$OLD_SVC"
+        info "Disabled old service: $OLD_SVC"
+    fi
+done
+
+# --- 9. Systemd ---
 info "Configuring systemd service..."
 
 DEPLOY_USER="$(whoami)"
@@ -164,7 +172,6 @@ sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
 
 if [[ "$MODE" == "robot" ]]; then
     sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
-        -e "s|DEPLOY_UV_PATH|${DEPLOY_UV_PATH}|g" \
         "$INSTALL_DIR/deploy/inference-worker.service" \
         | sudo tee /etc/systemd/system/inference-worker.service > /dev/null
 fi
@@ -181,7 +188,7 @@ sudo systemctl enable robot-platform
 sudo systemctl restart robot-platform
 info "Systemd service enabled and started"
 
-# --- 9. Server-specific: PostgreSQL + migrations ---
+# --- 10. Server-specific: PostgreSQL + migrations ---
 if [[ "$MODE" == "server" ]]; then
     info "Starting PostgreSQL (docker compose)..."
     cd "$INSTALL_DIR"
@@ -191,7 +198,7 @@ if [[ "$MODE" == "server" ]]; then
     ENV_FILE=.env.server uv run alembic -c back/alembic.ini upgrade head
 fi
 
-# --- 10. Create data directories ---
+# --- 11. Create data directories ---
 mkdir -p "$INSTALL_DIR/data"
 info "Data directory ready"
 

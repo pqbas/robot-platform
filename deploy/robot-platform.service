@@ -1,7 +1,7 @@
 [Unit]
 Description=Robot Platform Backend
 After=network.target inference-worker.service
-Requires=inference-worker.service
+Wants=inference-worker.service
 
 [Service]
 Type=simple
