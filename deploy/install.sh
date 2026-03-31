@@ -154,7 +154,8 @@ info "Nginx configured and reloaded"
 # --- 8. Disable old robot-movil services (if present) ---
 for OLD_SVC in robot_backend robot_front robot_movil_backend_server robot_movil_front_server; do
     if systemctl is-enabled "$OLD_SVC" &>/dev/null; then
-        sudo systemctl disable --now "$OLD_SVC"
+        sudo systemctl disable "$OLD_SVC"
+        sudo systemctl kill "$OLD_SVC" 2>/dev/null || true
         info "Disabled old service: $OLD_SVC"
     fi
 done
