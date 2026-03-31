@@ -8,7 +8,7 @@ Type=simple
 User=DEPLOY_USER
 WorkingDirectory=/opt/robot-platform/inference
 ExecStartPre=/bin/rm -f /tmp/inference.sock
-ExecStart=DEPLOY_UV_PATH run inference-worker --model /opt/robot-platform/yolo11n.pt
+ExecStart=/opt/robot-platform/inference/.venv/bin/inference-worker
 Restart=on-failure
 RestartSec=5
 

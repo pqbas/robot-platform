@@ -11,7 +11,10 @@ run-server:
 	ENV_FILE=.env.server uv run uvicorn back.main:app --host 0.0.0.0 --port 9090 --reload
 
 run-inference:
-	cd inference && uv run inference-worker --model ../yolo11n.pt
+	cd inference && VIRTUAL_ENV= .venv/bin/inference-worker
+
+run-inference-dev:
+	cd inference && uv run inference-worker
 
 db-up:
 	docker compose -f docker-compose.server.yml up -d
@@ -54,7 +57,6 @@ status:
 update:
 	git pull
 	uv sync
-	cd inference && uv sync
 	cd front && npm ci && npm run build
 	-sudo systemctl restart inference-worker
 	sudo systemctl restart robot-platform
