@@ -1,0 +1,16 @@
+[Unit]
+Description=Inference Worker (YOLO via Unix socket)
+Before=robot-platform.service
+After=network.target
+
+[Service]
+Type=simple
+User=DEPLOY_USER
+WorkingDirectory=/opt/robot-platform/inference
+ExecStartPre=/bin/rm -f /tmp/inference.sock
+ExecStart=DEPLOY_UV_PATH run inference-worker --model /opt/robot-platform/yolo11n.pt
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
