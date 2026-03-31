@@ -73,7 +73,7 @@ if [[ "$MODE" == "robot" ]]; then
         # Jetson: use system PyTorch (NVIDIA CUDA) via --system-site-packages
         # Do not install torch/torchvision from PyPI (x86 only)
         info "Jetson detected (aarch64): using system PyTorch"
-        uv venv --system-site-packages --python python3
+        uv venv --system-site-packages --python /usr/bin/python3
         uv pip install --no-deps ultralytics opencv-python numpy lap hatchling
         uv pip install -e . --no-deps
     else
