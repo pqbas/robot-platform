@@ -74,7 +74,7 @@ async def run_server(socket_path: str, model_path: str) -> None:
 def main():
     parser = argparse.ArgumentParser(description="YOLO inference worker")
     parser.add_argument("--socket-path", default="/tmp/inference.sock")
-    parser.add_argument("--model", required=True, help="Path to YOLO .pt model")
+    parser.add_argument("--model", default="yolo11n.pt", help="Path to YOLO .pt model")
     args = parser.parse_args()
 
     logging.basicConfig(
