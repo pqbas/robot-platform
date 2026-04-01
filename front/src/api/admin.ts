@@ -1,4 +1,4 @@
-import type { User, Empresa, Fundo, FruitType } from "@/types"
+import type { User, Empresa, Fundo } from "@/types"
 import { apiFetch } from "./client"
 
 // --- Users ---
@@ -66,7 +66,6 @@ export function createFundo(data: {
   empresa_uuid: string
   name: string
   region?: string | null
-  fruit_type_uuid?: string | null
 }) {
   return apiFetch<Fundo>("/api/fundos/", {
     method: "POST",
@@ -79,7 +78,6 @@ export function updateFundo(
   data: {
     name?: string
     region?: string | null
-    fruit_type_uuid?: string | null
     is_active?: boolean
   },
 ) {
@@ -89,8 +87,3 @@ export function updateFundo(
   })
 }
 
-// --- Fruit Types ---
-
-export function getFruitTypes() {
-  return apiFetch<FruitType[]>("/api/fruit-types")
-}

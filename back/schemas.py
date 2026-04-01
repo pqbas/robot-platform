@@ -232,16 +232,9 @@ class SyncEmpresa(BaseModel):
     created_at: str | None = None
 
 
-class SyncFruitType(BaseModel):
-    uuid: str
-    name: str
-    created_at: str | None = None
-
-
 class SyncFundo(BaseModel):
     uuid: str
     empresa_uuid: str
-    fruit_type_uuid: str | None = None
     name: str
     region: str | None = None
     is_active: bool = True

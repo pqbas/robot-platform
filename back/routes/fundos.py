@@ -17,20 +17,17 @@ class FundoCreate(BaseModel):
     empresa_uuid: str
     name: str
     region: str | None = None
-    fruit_type_uuid: str | None = None
 
 
 class FundoUpdate(BaseModel):
     name: str | None = None
     region: str | None = None
-    fruit_type_uuid: str | None = None
     is_active: bool | None = None
 
 
 class FundoOut(BaseModel):
     uuid: str
     empresa_uuid: str
-    fruit_type_uuid: str | None
     name: str
     region: str | None
     is_active: bool
@@ -51,7 +48,6 @@ async def create_fundo(body: FundoCreate, db: AsyncSession = Depends(get_db), _=
         empresa_uuid=body.empresa_uuid,
         name=body.name,
         region=body.region,
-        fruit_type_uuid=body.fruit_type_uuid,
     )
     db.add(fundo)
     await db.commit()
@@ -69,8 +65,6 @@ async def update_fundo(uuid: str, body: FundoUpdate, db: AsyncSession = Depends(
         fundo.name = body.name
     if body.region is not None:
         fundo.region = body.region
-    if body.fruit_type_uuid is not None:
-        fundo.fruit_type_uuid = body.fruit_type_uuid
     if body.is_active is not None:
         fundo.is_active = body.is_active
     await db.commit()

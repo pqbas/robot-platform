@@ -15,7 +15,6 @@ from back.schemas import (
     SyncCamellon,
     SyncEmpresa,
     SyncEvent,
-    SyncFruitType,
     SyncFundo,
     SyncLocation,
     SyncResult,
@@ -25,7 +24,6 @@ from back.services.sync_receive import (
     receive_camellones,
     receive_empresas,
     receive_events,
-    receive_fruit_types,
     receive_fundos,
     receive_locations,
     receive_sessions,
@@ -49,11 +47,6 @@ async def health():
 @router.post("/empresas", response_model=SyncResult, dependencies=_device_dep)
 async def sync_empresas(items: list[SyncEmpresa], db: AsyncSession = Depends(get_db)):
     return await receive_empresas(db, items)
-
-
-@router.post("/fruit-types", response_model=SyncResult, dependencies=_device_dep)
-async def sync_fruit_types(items: list[SyncFruitType], db: AsyncSession = Depends(get_db)):
-    return await receive_fruit_types(db, items)
 
 
 @router.post("/fundos", response_model=SyncResult, dependencies=_device_dep)
@@ -97,7 +90,6 @@ async def list_models(db: AsyncSession = Depends(get_db)):
             "filename": m.filename,
             "file_hash": m.file_hash,
             "version": m.version,
-            "object_type": m.object_type,
         }
         for m in models
     ]
