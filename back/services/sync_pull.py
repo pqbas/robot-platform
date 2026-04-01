@@ -66,11 +66,12 @@ async def pull_models() -> None:
 
             # 4. Always ensure worker is using the active model
             if latest_model_path and latest_model_path.exists():
+                abs_path = str(latest_model_path.resolve())
                 client = InferenceClient(config.perception.socket_path)
                 status = client.send_command("status")
                 current = status.get("model_path", "") if status else ""
-                if str(latest_model_path) != current:
-                    result = client.reload_model(str(latest_model_path))
+                if abs_path != current:
+                    result = client.reload_model(abs_path)
                     if result and result.get("ok"):
                         logger.info("Sync pull: worker reloaded with %s", latest_model_path.name)
                     else:
