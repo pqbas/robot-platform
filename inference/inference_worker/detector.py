@@ -11,7 +11,17 @@ logger = logging.getLogger("inference_worker.detector")
 class Detector:
     def __init__(self, model_path: str):
         self._model = YOLO(model_path)
+        self._model_path = model_path
         logger.info("Model loaded: %s", model_path)
+
+    def reload_model(self, model_path: str) -> None:
+        self._model = YOLO(model_path)
+        self._model_path = model_path
+        logger.info("Model reloaded: %s", model_path)
+
+    @property
+    def model_path(self) -> str:
+        return self._model_path
 
     def get_class_names(self) -> list[str]:
         return list(self._model.names.values())

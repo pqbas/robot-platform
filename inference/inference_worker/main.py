@@ -16,6 +16,23 @@ from inference_worker.protocol import read_request, write_response
 logger = logging.getLogger("inference_worker")
 
 
+def handle_command(header: dict, detector: Detector) -> dict:
+    """Handle a control command (no JPEG payload)."""
+    cmd = header.get("command")
+    if cmd == "reload_model":
+        model_path = header.get("model_path")
+        if not model_path:
+            return {"ok": False, "error": "model_path required"}
+        try:
+            detector.reload_model(model_path)
+            return {"ok": True, "model_path": model_path}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+    elif cmd == "status":
+        return {"ok": True, "model_path": detector.model_path}
+    return {"ok": False, "error": f"unknown command: {cmd}"}
+
+
 async def handle_client(reader, writer, detector: Detector) -> None:
     peer = "client"
     logger.info("%s connected", peer)
@@ -29,6 +46,13 @@ async def handle_client(reader, writer, detector: Detector) -> None:
                 break
 
             header, jpeg_bytes = req
+
+            # Control commands (no JPEG payload)
+            if "command" in header:
+                response = handle_command(header, detector)
+                await write_response(writer, response)
+                continue
+
             frame = cv2.imdecode(np.frombuffer(jpeg_bytes, np.uint8), cv2.IMREAD_COLOR)
             if frame is None:
                 await write_response(writer, {"error": "invalid JPEG"})
