@@ -40,9 +40,11 @@ async def pull_models() -> None:
                 logger.info("Sync pull: no active models on server")
                 return
 
-            # 2. Compare with local files
+            # 2. Download new/updated models
+            latest_model_path = None
             for model in remote_models:
                 local_path = models_dir / model["filename"]
+                latest_model_path = local_path
                 if local_path.exists():
                     local_hash = _file_hash(local_path)
                     if local_hash == model["file_hash"]:
@@ -62,11 +64,15 @@ async def pull_models() -> None:
                     local_path.write_bytes(content)
                     logger.info("Sync pull: downloaded %s (%d bytes)", model["filename"], len(content))
 
-                    # Tell the inference worker to reload with the new model
-                    client = InferenceClient(config.perception.socket_path)
-                    result = client.reload_model(str(local_path))
+            # 4. Always ensure worker is using the active model
+            if latest_model_path and latest_model_path.exists():
+                client = InferenceClient(config.perception.socket_path)
+                status = client.send_command("status")
+                current = status.get("model_path", "") if status else ""
+                if str(latest_model_path) != current:
+                    result = client.reload_model(str(latest_model_path))
                     if result and result.get("ok"):
-                        logger.info("Sync pull: worker reloaded with %s", model["filename"])
+                        logger.info("Sync pull: worker reloaded with %s", latest_model_path.name)
                     else:
                         logger.warning("Sync pull: worker reload failed: %s", result)
 
