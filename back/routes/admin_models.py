@@ -1,6 +1,7 @@
-"""Detection model and fruit type management routes — admin only."""
+"""Detection model management routes — admin only."""
 
 import hashlib
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
@@ -10,53 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import config
 from back.database import get_db
-from back.models import DetectionModel, FruitType
+from back.models import DetectionModel
 from back.services.auth import require_role
 
 router = APIRouter(prefix="/api", tags=["models"])
 admin_dep = require_role("admin")
 
 
-# --- Fruit Types ---
-
-
-class FruitTypeCreate(BaseModel):
-    name: str
-
-
-class FruitTypeOut(BaseModel):
-    uuid: str
-    name: str
-    created_at: str | None
-
-    model_config = {"from_attributes": True}
-
-
-@router.get("/fruit-types", response_model=list[FruitTypeOut])
-async def list_fruit_types(db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
-    result = await db.execute(select(FruitType))
-    return result.scalars().all()
-
-
-@router.post("/fruit-types", response_model=FruitTypeOut, status_code=201)
-async def create_fruit_type(body: FruitTypeCreate, db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
-    ft = FruitType(name=body.name)
-    db.add(ft)
-    await db.commit()
-    await db.refresh(ft)
-    return ft
-
-
-# --- Detection Models ---
-
-
 class DetectionModelOut(BaseModel):
     uuid: str
-    fruit_type_uuid: str
-    object_type: str
     version: str
     filename: str
     file_hash: str
+    class_mapping: list = []
     epochs: int | None
     map50: float | None
     map50_95: float | None
@@ -71,18 +38,32 @@ class DetectionModelOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+def _parse_class_mapping(raw: str | None) -> list:
+    if not raw:
+        return []
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def _model_to_out(m: DetectionModel) -> dict:
+    d = {c.name: getattr(m, c.name) for c in m.__table__.columns}
+    d["class_mapping"] = _parse_class_mapping(m.class_mapping)
+    return d
+
+
 @router.get("/detection-models", response_model=list[DetectionModelOut])
 async def list_detection_models(db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
     result = await db.execute(select(DetectionModel))
-    return result.scalars().all()
+    return [_model_to_out(m) for m in result.scalars().all()]
 
 
 @router.post("/detection-models", response_model=DetectionModelOut, status_code=201)
 async def upload_detection_model(
-    fruit_type_uuid: str = Form(...),
-    object_type: str = Form(...),
     version: str = Form(...),
     uploaded_by: str = Form(...),
+    class_mapping: str = Form("[]"),
     epochs: int | None = Form(None),
     map50: float | None = Form(None),
     map50_95: float | None = Form(None),
@@ -96,6 +77,7 @@ async def upload_detection_model(
 ):
     # Save file to disk
     models_dir = Path(config.storage.models_dir)
+    models_dir.mkdir(parents=True, exist_ok=True)
     file_path = models_dir / file.filename
     content = await file.read()
     file_path.write_bytes(content)
@@ -104,11 +86,10 @@ async def upload_detection_model(
     file_hash = hashlib.sha256(content).hexdigest()
 
     model = DetectionModel(
-        fruit_type_uuid=fruit_type_uuid,
-        object_type=object_type,
         version=version,
         filename=file.filename,
         file_hash=file_hash,
+        class_mapping=class_mapping,
         uploaded_by=uploaded_by,
         epochs=epochs,
         map50=map50,
@@ -121,7 +102,7 @@ async def upload_detection_model(
     db.add(model)
     await db.commit()
     await db.refresh(model)
-    return model
+    return _model_to_out(model)
 
 
 @router.put("/detection-models/{uuid}/activate", response_model=DetectionModelOut)
@@ -131,10 +112,9 @@ async def activate_model(uuid: str, db: AsyncSession = Depends(get_db), _=Depend
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    # Deactivate other models of the same fruit type
+    # Deactivate all other active models
     others = await db.execute(
         select(DetectionModel).where(
-            DetectionModel.fruit_type_uuid == model.fruit_type_uuid,
             DetectionModel.uuid != uuid,
             DetectionModel.is_active == True,  # noqa: E712
         )
@@ -145,7 +125,7 @@ async def activate_model(uuid: str, db: AsyncSession = Depends(get_db), _=Depend
     model.is_active = True
     await db.commit()
     await db.refresh(model)
-    return model
+    return _model_to_out(model)
 
 
 @router.delete("/detection-models/{uuid}", status_code=204)

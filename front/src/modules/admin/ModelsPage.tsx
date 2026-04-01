@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useState } from "react"
-import type { FruitType, DetectionModel } from "@/types"
+import type { DetectionModel, ClassMappingItem } from "@/types"
 import {
-  getFruitTypes,
-  createFruitType,
   getDetectionModels,
   activateModel,
   deleteModel,
 } from "@/api/admin-models"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -21,21 +18,27 @@ import {
 import ModelUploadDialog from "./components/ModelUploadDialog"
 import { toast } from "sonner"
 
+function formatClasses(mapping: ClassMappingItem[]): string {
+  if (!mapping || mapping.length === 0) return "—"
+  return mapping
+    .map((item) =>
+      typeof item === "string"
+        ? item
+        : `${item.model_label} → ${item.system_label}`,
+    )
+    .join(", ")
+}
+
 export default function ModelsPage() {
-  const [fruitTypes, setFruitTypes] = useState<FruitType[]>([])
   const [models, setModels] = useState<DetectionModel[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadOpen, setUploadOpen] = useState(false)
-  const [newFruitName, setNewFruitName] = useState("")
-  const [addingFruit, setAddingFruit] = useState(false)
 
   const load = useCallback(async () => {
     try {
-      const [ft, m] = await Promise.all([getFruitTypes(), getDetectionModels()])
-      setFruitTypes(ft)
-      setModels(m)
+      setModels(await getDetectionModels())
     } catch {
-      toast.error("Error al cargar datos")
+      toast.error("Error al cargar modelos")
     } finally {
       setLoading(false)
     }
@@ -44,21 +47,6 @@ export default function ModelsPage() {
   useEffect(() => {
     load()
   }, [load])
-
-  const handleAddFruit = async () => {
-    if (!newFruitName.trim() || addingFruit) return
-    setAddingFruit(true)
-    try {
-      await createFruitType({ name: newFruitName.trim() })
-      setNewFruitName("")
-      toast.success("Tipo de fruta creado")
-      load()
-    } catch {
-      toast.error("Error al crear tipo de fruta")
-    } finally {
-      setAddingFruit(false)
-    }
-  }
 
   const handleActivate = async (uuid: string) => {
     try {
@@ -81,9 +69,6 @@ export default function ModelsPage() {
     }
   }
 
-  const fruitName = (uuid: string) =>
-    fruitTypes.find((ft) => ft.uuid === uuid)?.name ?? "—"
-
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center text-muted-foreground">
@@ -94,36 +79,6 @@ export default function ModelsPage() {
 
   return (
     <div className="flex-1 space-y-6 overflow-auto p-4 md:p-6">
-      {/* Fruit Types section */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Tipos de fruta</h2>
-        <div className="flex items-center gap-2">
-          <Input
-            value={newFruitName}
-            onChange={(e) => setNewFruitName(e.target.value)}
-            placeholder="Nombre del tipo"
-            className="max-w-xs"
-            onKeyDown={(e) => e.key === "Enter" && handleAddFruit()}
-          />
-          <Button onClick={handleAddFruit} disabled={addingFruit} size="sm">
-            {addingFruit ? "Creando..." : "Agregar"}
-          </Button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {fruitTypes.map((ft) => (
-            <Badge key={ft.uuid} variant="secondary">
-              {ft.name}
-            </Badge>
-          ))}
-          {fruitTypes.length === 0 && (
-            <span className="text-sm text-muted-foreground">
-              No hay tipos de fruta registrados
-            </span>
-          )}
-        </div>
-      </section>
-
-      {/* Detection Models section */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Modelos de deteccion</h2>
@@ -133,10 +88,9 @@ export default function ModelsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Fruta</TableHead>
-                <TableHead>Objeto</TableHead>
                 <TableHead>Version</TableHead>
                 <TableHead>Archivo</TableHead>
+                <TableHead>Clases</TableHead>
                 <TableHead>mAP50</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="w-[140px]">Acciones</TableHead>
@@ -145,11 +99,12 @@ export default function ModelsPage() {
             <TableBody>
               {models.map((model) => (
                 <TableRow key={model.uuid}>
-                  <TableCell>{fruitName(model.fruit_type_uuid)}</TableCell>
-                  <TableCell>{model.object_type}</TableCell>
                   <TableCell>{model.version}</TableCell>
                   <TableCell className="font-mono text-xs">
                     {model.filename}
+                  </TableCell>
+                  <TableCell className="max-w-[200px] truncate text-muted-foreground">
+                    {formatClasses(model.class_mapping)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {model.map50 != null ? model.map50.toFixed(3) : "—"}
@@ -183,7 +138,10 @@ export default function ModelsPage() {
               ))}
               {models.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  <TableCell
+                    colSpan={6}
+                    className="text-center text-muted-foreground"
+                  >
                     No hay modelos registrados
                   </TableCell>
                 </TableRow>
@@ -196,7 +154,6 @@ export default function ModelsPage() {
       <ModelUploadDialog
         open={uploadOpen}
         onOpenChange={setUploadOpen}
-        fruitTypes={fruitTypes}
         onSuccess={load}
       />
     </div>

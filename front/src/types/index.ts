@@ -113,7 +113,6 @@ export type Empresa = {
 export type Fundo = {
   uuid: string
   empresa_uuid: string
-  fruit_type_uuid: string | null
   name: string
   region: string | null
   is_active: boolean
@@ -127,19 +126,14 @@ export type Device = {
   is_active: boolean
 }
 
-export type FruitType = {
-  uuid: string
-  name: string
-  created_at: string | null
-}
+export type ClassMappingItem = string | { model_label: string; system_label: string }
 
 export type DetectionModel = {
   uuid: string
-  fruit_type_uuid: string
-  object_type: string
   version: string
   filename: string
   file_hash: string
+  class_mapping: ClassMappingItem[]
   epochs: number | null
   map50: number | null
   map50_95: number | null

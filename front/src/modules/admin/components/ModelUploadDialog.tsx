@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react"
-import type { FruitType } from "@/types"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -10,33 +9,23 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { uploadDetectionModel } from "@/api/admin-models"
 import { toast } from "sonner"
 
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  fruitTypes: FruitType[]
   onSuccess: () => void
 }
 
 export default function ModelUploadDialog({
   open,
   onOpenChange,
-  fruitTypes,
   onSuccess,
 }: Props) {
-  const [fruitTypeUuid, setFruitTypeUuid] = useState("")
-  const [objectType, setObjectType] = useState("")
   const [version, setVersion] = useState("")
   const [uploadedBy, setUploadedBy] = useState("")
+  const [classMapping, setClassMapping] = useState("")
   const [epochs, setEpochs] = useState("")
   const [map50, setMap50] = useState("")
   const [map50_95, setMap50_95] = useState("")
@@ -49,10 +38,9 @@ export default function ModelUploadDialog({
 
   useEffect(() => {
     if (open) {
-      setFruitTypeUuid("")
-      setObjectType("")
       setVersion("")
       setUploadedBy("")
+      setClassMapping("")
       setEpochs("")
       setMap50("")
       setMap50_95("")
@@ -66,18 +54,29 @@ export default function ModelUploadDialog({
 
   const handleSubmit = async () => {
     const file = fileRef.current?.files?.[0]
-    if (!file || !fruitTypeUuid || !objectType || !version || !uploadedBy) {
+    if (!file || !version || !uploadedBy) {
       toast.error("Completa los campos obligatorios")
       return
+    }
+
+    // Validate class_mapping JSON if provided
+    let mappingJson = "[]"
+    if (classMapping.trim()) {
+      try {
+        JSON.parse(classMapping.trim())
+        mappingJson = classMapping.trim()
+      } catch {
+        toast.error("Class mapping debe ser JSON valido. Ej: [\"person\", \"car\"]")
+        return
+      }
     }
 
     setSaving(true)
     try {
       const fd = new FormData()
-      fd.append("fruit_type_uuid", fruitTypeUuid)
-      fd.append("object_type", objectType)
       fd.append("version", version)
       fd.append("uploaded_by", uploadedBy)
+      fd.append("class_mapping", mappingJson)
       fd.append("file", file)
       if (epochs) fd.append("epochs", epochs)
       if (map50) fd.append("map50", map50)
@@ -105,31 +104,7 @@ export default function ModelUploadDialog({
           <DialogTitle>Subir modelo</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Tipo de fruta *</Label>
-            <Select value={fruitTypeUuid || "__none__"} onValueChange={(v) => setFruitTypeUuid(v === "__none__" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__" disabled>Seleccionar</SelectItem>
-                {fruitTypes.map((ft) => (
-                  <SelectItem key={ft.uuid} value={ft.uuid}>
-                    {ft.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Tipo objeto *</Label>
-              <Input
-                value={objectType}
-                onChange={(e) => setObjectType(e.target.value)}
-                placeholder="flower"
-              />
-            </div>
             <div className="space-y-2">
               <Label>Version *</Label>
               <Input
@@ -138,18 +113,29 @@ export default function ModelUploadDialog({
                 placeholder="v1.0"
               />
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Subido por *</Label>
-            <Input
-              value={uploadedBy}
-              onChange={(e) => setUploadedBy(e.target.value)}
-              placeholder="nombre"
-            />
+            <div className="space-y-2">
+              <Label>Subido por *</Label>
+              <Input
+                value={uploadedBy}
+                onChange={(e) => setUploadedBy(e.target.value)}
+                placeholder="nombre"
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Archivo .pt *</Label>
             <Input type="file" accept=".pt" ref={fileRef} />
+          </div>
+          <div className="space-y-2">
+            <Label>Clases (JSON)</Label>
+            <Input
+              value={classMapping}
+              onChange={(e) => setClassMapping(e.target.value)}
+              placeholder='["person", "car"] o [{"model_label": "cls0", "system_label": "manzana"}]'
+            />
+            <p className="text-xs text-muted-foreground">
+              Lista de clases que detecta el modelo. Strings simples o mapeo model_label → system_label.
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

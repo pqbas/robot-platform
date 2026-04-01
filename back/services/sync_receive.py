@@ -9,7 +9,6 @@ from back.models import (
     Camellon,
     Empresa,
     Event,
-    FruitType,
     Fundo,
     Location,
     Session,
@@ -18,7 +17,6 @@ from back.schemas import (
     SyncCamellon,
     SyncEmpresa,
     SyncEvent,
-    SyncFruitType,
     SyncFundo,
     SyncLocation,
     SyncResult,
@@ -42,20 +40,6 @@ async def receive_empresas(db: AsyncSession, items: list[SyncEmpresa]) -> SyncRe
     return SyncResult(received=len(items), inserted=inserted, skipped=skipped)
 
 
-async def receive_fruit_types(db: AsyncSession, items: list[SyncFruitType]) -> SyncResult:
-    inserted = 0
-    skipped = 0
-    for item in items:
-        existing = await db.execute(select(FruitType).where(FruitType.uuid == item.uuid))
-        if existing.scalar_one_or_none():
-            skipped += 1
-            continue
-        db.add(FruitType(uuid=item.uuid, name=item.name, created_at=item.created_at))
-        inserted += 1
-    await db.commit()
-    return SyncResult(received=len(items), inserted=inserted, skipped=skipped)
-
-
 async def receive_fundos(db: AsyncSession, items: list[SyncFundo]) -> SyncResult:
     inserted = 0
     skipped = 0
@@ -72,8 +56,8 @@ async def receive_fundos(db: AsyncSession, items: list[SyncFundo]) -> SyncResult
             continue
         db.add(Fundo(
             uuid=item.uuid, empresa_uuid=item.empresa_uuid,
-            fruit_type_uuid=item.fruit_type_uuid, name=item.name,
-            region=item.region, is_active=item.is_active, created_at=item.created_at,
+            name=item.name, region=item.region,
+            is_active=item.is_active, created_at=item.created_at,
         ))
         inserted += 1
     await db.commit()

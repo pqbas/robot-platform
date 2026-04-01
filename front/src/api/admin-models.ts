@@ -1,16 +1,5 @@
-import type { FruitType, DetectionModel } from "@/types"
+import type { DetectionModel } from "@/types"
 import { apiFetch } from "./client"
-
-export function getFruitTypes() {
-  return apiFetch<FruitType[]>("/api/fruit-types")
-}
-
-export function createFruitType(data: { name: string }) {
-  return apiFetch<FruitType>("/api/fruit-types", {
-    method: "POST",
-    body: JSON.stringify(data),
-  })
-}
 
 export function getDetectionModels() {
   return apiFetch<DetectionModel[]>("/api/detection-models")

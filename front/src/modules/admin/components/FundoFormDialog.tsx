@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import type { Fundo, Empresa, FruitType } from "@/types"
+import type { Fundo, Empresa } from "@/types"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -25,7 +25,6 @@ type Props = {
   onOpenChange: (open: boolean) => void
   editing: Fundo | null
   empresas: Empresa[]
-  fruitTypes: FruitType[]
   onSuccess: () => void
 }
 
@@ -34,13 +33,11 @@ export default function FundoFormDialog({
   onOpenChange,
   editing,
   empresas,
-  fruitTypes,
   onSuccess,
 }: Props) {
   const [name, setName] = useState("")
   const [empresaUuid, setEmpresaUuid] = useState("")
   const [region, setRegion] = useState("")
-  const [fruitTypeUuid, setFruitTypeUuid] = useState("")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -49,12 +46,10 @@ export default function FundoFormDialog({
         setName(editing.name)
         setEmpresaUuid(editing.empresa_uuid)
         setRegion(editing.region ?? "")
-        setFruitTypeUuid(editing.fruit_type_uuid ?? "")
       } else {
         setName("")
         setEmpresaUuid("")
         setRegion("")
-        setFruitTypeUuid("")
       }
     }
   }, [editing, open])
@@ -66,7 +61,6 @@ export default function FundoFormDialog({
         await updateFundo(editing.uuid, {
           name,
           region: region || null,
-          fruit_type_uuid: fruitTypeUuid || null,
         })
         toast.success("Fundo actualizado")
       } else {
@@ -74,7 +68,6 @@ export default function FundoFormDialog({
           empresa_uuid: empresaUuid,
           name,
           region: region || null,
-          fruit_type_uuid: fruitTypeUuid || null,
         })
         toast.success("Fundo creado")
       }
@@ -129,22 +122,6 @@ export default function FundoFormDialog({
               onChange={(e) => setRegion(e.target.value)}
               placeholder="Opcional"
             />
-          </div>
-          <div className="space-y-2">
-            <Label>Tipo de fruta</Label>
-            <Select value={fruitTypeUuid || "__none__"} onValueChange={(v) => setFruitTypeUuid(v === "__none__" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Sin tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Sin tipo</SelectItem>
-                {fruitTypes.map((ft) => (
-                  <SelectItem key={ft.uuid} value={ft.uuid}>
-                    {ft.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </div>
         <DialogFooter>

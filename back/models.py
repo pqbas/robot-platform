@@ -32,25 +32,14 @@ class Empresa(Base):
     fundos: Mapped[list["Fundo"]] = relationship(back_populates="empresa")
 
 
-class FruitType(Base):
-    __tablename__ = "fruit_types"
-
-    uuid: Mapped[str] = mapped_column(Text, primary_key=True, default=_new_uuid)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[str] = mapped_column(Text, default=_now_iso)
-
-
 class DetectionModel(Base):
     __tablename__ = "detection_models"
 
     uuid: Mapped[str] = mapped_column(Text, primary_key=True, default=_new_uuid)
-    fruit_type_uuid: Mapped[str] = mapped_column(
-        ForeignKey("fruit_types.uuid"), nullable=False
-    )
-    object_type: Mapped[str] = mapped_column(Text, nullable=False)  # e.g. "arándano", "uva"
     version: Mapped[str] = mapped_column(Text, nullable=False)
     filename: Mapped[str] = mapped_column(Text, nullable=False)
     file_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    class_mapping: Mapped[str | None] = mapped_column(Text, nullable=True, default="[]")
     epochs: Mapped[int | None] = mapped_column(Integer, nullable=True)
     map50: Mapped[float | None] = mapped_column(Float, nullable=True)
     map50_95: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -61,7 +50,6 @@ class DetectionModel(Base):
     uploaded_by: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[str] = mapped_column(Text, default=_now_iso)
-    fruit_type: Mapped["FruitType"] = relationship()
 
 
 class Fundo(Base):
@@ -71,15 +59,11 @@ class Fundo(Base):
     empresa_uuid: Mapped[str] = mapped_column(
         ForeignKey("empresas.uuid"), nullable=False
     )
-    fruit_type_uuid: Mapped[str | None] = mapped_column(
-        ForeignKey("fruit_types.uuid"), nullable=True
-    )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     region: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[str] = mapped_column(Text, default=_now_iso)
     empresa: Mapped["Empresa"] = relationship(back_populates="fundos")
-    fruit_type: Mapped["FruitType | None"] = relationship()
 
 
 class Device(Base):

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
-import type { Fundo, Empresa, FruitType } from "@/types"
-import { getFundos, getEmpresas, getFruitTypes } from "@/api/admin"
+import type { Fundo, Empresa } from "@/types"
+import { getFundos, getEmpresas } from "@/api/admin"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -17,21 +17,18 @@ import { toast } from "sonner"
 export default function FundosPage() {
   const [fundos, setFundos] = useState<Fundo[]>([])
   const [empresas, setEmpresas] = useState<Empresa[]>([])
-  const [fruitTypes, setFruitTypes] = useState<FruitType[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Fundo | null>(null)
 
   const load = useCallback(async () => {
     try {
-      const [f, e, ft] = await Promise.all([
+      const [f, e] = await Promise.all([
         getFundos(),
         getEmpresas(),
-        getFruitTypes(),
       ])
       setFundos(f)
       setEmpresas(e)
-      setFruitTypes(ft)
     } catch {
       toast.error("Error al cargar fundos")
     } finally {
@@ -45,9 +42,6 @@ export default function FundosPage() {
 
   const empresaName = (uuid: string) =>
     empresas.find((e) => e.uuid === uuid)?.name ?? "—"
-
-  const fruitTypeName = (uuid: string | null) =>
-    fruitTypes.find((ft) => ft.uuid === uuid)?.name ?? "—"
 
   if (loading) {
     return (
@@ -77,7 +71,6 @@ export default function FundosPage() {
               <TableHead>Nombre</TableHead>
               <TableHead>Empresa</TableHead>
               <TableHead>Region</TableHead>
-              <TableHead>Tipo fruta</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="w-[80px]">Acciones</TableHead>
             </TableRow>
@@ -89,9 +82,6 @@ export default function FundosPage() {
                 <TableCell>{empresaName(fundo.empresa_uuid)}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {fundo.region ?? "—"}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {fruitTypeName(fundo.fruit_type_uuid)}
                 </TableCell>
                 <TableCell>
                   <Badge variant={fundo.is_active ? "default" : "outline"}>
@@ -120,7 +110,6 @@ export default function FundosPage() {
         onOpenChange={setDialogOpen}
         editing={editing}
         empresas={empresas}
-        fruitTypes={fruitTypes}
         onSuccess={load}
       />
     </div>

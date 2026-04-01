@@ -11,7 +11,6 @@ from back.models import (
     Camellon,
     Empresa,
     Event,
-    FruitType,
     Fundo,
     Location,
     Session,
@@ -74,21 +73,13 @@ async def push_all(db: AsyncSession) -> None:
             if result:
                 await _mark_synced(db, "empresas", [r.uuid for r in unsynced])
 
-        # 2. FruitTypes
-        unsynced = await _get_unsynced_uuids(db, "fruit_types", FruitType)
-        if unsynced:
-            data = [{"uuid": r.uuid, "name": r.name, "created_at": r.created_at} for r in unsynced]
-            result = await _post_batch(http, "fruit-types", data)
-            if result:
-                await _mark_synced(db, "fruit_types", [r.uuid for r in unsynced])
-
-        # 3. Fundos
+        # 2. Fundos
         unsynced = await _get_unsynced_uuids(db, "fundos", Fundo)
         if unsynced:
             data = [{
                 "uuid": r.uuid, "empresa_uuid": r.empresa_uuid,
-                "fruit_type_uuid": r.fruit_type_uuid, "name": r.name,
-                "region": r.region, "is_active": r.is_active, "created_at": r.created_at,
+                "name": r.name, "region": r.region,
+                "is_active": r.is_active, "created_at": r.created_at,
             } for r in unsynced]
             result = await _post_batch(http, "fundos", data)
             if result:
