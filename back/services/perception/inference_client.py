@@ -37,6 +37,27 @@ class InferenceClient:
                 pass
             self._sock = None
 
+    def send_command(self, command: str, **kwargs) -> dict | None:
+        """Send a control command to the worker (no JPEG payload)."""
+        try:
+            self._connect()
+        except (ConnectionRefusedError, FileNotFoundError):
+            logger.warning("Inference worker not available")
+            return None
+
+        header = {"command": command, **kwargs}
+        try:
+            send_request(self._sock, header, b"")
+            return recv_response(self._sock)
+        except (ConnectionError, OSError):
+            logger.warning("Lost connection to inference worker")
+            self._disconnect()
+            return None
+
+    def reload_model(self, model_path: str) -> dict | None:
+        """Tell the worker to load a different model."""
+        return self.send_command("reload_model", model_path=model_path)
+
     def detect(
         self, frame: np.ndarray, target_class: str | None = None, conf: float = 0.5
     ) -> dict | None:

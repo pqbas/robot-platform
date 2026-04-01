@@ -7,6 +7,7 @@ from pathlib import Path
 import aiohttp
 
 from back.config import config
+from back.services.perception.inference_client import InferenceClient
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,14 @@ async def pull_models() -> None:
                     content = await dl_resp.read()
                     local_path.write_bytes(content)
                     logger.info("Sync pull: downloaded %s (%d bytes)", model["filename"], len(content))
+
+                    # Tell the inference worker to reload with the new model
+                    client = InferenceClient(config.perception.socket_path)
+                    result = client.reload_model(str(local_path))
+                    if result and result.get("ok"):
+                        logger.info("Sync pull: worker reloaded with %s", model["filename"])
+                    else:
+                        logger.warning("Sync pull: worker reload failed: %s", result)
 
     except Exception as exc:
         logger.warning("Sync pull failed: %s", exc)
