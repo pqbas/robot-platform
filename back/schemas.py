@@ -222,6 +222,19 @@ class DashboardStatsOut(BaseModel):
     by_class: list[ClassBreakdownItem]
 
 
+# --- Vision labels ---
+
+
+class AvailableLabelItem(BaseModel):
+    label: str
+    model_filename: str
+
+
+class SelectLabelRequest(BaseModel):
+    label: str
+    model_filename: str
+
+
 # --- Sync ---
 
 

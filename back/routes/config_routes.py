@@ -1,17 +1,26 @@
+import json
 import os
 import re
+from pathlib import Path
 
 import cv2
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import config
+from back.database import get_db
+from back.models import DetectionModel
 from back.schemas import (
+    AvailableLabelItem,
     CameraConfigOut,
     CameraConfigUpdate,
     CameraDevice,
     CountingConfigOut,
     CountingConfigUpdate,
+    SelectLabelRequest,
 )
+from back.services.perception.inference_client import InferenceClient
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -122,3 +131,38 @@ async def update_counting_config(body: CountingConfigUpdate):
         direction=c.direction,
         confidence_threshold=c.confidence_threshold,
     )
+
+
+# --- Vision labels ---
+
+
+@router.get("/available-labels", response_model=list[AvailableLabelItem])
+async def get_available_labels(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(DetectionModel))
+    models = result.scalars().all()
+    labels: list[AvailableLabelItem] = []
+    for m in models:
+        if not m.class_mapping:
+            continue
+        try:
+            mapping = json.loads(m.class_mapping)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for entry in mapping:
+            if isinstance(entry, str):
+                label = entry
+            else:
+                label = entry.get("system_label") or entry.get("model_label")
+            if label:
+                labels.append(AvailableLabelItem(label=label, model_filename=m.filename))
+    return labels
+
+
+@router.post("/select-label")
+async def select_label(body: SelectLabelRequest):
+    abs_path = str(Path(config.storage.models_dir) / body.model_filename)
+    client = InferenceClient(config.perception.socket_path)
+    result = client.reload_model(abs_path)
+    if result is None:
+        raise HTTPException(status_code=503, detail="Inference worker not available")
+    return {"ok": True, "model": body.model_filename}

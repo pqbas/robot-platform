@@ -9,7 +9,7 @@ import { getLocations } from "@/api/locations"
 import { useWebRTC } from "@/hooks/useWebRTC"
 import { useCounting } from "@/hooks/useCounting"
 import VideoStream from "./components/VideoStream"
-import ClassSelector from "./components/ClassSelector"
+import ObjectPicker from "./components/ObjectPicker"
 import CountOverlay from "./components/CountOverlay"
 import CountingConfigDialog from "./components/CountingConfigDialog"
 import SaveDialog from "./components/SaveDialog"
@@ -27,7 +27,8 @@ export default function VisionPage() {
     useWebRTC()
   const counting = useCounting()
 
-  const [selectedClass, setSelectedClass] = useState("person")
+  const [step, setStep] = useState<"pick" | "operate">("pick")
+  const [selectedClass, setSelectedClass] = useState("")
   const [durationStr, setDurationStr] = useState("0s")
   const [locations, setLocations] = useState<MapLocation[]>([])
   const [configOpen, setConfigOpen] = useState(false)
@@ -66,7 +67,6 @@ export default function VisionPage() {
     if (frameData?.error && frameData.error !== lastErrorRef.current) {
       lastErrorRef.current = frameData.error
       toast.error(`Error de inferencia: ${frameData.error}`)
-      // Reset after 10s so the same error can show again if persistent
       setTimeout(() => { lastErrorRef.current = null }, 10_000)
     }
   }, [frameData?.error])
@@ -112,15 +112,34 @@ export default function VisionPage() {
     }
   }
 
+  if (step === "pick") {
+    return (
+      <div className="flex h-[calc(100dvh-3.5rem)] flex-col md:h-auto md:flex-1">
+        <ObjectPicker
+          onSelect={(label) => {
+            setSelectedClass(label)
+            setStep("operate")
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col md:h-auto md:flex-1">
-      {/* Config bar: class selector + settings */}
+      {/* Config bar: selected class + settings */}
       <div className="flex shrink-0 items-center gap-3 border-b px-4 py-2">
-        <ClassSelector
-          value={selectedClass}
-          onChange={setSelectedClass}
-          disabled={isCounting}
-        />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setStep("pick")}
+          disabled={busy}
+        >
+          ← Cambiar
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          Detectando: <span className="font-medium text-foreground capitalize">{selectedClass}</span>
+        </span>
         <Button
           variant="ghost"
           size="icon"
