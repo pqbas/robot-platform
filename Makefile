@@ -26,7 +26,10 @@ db-migrate:
 	ENV_FILE=.env.server uv run alembic -c back/alembic.ini upgrade head
 
 run-front:
-	cd front && ENV_FILE=$(or $(ENV_FILE),../.env.robot) npm run dev
+	cd front && ENV_FILE=$(or $(ENV_FILE),.env.robot) npm run dev
+
+run-front-server:
+	cd front && ENV_FILE=.env.server npm run dev -- --port 5174
 
 build-front:
 	cd front && npm ci && npm run build
