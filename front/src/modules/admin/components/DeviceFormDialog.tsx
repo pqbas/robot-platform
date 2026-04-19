@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createDevice, updateDevice } from "@/api/admin-devices"
+import { createDevice, rotateApiKey, updateDevice } from "@/api/admin-devices"
 import { toast } from "sonner"
 import ApiKeyDisplay from "./ApiKeyDisplay"
 
@@ -31,6 +31,7 @@ export default function DeviceFormDialog({
   const [label, setLabel] = useState("")
   const [isActive, setIsActive] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [rotating, setRotating] = useState(false)
   const [createdApiKey, setCreatedApiKey] = useState<string | null>(null)
 
   useEffect(() => {
@@ -78,7 +79,7 @@ export default function DeviceFormDialog({
       <Dialog open={open} onOpenChange={() => {}}>
         <DialogContent onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
           <DialogHeader>
-            <DialogTitle>Dispositivo registrado</DialogTitle>
+            <DialogTitle>{editing ? "Nueva API key generada" : "Dispositivo registrado"}</DialogTitle>
           </DialogHeader>
           <ApiKeyDisplay apiKey={createdApiKey} />
           <DialogFooter>
@@ -116,15 +117,38 @@ export default function DeviceFormDialog({
             />
           </div>
           {editing && (
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="device-active"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-              />
-              <Label htmlFor="device-active">Activo</Label>
-            </div>
+            <>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="device-active"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                />
+                <Label htmlFor="device-active">Activo</Label>
+              </div>
+              <div className="pt-1 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={rotating}
+                  onClick={async () => {
+                    setRotating(true)
+                    try {
+                      const res = await rotateApiKey(editing.id)
+                      setCreatedApiKey(res.api_key)
+                    } catch {
+                      toast.error("Error al regenerar API key")
+                    } finally {
+                      setRotating(false)
+                    }
+                  }}
+                >
+                  {rotating ? "Regenerando..." : "Regenerar API key"}
+                </Button>
+              </div>
+            </>
           )}
         </div>
         <DialogFooter>

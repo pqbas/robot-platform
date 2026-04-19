@@ -24,3 +24,10 @@ export function updateDevice(
     body: JSON.stringify(data),
   })
 }
+
+export function rotateApiKey(id: string) {
+  return apiFetch<{ id: string; label: string; api_key: string }>(
+    `/api/devices/${id}/rotate-api-key`,
+    { method: "POST" },
+  )
+}

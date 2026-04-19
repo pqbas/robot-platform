@@ -63,6 +63,18 @@ async def register_device(body: DeviceCreate, db: AsyncSession = Depends(get_db)
     return DeviceCreateResponse(id=device.id, label=device.label, api_key=api_key)
 
 
+@router.post("/{device_id}/rotate-api-key", response_model=DeviceCreateResponse)
+async def rotate_api_key(device_id: str, db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    device = result.scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    api_key = generate_api_key()
+    device.api_key_hash = hash_api_key(api_key)
+    await db.commit()
+    return DeviceCreateResponse(id=device.id, label=device.label, api_key=api_key)
+
+
 @router.put("/{device_id}", response_model=DeviceOut)
 async def update_device(device_id: str, body: DeviceUpdate, db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
     result = await db.execute(select(Device).where(Device.id == device_id))
