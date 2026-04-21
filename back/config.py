@@ -19,6 +19,7 @@ class CameraConfig:
     frame_width: int = 2560      # ZED stereo (2x1280)
     frame_height: int = 720
     crop_width: int = 1280       # 0 = no crop (webcam), >0 = stereo crop (ZED)
+    socket_path: str = field(default_factory=lambda: os.getenv("CAMERA_SOCKET", "/tmp/camera.sock"))
 
 
 @dataclass
