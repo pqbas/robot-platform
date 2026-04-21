@@ -226,22 +226,18 @@ class CameraStreamTrack(VideoStreamTrack):
         return video_frame
 
     def _release_camera(self) -> None:
-        """Drain V4L2 buffers then release (runs in a daemon thread).
+        """Release the camera (runs in a daemon thread).
 
         Holds _camera_lock so _open_camera() in the next session blocks
-        until this release is fully complete.
+        until the device fd is fully closed.  The lock also prevents
+        double-release when stop() is called more than once.
         """
-        if self._cap is None:
-            return
         with _camera_lock:
+            if self._cap is None:
+                return
+            cap, self._cap = self._cap, None
             try:
-                if self._cap.isOpened():
-                    for _ in range(4):
-                        self._cap.grab()
-            except Exception:
-                pass
-            try:
-                self._cap.release()
+                cap.release()
                 logger.info("Camera released")
             except Exception:
                 logger.debug("Camera release error", exc_info=True)
