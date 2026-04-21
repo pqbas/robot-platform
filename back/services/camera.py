@@ -169,14 +169,14 @@ class CameraStreamTrack(VideoStreamTrack):
             logger.warning("Camera read exception: %s — stopping track", exc)
             self.stop()
             if self._on_camera_fail:
-                asyncio.ensure_future(self._on_camera_fail())
+                await self._on_camera_fail()
             raise
 
         if not ret:
             logger.warning("Camera returned empty frame — stopping track")
             self.stop()
             if self._on_camera_fail:
-                asyncio.ensure_future(self._on_camera_fail())
+                await self._on_camera_fail()
             raise RuntimeError("Camera disconnected")
 
         crop = config.camera.crop_width
