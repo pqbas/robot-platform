@@ -155,7 +155,7 @@ class CameraStreamTrack(VideoStreamTrack):
         cfg = config.camera
         with _camera_lock:
             time.sleep(0.3)
-            cap = cv2.VideoCapture(cfg.index, cv2.CAP_V4L2)
+            cap = cv2.VideoCapture(cfg.index)
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.frame_width)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.frame_height)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
