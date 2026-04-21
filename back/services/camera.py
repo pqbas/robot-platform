@@ -132,6 +132,10 @@ class CameraStreamTrack(VideoStreamTrack):
         self._cap: cv2.VideoCapture | None = None
         self._worker = _InferenceWorker()
         self._data_channel = None
+        # Signalled by stop() so a watcher task can close the PC without
+        # relying on pyee's async-handler scheduling (which can silently
+        # drop futures when called from a cancelled task's finally block).
+        self.stopped = asyncio.Event()
 
     def set_data_channel(self, dc):
         self._data_channel = dc
@@ -215,3 +219,4 @@ class CameraStreamTrack(VideoStreamTrack):
         if self._cap is not None and self._cap.isOpened():
             self._cap.release()
             logger.info("Camera released")
+        self.stopped.set()

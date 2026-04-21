@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from aiortc import RTCPeerConnection, RTCSessionDescription
@@ -27,12 +28,14 @@ async def offer(request: Request):
 
     track = camera.CameraStreamTrack()
 
-    @track.on("ended")
-    async def on_track_ended():
-        logger.warning("Track ended — closing peer connection")
+    async def _watch_track():
+        await track.stopped.wait()
+        logger.warning("Track stopped — closing peer connection")
         if pc.connectionState not in ("closed", "failed"):
             await pc.close()
             camera.pcs.discard(pc)
+
+    asyncio.ensure_future(_watch_track())
 
     # receive data channel created by the frontend
     @pc.on("datachannel")
