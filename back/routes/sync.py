@@ -42,6 +42,16 @@ async def health():
     return {"status": "ok", "mode": config.mode.value}
 
 
+@router.post("/pull")
+async def force_pull():
+    """Trigger an immediate model sync pull (robot mode only)."""
+    if config.mode != AppMode.ROBOT:
+        return {"ok": False, "reason": "only available in robot mode"}
+    from back.services.sync_pull import pull_models
+    await pull_models()
+    return {"ok": True}
+
+
 # --- Receive endpoints (server mode, protected by device API key) ---
 
 

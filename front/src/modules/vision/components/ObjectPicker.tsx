@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
 import { getAvailableLabels, selectLabel, type AvailableLabelItem } from "@/api/vision"
+import { apiFetch } from "@/api/client"
+import { Button } from "@/components/ui/button"
 
 type ObjectPickerProps = {
   onSelect: (label: string) => void
@@ -9,11 +11,17 @@ export default function ObjectPicker({ onSelect }: ObjectPickerProps) {
   const [labels, setLabels] = useState<AvailableLabelItem[]>([])
   const [loading, setLoading] = useState(true)
   const [selecting, setSelecting] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
 
-  useEffect(() => {
+  function fetchLabels() {
+    setLoading(true)
     getAvailableLabels()
       .then(setLabels)
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    fetchLabels()
   }, [])
 
   async function handleSelect(item: AvailableLabelItem) {
@@ -23,6 +31,16 @@ export default function ObjectPicker({ onSelect }: ObjectPickerProps) {
       onSelect(item.label)
     } finally {
       setSelecting(null)
+    }
+  }
+
+  async function handleForcePull() {
+    setSyncing(true)
+    try {
+      await apiFetch("/api/sync/pull", { method: "POST" })
+      fetchLabels()
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -36,15 +54,23 @@ export default function ObjectPicker({ onSelect }: ObjectPickerProps) {
 
   if (labels.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center text-muted-foreground">
-        No hay modelos registrados
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted-foreground">
+        <p>No hay modelos asignados a este robot</p>
+        <Button variant="outline" size="sm" onClick={handleForcePull} disabled={syncing}>
+          {syncing ? "Sincronizando..." : "Sincronizar ahora"}
+        </Button>
       </div>
     )
   }
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
-      <h2 className="text-xl font-semibold">¿Qué quieres detectar?</h2>
+      <div className="flex items-center gap-3">
+        <h2 className="text-xl font-semibold">¿Qué quieres detectar?</h2>
+        <Button variant="ghost" size="sm" onClick={handleForcePull} disabled={syncing} title="Sincronizar modelos">
+          {syncing ? "..." : "↻"}
+        </Button>
+      </div>
       <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
         {labels.map((item) => (
           <button
