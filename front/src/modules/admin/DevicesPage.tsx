@@ -41,6 +41,8 @@ export default function DevicesPage() {
 
   useEffect(() => {
     load()
+    const id = setInterval(load, 30_000)
+    return () => clearInterval(id)
   }, [load])
 
   if (loading) {
