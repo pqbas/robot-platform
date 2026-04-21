@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import threading
+import time
 
 import av
 import cv2
@@ -16,6 +17,10 @@ logger = logging.getLogger("webrtc")
 
 pcs = set()
 processing_enabled = True
+
+# Serializes camera open/release transitions across sessions so V4L2 never
+# sees a new open() while a previous session's buffers are still live.
+_camera_lock = threading.Lock()
 
 
 async def close_all_connections() -> None:
@@ -141,14 +146,21 @@ class CameraStreamTrack(VideoStreamTrack):
         self._data_channel = dc
 
     def _open_camera(self) -> cv2.VideoCapture:
-        """Open the camera device (runs in executor, may block on V4L2)."""
+        """Open the camera device (runs in executor, may block on V4L2).
+
+        Acquires _camera_lock so this open waits for any in-progress release
+        from the previous session, then sleeps briefly to let V4L2 flush its
+        buffer state before handing the device to a new VideoCapture.
+        """
         cfg = config.camera
-        cap = cv2.VideoCapture(cfg.index)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.frame_width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.frame_height)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        if not cap.isOpened():
-            raise RuntimeError("Could not open camera")
+        with _camera_lock:
+            time.sleep(0.3)
+            cap = cv2.VideoCapture(cfg.index, cv2.CAP_V4L2)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.frame_width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.frame_height)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            if not cap.isOpened():
+                raise RuntimeError("Could not open camera")
         logger.info("Camera opened (index=%d)", cfg.index)
         return cap
 
@@ -213,10 +225,31 @@ class CameraStreamTrack(VideoStreamTrack):
         video_frame.time_base = time_base
         return video_frame
 
+    def _release_camera(self) -> None:
+        """Drain V4L2 buffers then release (runs in a daemon thread).
+
+        Holds _camera_lock so _open_camera() in the next session blocks
+        until this release is fully complete.
+        """
+        if self._cap is None:
+            return
+        with _camera_lock:
+            try:
+                if self._cap.isOpened():
+                    for _ in range(4):
+                        self._cap.grab()
+            except Exception:
+                pass
+            try:
+                self._cap.release()
+                logger.info("Camera released")
+            except Exception:
+                logger.debug("Camera release error", exc_info=True)
+
     def stop(self):
         super().stop()
         self._worker.stop()
-        if self._cap is not None and self._cap.isOpened():
-            self._cap.release()
-            logger.info("Camera released")
+        # Release in a thread so drain+release holds _camera_lock without
+        # blocking the event loop — _open_camera() will wait on the lock.
+        threading.Thread(target=self._release_camera, daemon=True).start()
         self.stopped.set()
