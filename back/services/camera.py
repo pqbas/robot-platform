@@ -3,12 +3,12 @@ import logging
 import threading
 
 import av
-import cv2
 import numpy as np
 from aiortc import VideoStreamTrack
 
 from back.config import config
 from back.schemas import DetectionItem, FrameDetectionPayload
+from back.services.camera_client import CameraClient
 from back.services.perception import counter
 from back.services.perception.inference_client import InferenceClient
 
@@ -126,60 +126,34 @@ class CameraStreamTrack(VideoStreamTrack):
 
     def __init__(self):
         super().__init__()
-        cfg = config.camera
-        self._cap = cv2.VideoCapture(cfg.index)
-        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.frame_width)
-        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.frame_height)
-        self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        if not self._cap.isOpened():
-            raise RuntimeError("Could not open camera")
-        logger.info("Camera opened (index=%d)", cfg.index)
-        self._first_frame = True
+        self._client = CameraClient(config.camera.socket_path)
         self._worker = _InferenceWorker()
         self._data_channel = None
+        self.stopped = asyncio.Event()
+        self._first_frame = True
 
     def set_data_channel(self, dc):
         self._data_channel = dc
 
-    def _drain_and_read(self):
-        """Discard buffered frames and return only the latest one."""
-        for _ in range(4):
-            self._cap.grab()
-        ret, frame = self._cap.read()
-        return ret, frame
-
     async def recv(self):
         pts, time_base = await self.next_timestamp()
-
         loop = asyncio.get_event_loop()
 
-        # Start worker on first frame
-        if self._first_frame:
-            self._first_frame = False
-            self._worker.start()
-            read_fn = self._drain_and_read
-        else:
-            read_fn = self._cap.read
-
         try:
-            ret, frame = await loop.run_in_executor(None, read_fn)
+            frame = await loop.run_in_executor(None, self._client.read_frame)
         except Exception as exc:
-            logger.warning("Camera read exception: %s — stopping track", exc)
+            logger.warning("Camera read failed: %s — stopping track", exc)
             self.stop()
             raise
 
-        if not ret:
-            logger.warning("Camera returned empty frame — stopping track")
-            self.stop()
-            raise RuntimeError("Camera disconnected")
-
-        crop = config.camera.crop_width
-        left = frame[:, :crop] if crop > 0 else frame
+        if self._first_frame:
+            self._first_frame = False
+            self._worker.start()
 
         # Submit frame to inference worker (non-blocking)
-        self._worker.submit_frame(left.copy())
+        self._worker.submit_frame(frame.copy())
 
-        # Send latest detection result over data channel (from event loop, thread-safe)
+        # Send latest detection result over data channel
         result = self._worker.consume_result()
         if result is not None and self._data_channel is not None:
             try:
@@ -188,8 +162,7 @@ class CameraStreamTrack(VideoStreamTrack):
             except Exception:
                 logger.debug("Data channel send failed", exc_info=True)
 
-        # Stream sends the clean frame (no YOLO annotations)
-        video_frame = av.VideoFrame.from_ndarray(left, format="bgr24")
+        video_frame = av.VideoFrame.from_ndarray(frame, format="bgr24")
         video_frame.pts = pts
         video_frame.time_base = time_base
         return video_frame
@@ -197,6 +170,6 @@ class CameraStreamTrack(VideoStreamTrack):
     def stop(self):
         super().stop()
         self._worker.stop()
-        if self._cap.isOpened():
-            self._cap.release()
-            logger.info("Camera released")
+        self._client.close()
+        self.stopped.set()
+        logger.info("Track stopped")

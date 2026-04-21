@@ -1,0 +1,17 @@
+[project]
+name = "camera-worker"
+version = "0.1.0"
+description = "V4L2 camera capture worker — serves raw BGR frames via Unix socket"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.4.4",
+    "opencv-python>=4.13.0.92",
+]
+
+[project.scripts]
+camera-worker = "camera_worker.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

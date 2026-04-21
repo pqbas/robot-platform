@@ -18,7 +18,14 @@
 - Server: `PORT=9090` (`.env.server`)
 - Frontend dev: `5173` (proxy apunta a `localhost:8080`)
 
+## Camera Worker
+- Proyecto uv separado en `camera_worker/` con opencv-python y numpy
+- El backend NO accede a V4L2 directamente — lee frames raw BGR del socket `/tmp/camera.sock`
+- Protocolo: handshake JSON (width, height, channels) + stream de frames length-prefixed
+- Iniciar worker: `make run-camera` o `cd camera_worker && uv run camera-worker`
+
 ## Comandos
+- Camera worker: `make run-camera`
 - Inference worker: `make run-inference`
 - Backend robot: `make run-robot` (o `ENV_FILE=.env.robot uv run python -m back.main`)
 - Backend server: `make run-server` (levanta PostgreSQL + uvicorn)
@@ -27,7 +34,7 @@
 ## Deploy (producción)
 - Instalar robot: `make deploy-robot` (nginx + systemd, SQLite, port 8080)
 - Instalar server: `make deploy-server` (nginx + systemd + PostgreSQL, port 9090)
-- Logs backend: `make logs` | Logs inference: `make logs-inference`
+- Logs backend: `make logs` | Logs inference: `make logs-inference` | Logs camera: `make logs-camera`
 - Status: `make status` | Restart: `make restart`
 - Nginx sirve `front/dist/` y hace proxy a uvicorn en 127.0.0.1
 - Systemd ejecuta uvicorn directo (sin tmux), `Restart=on-failure`
