@@ -31,7 +31,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def open_camera(args) -> tuple[cv2.VideoCapture, int, int]:
+def open_camera(args):
     while True:
         cap = cv2.VideoCapture(args.index)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
