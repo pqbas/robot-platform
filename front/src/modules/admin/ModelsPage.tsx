@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import ModelUploadDialog from "./components/ModelUploadDialog"
+import ModelEditDialog from "./components/ModelEditDialog"
 import { toast } from "sonner"
 
 function formatClasses(mapping: ClassMappingItem[]): string {
@@ -33,6 +34,7 @@ export default function ModelsPage() {
   const [models, setModels] = useState<DetectionModel[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [editingModel, setEditingModel] = useState<DetectionModel | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -116,6 +118,13 @@ export default function ModelsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingModel(model)}
+                      >
+                        Editar
+                      </Button>
                       {!model.is_active && (
                         <Button
                           variant="ghost"
@@ -156,6 +165,14 @@ export default function ModelsPage() {
         onOpenChange={setUploadOpen}
         onSuccess={load}
       />
+      {editingModel && (
+        <ModelEditDialog
+          model={editingModel}
+          open={!!editingModel}
+          onOpenChange={(open) => { if (!open) setEditingModel(null) }}
+          onSuccess={load}
+        />
+      )}
     </div>
   )
 }

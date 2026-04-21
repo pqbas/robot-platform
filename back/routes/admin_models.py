@@ -105,6 +105,65 @@ async def upload_detection_model(
     return _model_to_out(model)
 
 
+@router.patch("/detection-models/{uuid}", response_model=DetectionModelOut)
+async def update_detection_model(
+    uuid: str,
+    version: str | None = Form(None),
+    class_mapping: str | None = Form(None),
+    epochs: int | None = Form(None),
+    map50: float | None = Form(None),
+    map50_95: float | None = Form(None),
+    precision_val: float | None = Form(None, alias="precision"),
+    recall: float | None = Form(None),
+    dataset_size: int | None = Form(None),
+    notes: str | None = Form(None),
+    file: UploadFile | None = File(None),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(admin_dep),
+):
+    result = await db.execute(select(DetectionModel).where(DetectionModel.uuid == uuid))
+    model = result.scalar_one_or_none()
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    if file and file.filename:
+        models_dir = Path(config.storage.models_dir)
+        models_dir.mkdir(parents=True, exist_ok=True)
+        content = await file.read()
+        new_filename = file.filename
+        if new_filename != model.filename:
+            old_path = models_dir / model.filename
+            if old_path.exists():
+                old_path.unlink()
+        new_path = models_dir / new_filename
+        new_path.write_bytes(content)
+        model.filename = new_filename
+        model.file_hash = hashlib.sha256(content).hexdigest()
+
+    if version is not None:
+        model.version = version
+    if class_mapping is not None:
+        model.class_mapping = class_mapping
+    if epochs is not None:
+        model.epochs = epochs
+    if map50 is not None:
+        model.map50 = map50
+    if map50_95 is not None:
+        model.map50_95 = map50_95
+    if precision_val is not None:
+        model.precision = precision_val
+    if recall is not None:
+        model.recall = recall
+    if dataset_size is not None:
+        model.dataset_size = dataset_size
+    if notes is not None:
+        model.notes = notes
+
+    await db.commit()
+    await db.refresh(model)
+    return _model_to_out(model)
+
+
 @router.put("/detection-models/{uuid}/activate", response_model=DetectionModelOut)
 async def activate_model(uuid: str, db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
     result = await db.execute(select(DetectionModel).where(DetectionModel.uuid == uuid))
