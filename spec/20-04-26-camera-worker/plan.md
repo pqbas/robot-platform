@@ -2,9 +2,16 @@
 
 ## Group 1: Camera worker process
 
-1. Crear `camera_worker/__init__.py` (vacío).
+1. Inicializar proyecto uv en `camera_worker/`:
+   - `cd camera_worker && uv init --name camera-worker --no-workspace`
+   - Agregar dependencias: `uv add opencv-python numpy`
+   - Definir entry point en `camera_worker/pyproject.toml`:
+     ```toml
+     [project.scripts]
+     camera-worker = "camera_worker.main:main"
+     ```
 
-2. Crear `camera_worker/main.py` — servidor Unix socket + loop de captura:
+2. Crear `camera_worker/camera_worker/main.py` — servidor Unix socket + loop de captura:
    - `parse_args()`: `--socket-path` (default `/tmp/camera.sock` vía `CAMERA_SOCKET`), `--index`, `--width`, `--height`, `--crop`
    - `main()`: limpia socket antiguo (`os.unlink` si existe), llama `asyncio.run(serve(args))`
    - `serve(args)`: abre `asyncio.start_unix_server(handle_client, path)`, instala handlers SIGTERM/SIGINT para shutdown limpio
@@ -12,12 +19,6 @@
    - `open_camera(args)` → `cv2.VideoCapture` con propiedades, reintentos cada 1s hasta éxito
    - Los frames se cropean aquí: `frame = frame[:, :args.crop] if args.crop > 0 else frame`
    - Protocolo send: `struct.pack(">I", frame_len) + frame.tobytes()`
-
-3. Agregar entry point en `pyproject.toml` (raíz):
-   ```toml
-   [project.scripts]
-   camera-worker = "camera_worker.main:main"
-   ```
 
 ---
 
@@ -90,7 +91,7 @@
     User=DEPLOY_USER
     WorkingDirectory=DEPLOY_DIR
     ExecStartPre=/bin/rm -f /tmp/camera.sock
-    ExecStart=DEPLOY_UV_PATH run camera-worker
+    ExecStart=/opt/robot-platform/camera_worker/.venv/bin/camera-worker
     Restart=on-failure
     RestartSec=3
     Environment=CAMERA_SOCKET=/tmp/camera.sock
@@ -106,7 +107,7 @@
 14. Agregar targets en `Makefile`:
     ```makefile
     run-camera:
-        uv run camera-worker
+        cd camera_worker && uv run camera-worker
 
     logs-camera:
         sudo journalctl -u camera-worker -f

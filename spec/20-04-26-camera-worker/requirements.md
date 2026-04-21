@@ -50,7 +50,7 @@ Configuración del worker vía variables de entorno (iguales a las existentes en
 
 - **Frames raw BGR, sin JPEG** — WebRTC ya hace encode H.264 de los frames. Agregar JPEG encode en el worker y decode en el backend sería double-encoding innecesario. A 1280×720×3 = ~2.8MB/frame × 30fps = ~84MB/s en loopback Unix socket, que es trivial.
 
-- **Camera-worker como módulo del proyecto raíz, no proyecto uv separado** — el inference worker es un proyecto separado porque necesita torch/ultralytics que son pesados y platform-specific (Jetson vs laptop). El camera-worker solo necesita `cv2` y `numpy`, que ya están en el root. Poner todo en `camera_worker/` dentro del mismo proyecto simplifica el deploy.
+- **Camera-worker como proyecto uv separado en `camera_worker/`** — mismo patrón que `inference/`. Tiene su propio `pyproject.toml` con `opencv-python` y `numpy`, su propio venv, y su propio entry point. Esto aísla dependencias, simplifica el deploy a systemd, y hace el servicio arrancable de forma independiente con `uv run camera-worker`.
 
 - **Push streaming con un cliente a la vez** — una conexión WebRTC activa simultáneamente es el invariante del sistema (ver `close_all_connections()` en `stream.py`). No hace falta multi-client ni pull protocol. El push con un socket es el modelo más simple.
 
