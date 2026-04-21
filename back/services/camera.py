@@ -126,23 +126,31 @@ class CameraStreamTrack(VideoStreamTrack):
 
     def __init__(self):
         super().__init__()
-        cfg = config.camera
-        self._cap = cv2.VideoCapture(cfg.index)
-        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.frame_width)
-        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.frame_height)
-        self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        if not self._cap.isOpened():
-            raise RuntimeError("Could not open camera")
-        logger.info("Camera opened (index=%d)", cfg.index)
-        self._first_frame = True
+        # Camera is opened lazily in the first recv() call via executor so that
+        # cv2.VideoCapture() — which can block waiting for V4L2 — never runs
+        # on the asyncio event loop and never stalls ICE/DTLS processing.
+        self._cap: cv2.VideoCapture | None = None
         self._worker = _InferenceWorker()
         self._data_channel = None
 
     def set_data_channel(self, dc):
         self._data_channel = dc
 
+    def _open_camera(self) -> cv2.VideoCapture:
+        """Open the camera device (runs in executor, may block on V4L2)."""
+        cfg = config.camera
+        cap = cv2.VideoCapture(cfg.index)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.frame_width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.frame_height)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        if not cap.isOpened():
+            raise RuntimeError("Could not open camera")
+        logger.info("Camera opened (index=%d)", cfg.index)
+        return cap
+
     def _drain_and_read(self):
         """Discard buffered frames and return only the latest one."""
+        assert self._cap is not None
         for _ in range(4):
             self._cap.grab()
         ret, frame = self._cap.read()
@@ -153,9 +161,16 @@ class CameraStreamTrack(VideoStreamTrack):
 
         loop = asyncio.get_event_loop()
 
-        # Start worker on first frame
-        if self._first_frame:
-            self._first_frame = False
+        # Open camera on first recv — in executor so V4L2 open never blocks
+        # the event loop (important when a previous session's thread is still
+        # holding the device after an unexpected disconnect).
+        if self._cap is None:
+            try:
+                self._cap = await loop.run_in_executor(None, self._open_camera)
+            except Exception as exc:
+                logger.warning("Camera open failed: %s — stopping track", exc)
+                self.stop()
+                raise
             self._worker.start()
             read_fn = self._drain_and_read
         else:
@@ -197,6 +212,6 @@ class CameraStreamTrack(VideoStreamTrack):
     def stop(self):
         super().stop()
         self._worker.stop()
-        if self._cap.isOpened():
+        if self._cap is not None and self._cap.isOpened():
             self._cap.release()
             logger.info("Camera released")
