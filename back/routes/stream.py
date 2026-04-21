@@ -25,11 +25,14 @@ async def offer(request: Request):
     pc = RTCPeerConnection()
     camera.pcs.add(pc)
 
-    async def _on_camera_fail():
-        await pc.close()
-        camera.pcs.discard(pc)
+    track = camera.CameraStreamTrack()
 
-    track = camera.CameraStreamTrack(on_camera_fail=_on_camera_fail)
+    @track.on("ended")
+    async def on_track_ended():
+        logger.warning("Track ended — closing peer connection")
+        if pc.connectionState not in ("closed", "failed"):
+            await pc.close()
+            camera.pcs.discard(pc)
 
     # receive data channel created by the frontend
     @pc.on("datachannel")

@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import threading
-from collections.abc import Awaitable, Callable
 
 import av
 import cv2
@@ -125,7 +124,7 @@ class _InferenceWorker:
 class CameraStreamTrack(VideoStreamTrack):
     kind = "video"
 
-    def __init__(self, on_camera_fail: Callable[[], Awaitable[None]] | None = None):
+    def __init__(self):
         super().__init__()
         cfg = config.camera
         self._cap = cv2.VideoCapture(cfg.index)
@@ -138,7 +137,6 @@ class CameraStreamTrack(VideoStreamTrack):
         self._first_frame = True
         self._worker = _InferenceWorker()
         self._data_channel = None
-        self._on_camera_fail = on_camera_fail
 
     def set_data_channel(self, dc):
         self._data_channel = dc
@@ -168,15 +166,11 @@ class CameraStreamTrack(VideoStreamTrack):
         except Exception as exc:
             logger.warning("Camera read exception: %s — stopping track", exc)
             self.stop()
-            if self._on_camera_fail:
-                await self._on_camera_fail()
             raise
 
         if not ret:
             logger.warning("Camera returned empty frame — stopping track")
             self.stop()
-            if self._on_camera_fail:
-                await self._on_camera_fail()
             raise RuntimeError("Camera disconnected")
 
         crop = config.camera.crop_width
