@@ -25,7 +25,11 @@ async def offer(request: Request):
     pc = RTCPeerConnection()
     camera.pcs.add(pc)
 
-    track = camera.CameraStreamTrack()
+    async def _on_camera_fail():
+        await pc.close()
+        camera.pcs.discard(pc)
+
+    track = camera.CameraStreamTrack(on_camera_fail=_on_camera_fail)
 
     # receive data channel created by the frontend
     @pc.on("datachannel")
