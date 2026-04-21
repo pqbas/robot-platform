@@ -32,7 +32,7 @@
 
 ---
 
-## Phase 2: Estabilidad de cámara WebRTC
+## Phase 2: Estabilidad de cámara WebRTC (In Progress)
 
 **Goal:** el robot no requiere reinicio manual ante fallos de cámara.
 
@@ -42,7 +42,18 @@
 
 ---
 
-## Phase 3: Grabación de video
+## Phase 3: Servicio de cámara independiente
+
+**Goal:** la captura V4L2 corre en un proceso separado para que los fallos de cámara no afecten el event loop de FastAPI.
+
+- [ ] `camera-worker` es un proceso independiente que captura frames y los sirve por Unix socket (frames raw, protocolo length-prefixed)
+- [ ] `CameraStreamTrack` lee frames del socket en vez de acceder a V4L2 directamente
+- [ ] Si el worker se cae o la cámara se desconecta, el worker se reinicia solo y el backend reconecta sin intervención
+- [ ] El servicio se instala como unidad systemd separada junto al robot
+
+---
+
+## Phase 4: Grabación de video
 
 **Goal:** el robot puede grabar sesiones en video además de contar.
 
@@ -51,7 +62,7 @@
 
 ---
 
-## Phase 4: Nuevo método de conteo
+## Phase 5: Nuevo método de conteo
 
 **Goal:** el conteo es más robusto y no depende exclusivamente del tracker de YOLO.
 
@@ -61,7 +72,7 @@
 
 ---
 
-## Phase 5: Deploy servidor + validación end-to-end
+## Phase 6: Deploy servidor + validación end-to-end
 
 **Goal:** el flujo completo robot → servidor funciona en producción y el operador siempre sabe qué modelo está activo.
 
@@ -71,7 +82,7 @@
 
 ---
 
-## Phase 6: Integración de otros objetos
+## Phase 7: Integración de otros objetos
 
 **Goal:** el sistema soporta distintos tipos de fruta u objeto sin cambios de código.
 
