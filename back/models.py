@@ -32,6 +32,13 @@ class Empresa(Base):
     fundos: Mapped[list["Fundo"]] = relationship(back_populates="empresa")
 
 
+class DeviceModel(Base):
+    __tablename__ = "device_models"
+
+    device_id: Mapped[str] = mapped_column(Text, ForeignKey("devices.id"), primary_key=True)
+    model_uuid: Mapped[str] = mapped_column(Text, ForeignKey("detection_models.uuid"), primary_key=True)
+
+
 class DetectionModel(Base):
     __tablename__ = "detection_models"
 

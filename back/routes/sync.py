@@ -1,5 +1,6 @@
 """Sync endpoints — shared between robot and server modes."""
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import AppMode, config
 from back.database import get_db
-from back.models import DetectionModel
-from back.services.auth import verify_device_key
+from back.models import DetectionModel, Device, DeviceModel
+from back.services.auth import get_device_or_none, verify_device_key
 from back.schemas import (
     SyncCamellon,
     SyncEmpresa,
@@ -39,6 +40,16 @@ _device_dep = [Depends(verify_device_key)] if config.mode == AppMode.SERVER else
 async def health():
     """Health check for sync connectivity."""
     return {"status": "ok", "mode": config.mode.value}
+
+
+@router.post("/pull")
+async def force_pull():
+    """Trigger an immediate model sync pull (robot mode only)."""
+    if config.mode != AppMode.ROBOT:
+        return {"ok": False, "reason": "only available in robot mode"}
+    from back.services.sync_pull import pull_models
+    await pull_models()
+    return {"ok": True}
 
 
 # --- Receive endpoints (server mode, protected by device API key) ---
@@ -77,12 +88,23 @@ async def sync_events(items: list[SyncEvent], db: AsyncSession = Depends(get_db)
 # --- Model endpoints (protected by device API key in server mode) ---
 
 
-@router.get("/models", dependencies=_device_dep)
-async def list_models(db: AsyncSession = Depends(get_db)):
-    """List active detection models with their file hashes."""
-    result = await db.execute(
-        select(DetectionModel).where(DetectionModel.is_active == True)  # noqa: E712
-    )
+@router.get("/models")
+async def list_models(db: AsyncSession = Depends(get_db), device: Device | None = Depends(get_device_or_none)):
+    """List detection models for the requesting device.
+
+    Server mode: returns only models assigned to the device via device_models.
+    Robot mode: returns all active models (no auth, no filtering).
+    """
+    if device is not None:
+        device.last_sync_at = datetime.now(timezone.utc).isoformat()
+        stmt = (
+            select(DetectionModel)
+            .join(DeviceModel, DeviceModel.model_uuid == DetectionModel.uuid)
+            .where(DeviceModel.device_id == device.id)
+        )
+    else:
+        stmt = select(DetectionModel).where(DetectionModel.is_active == True)  # noqa: E712
+    result = await db.execute(stmt)
     models = result.scalars().all()
     return [
         {
@@ -90,6 +112,8 @@ async def list_models(db: AsyncSession = Depends(get_db)):
             "filename": m.filename,
             "file_hash": m.file_hash,
             "version": m.version,
+            "class_mapping": m.class_mapping,
+            "notes": m.notes,
         }
         for m in models
     ]

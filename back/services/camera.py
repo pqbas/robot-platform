@@ -157,11 +157,21 @@ class CameraStreamTrack(VideoStreamTrack):
         if self._first_frame:
             self._first_frame = False
             self._worker.start()
-            ret, frame = await loop.run_in_executor(None, self._drain_and_read)
+            read_fn = self._drain_and_read
         else:
-            ret, frame = await loop.run_in_executor(None, self._cap.read)
+            read_fn = self._cap.read
+
+        try:
+            ret, frame = await loop.run_in_executor(None, read_fn)
+        except Exception as exc:
+            logger.warning("Camera read exception: %s — stopping track", exc)
+            self.stop()
+            raise
+
         if not ret:
-            raise RuntimeError("Failed to read frame from camera")
+            logger.warning("Camera returned empty frame — stopping track")
+            self.stop()
+            raise RuntimeError("Camera disconnected")
 
         crop = config.camera.crop_width
         left = frame[:, :crop] if crop > 0 else frame

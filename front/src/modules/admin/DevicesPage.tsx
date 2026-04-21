@@ -12,13 +12,22 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import DeviceFormDialog from "./components/DeviceFormDialog"
+import DeviceModelsDialog from "./components/DeviceModelsDialog"
 import { toast } from "sonner"
+
+const ONLINE_THRESHOLD_MS = 10 * 60 * 1000 // 10 minutes
+
+function isOnline(last_sync_at: string | null): boolean {
+  if (!last_sync_at) return false
+  return Date.now() - new Date(last_sync_at).getTime() < ONLINE_THRESHOLD_MS
+}
 
 export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Device | null>(null)
+  const [modelsDevice, setModelsDevice] = useState<Device | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -32,6 +41,8 @@ export default function DevicesPage() {
 
   useEffect(() => {
     load()
+    const id = setInterval(load, 30_000)
+    return () => clearInterval(id)
   }, [load])
 
   if (loading) {
@@ -63,7 +74,7 @@ export default function DevicesPage() {
               <TableHead>Label</TableHead>
               <TableHead>Ultimo sync</TableHead>
               <TableHead>Estado</TableHead>
-              <TableHead className="w-[80px]">Acciones</TableHead>
+              <TableHead className="w-[140px]">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -72,9 +83,15 @@ export default function DevicesPage() {
                 <TableCell className="font-mono text-sm">{device.id}</TableCell>
                 <TableCell className="font-medium">{device.label}</TableCell>
                 <TableCell className="text-muted-foreground">
-                  {device.last_sync_at
-                    ? new Date(device.last_sync_at).toLocaleString()
-                    : "—"}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`size-2 rounded-full shrink-0 ${isOnline(device.last_sync_at) ? "bg-green-500" : "bg-muted-foreground/40"}`}
+                      title={isOnline(device.last_sync_at) ? "Online" : "Offline"}
+                    />
+                    {device.last_sync_at
+                      ? new Date(device.last_sync_at).toLocaleString()
+                      : "—"}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Badge variant={device.is_active ? "default" : "outline"}>
@@ -82,16 +99,25 @@ export default function DevicesPage() {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setEditing(device)
-                      setDialogOpen(true)
-                    }}
-                  >
-                    Editar
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditing(device)
+                        setDialogOpen(true)
+                      }}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setModelsDevice(device)}
+                    >
+                      Modelos
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -104,6 +130,13 @@ export default function DevicesPage() {
         editing={editing}
         onSuccess={load}
       />
+      {modelsDevice && (
+        <DeviceModelsDialog
+          device={modelsDevice}
+          open={!!modelsDevice}
+          onOpenChange={(open) => { if (!open) setModelsDevice(null) }}
+        />
+      )}
     </div>
   )
 }
