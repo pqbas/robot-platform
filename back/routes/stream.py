@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from aiortc import RTCPeerConnection, RTCSessionDescription
@@ -10,6 +11,14 @@ from back.services import camera
 logger = logging.getLogger("webrtc")
 
 router = APIRouter()
+
+
+async def _watch_track(track: camera.CameraStreamTrack, pc: RTCPeerConnection) -> None:
+    """Close the peer connection when the track stops (camera disconnect)."""
+    await track.stopped.wait()
+    logger.info("Track stopped — closing peer connection")
+    await pc.close()
+    camera.pcs.discard(pc)
 
 
 @router.post("/offer")
@@ -40,6 +49,8 @@ async def offer(request: Request):
             await pc.close()
             track.stop()
             camera.pcs.discard(pc)
+
+    asyncio.ensure_future(_watch_track(track, pc))
 
     pc.addTrack(track)
     await pc.setRemoteDescription(offer_desc)
