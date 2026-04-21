@@ -15,6 +15,13 @@ import DeviceFormDialog from "./components/DeviceFormDialog"
 import DeviceModelsDialog from "./components/DeviceModelsDialog"
 import { toast } from "sonner"
 
+const ONLINE_THRESHOLD_MS = 10 * 60 * 1000 // 10 minutes
+
+function isOnline(last_sync_at: string | null): boolean {
+  if (!last_sync_at) return false
+  return Date.now() - new Date(last_sync_at).getTime() < ONLINE_THRESHOLD_MS
+}
+
 export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(true)
@@ -74,9 +81,15 @@ export default function DevicesPage() {
                 <TableCell className="font-mono text-sm">{device.id}</TableCell>
                 <TableCell className="font-medium">{device.label}</TableCell>
                 <TableCell className="text-muted-foreground">
-                  {device.last_sync_at
-                    ? new Date(device.last_sync_at).toLocaleString()
-                    : "—"}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`size-2 rounded-full shrink-0 ${isOnline(device.last_sync_at) ? "bg-green-500" : "bg-muted-foreground/40"}`}
+                      title={isOnline(device.last_sync_at) ? "Online" : "Offline"}
+                    />
+                    {device.last_sync_at
+                      ? new Date(device.last_sync_at).toLocaleString()
+                      : "—"}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Badge variant={device.is_active ? "default" : "outline"}>

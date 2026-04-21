@@ -1,5 +1,6 @@
 """Sync endpoints — shared between robot and server modes."""
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -85,6 +86,7 @@ async def list_models(db: AsyncSession = Depends(get_db), device: Device | None 
     Robot mode: returns all active models (no auth, no filtering).
     """
     if device is not None:
+        device.last_sync_at = datetime.now(timezone.utc).isoformat()
         stmt = (
             select(DetectionModel)
             .join(DeviceModel, DeviceModel.model_uuid == DetectionModel.uuid)
