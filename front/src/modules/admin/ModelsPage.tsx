@@ -3,6 +3,7 @@ import type { DetectionModel, ClassMappingItem } from "@/types"
 import {
   getDetectionModels,
   activateModel,
+  deactivateModel,
   deleteModel,
 } from "@/api/admin-models"
 import { Button } from "@/components/ui/button"
@@ -57,6 +58,16 @@ export default function ModelsPage() {
       load()
     } catch {
       toast.error("Error al activar modelo")
+    }
+  }
+
+  const handleDeactivate = async (uuid: string) => {
+    try {
+      await deactivateModel(uuid)
+      toast.success("Modelo desactivado")
+      load()
+    } catch {
+      toast.error("Error al desactivar modelo")
     }
   }
 
@@ -125,7 +136,15 @@ export default function ModelsPage() {
                       >
                         Editar
                       </Button>
-                      {!model.is_active && (
+                      {model.is_active ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeactivate(model.uuid)}
+                        >
+                          Desactivar
+                        </Button>
+                      ) : (
                         <Button
                           variant="ghost"
                           size="sm"
