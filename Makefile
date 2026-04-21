@@ -16,6 +16,12 @@ run-inference:
 run-inference-dev:
 	cd inference && uv run inference-worker
 
+run-camera:
+	cd camera_worker && uv run camera-worker
+
+logs-camera:
+	sudo journalctl -u camera-worker -f
+
 db-up:
 	docker compose -f docker-compose.server.yml up -d
 

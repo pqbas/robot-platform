@@ -1,0 +1,17 @@
+[Unit]
+Description=Camera Worker (V4L2 via Unix socket)
+Before=robot-platform.service
+After=network.target
+
+[Service]
+Type=simple
+User=DEPLOY_USER
+WorkingDirectory=DEPLOY_DIR
+ExecStartPre=/bin/rm -f /tmp/camera.sock
+ExecStart=/opt/robot-platform/camera_worker/.venv/bin/camera-worker
+Restart=on-failure
+RestartSec=3
+Environment=CAMERA_SOCKET=/tmp/camera.sock
+
+[Install]
+WantedBy=multi-user.target

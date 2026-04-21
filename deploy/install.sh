@@ -166,6 +166,11 @@ if [[ "$MODE" == "robot" ]]; then
     sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
         "$INSTALL_DIR/deploy/inference-worker.service" \
         | sudo tee /etc/systemd/system/inference-worker.service > /dev/null
+
+    sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
+        -e "s|DEPLOY_DIR|${INSTALL_DIR}/camera_worker|g" \
+        "$INSTALL_DIR/deploy/camera-worker.service" \
+        | sudo tee /etc/systemd/system/camera-worker.service > /dev/null
 fi
 
 sudo systemctl daemon-reload
@@ -174,6 +179,10 @@ if [[ "$MODE" == "robot" ]]; then
     sudo systemctl enable inference-worker
     sudo systemctl restart inference-worker
     info "Inference worker service enabled and started"
+
+    sudo systemctl enable camera-worker
+    sudo systemctl restart camera-worker
+    info "Camera worker service enabled and started"
 fi
 
 sudo systemctl enable robot-platform
