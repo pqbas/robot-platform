@@ -10,7 +10,7 @@ from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from back.config import config
+from back.config import AppMode, config
 from back.database import get_db
 from back.models import Device, User
 
@@ -101,6 +101,23 @@ async def verify_device_key(
     db: AsyncSession = Depends(get_db),
 ) -> Device:
     """Dependency: validate robot API key from Authorization header."""
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key required")
+    key = credentials.credentials
+    result = await db.execute(select(Device).where(Device.is_active == True))  # noqa: E712
+    for device in result.scalars().all():
+        if verify_api_key(key, device.api_key_hash):
+            return device
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+
+async def get_device_or_none(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> Device | None:
+    """Dependency: returns the authenticated device in server mode, None in robot mode."""
+    if config.mode != AppMode.SERVER:
+        return None
     if not credentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key required")
     key = credentials.credentials
