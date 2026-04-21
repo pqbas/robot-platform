@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import DeviceFormDialog from "./components/DeviceFormDialog"
+import DeviceModelsDialog from "./components/DeviceModelsDialog"
 import { toast } from "sonner"
 
 export default function DevicesPage() {
@@ -19,6 +20,7 @@ export default function DevicesPage() {
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Device | null>(null)
+  const [modelsDevice, setModelsDevice] = useState<Device | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -63,7 +65,7 @@ export default function DevicesPage() {
               <TableHead>Label</TableHead>
               <TableHead>Ultimo sync</TableHead>
               <TableHead>Estado</TableHead>
-              <TableHead className="w-[80px]">Acciones</TableHead>
+              <TableHead className="w-[140px]">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -82,16 +84,25 @@ export default function DevicesPage() {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setEditing(device)
-                      setDialogOpen(true)
-                    }}
-                  >
-                    Editar
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditing(device)
+                        setDialogOpen(true)
+                      }}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setModelsDevice(device)}
+                    >
+                      Modelos
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -104,6 +115,13 @@ export default function DevicesPage() {
         editing={editing}
         onSuccess={load}
       />
+      {modelsDevice && (
+        <DeviceModelsDialog
+          device={modelsDevice}
+          open={!!modelsDevice}
+          onOpenChange={(open) => { if (!open) setModelsDevice(null) }}
+        />
+      )}
     </div>
   )
 }

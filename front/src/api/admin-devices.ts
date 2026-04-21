@@ -31,3 +31,14 @@ export function rotateApiKey(id: string) {
     { method: "POST" },
   )
 }
+
+export function getDeviceModels(deviceId: string) {
+  return apiFetch<import("@/types").DetectionModel[]>(`/api/devices/${deviceId}/models`)
+}
+
+export function setDeviceModels(deviceId: string, modelUuids: string[]) {
+  return apiFetch<void>(`/api/devices/${deviceId}/models`, {
+    method: "PUT",
+    body: JSON.stringify({ model_uuids: modelUuids }),
+  })
+}
