@@ -171,17 +171,20 @@ async def activate_model(uuid: str, db: AsyncSession = Depends(get_db), _=Depend
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    # Deactivate all other active models
-    others = await db.execute(
-        select(DetectionModel).where(
-            DetectionModel.uuid != uuid,
-            DetectionModel.is_active == True,  # noqa: E712
-        )
-    )
-    for other in others.scalars().all():
-        other.is_active = False
-
     model.is_active = True
+    await db.commit()
+    await db.refresh(model)
+    return _model_to_out(model)
+
+
+@router.put("/detection-models/{uuid}/deactivate", response_model=DetectionModelOut)
+async def deactivate_model(uuid: str, db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
+    result = await db.execute(select(DetectionModel).where(DetectionModel.uuid == uuid))
+    model = result.scalar_one_or_none()
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    model.is_active = False
     await db.commit()
     await db.refresh(model)
     return _model_to_out(model)

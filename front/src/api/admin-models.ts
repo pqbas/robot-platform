@@ -65,6 +65,12 @@ export function activateModel(uuid: string) {
   })
 }
 
+export function deactivateModel(uuid: string) {
+  return apiFetch<DetectionModel>(`/api/detection-models/${uuid}/deactivate`, {
+    method: "PUT",
+  })
+}
+
 export function deleteModel(uuid: string) {
   return apiFetch<void>(`/api/detection-models/${uuid}`, {
     method: "DELETE",
