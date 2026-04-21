@@ -31,15 +31,20 @@ def parse_args():
     return parser.parse_args()
 
 
-def open_camera(args) -> cv2.VideoCapture:
+def open_camera(args) -> tuple[cv2.VideoCapture, int, int]:
     while True:
         cap = cv2.VideoCapture(args.index)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if cap.isOpened():
-            logger.info("Camera opened (index=%d)", args.index)
-            return cap
+            actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            logger.info(
+                "Camera opened (index=%d) — actual resolution %dx%d",
+                args.index, actual_width, actual_height,
+            )
+            return cap, actual_width, actual_height
         cap.release()
         logger.warning("Camera not available — retrying in 1s")
         time.sleep(1)
@@ -49,12 +54,13 @@ async def handle_client(_reader: asyncio.StreamReader, writer: asyncio.StreamWri
     logger.info("Client connected")
 
     loop = asyncio.get_event_loop()
-    cap = await loop.run_in_executor(None, open_camera, args)
+    cap, actual_width, actual_height = await loop.run_in_executor(None, open_camera, args)
 
-    out_width = args.crop if args.crop > 0 else args.width
-    out_height = args.height
+    # Clamp crop to actual width; if crop=0 or exceeds actual width, send full frame
+    out_width = min(args.crop, actual_width) if args.crop > 0 else actual_width
+    out_height = actual_height
 
-    # Send handshake
+    # Send handshake with real dimensions
     handshake = json.dumps(
         {"width": out_width, "height": out_height, "channels": 3}
     ).encode()
@@ -78,7 +84,7 @@ async def handle_client(_reader: asyncio.StreamReader, writer: asyncio.StreamWri
                 logger.warning("Camera disconnected — waiting for reconnect")
                 break
 
-            cropped = frame[:, : args.crop] if args.crop > 0 else frame
+            cropped = frame[:, :out_width] if out_width < actual_width else frame
             raw = cropped.tobytes()
             frame_len = struct.pack(">I", len(raw))
             try:
