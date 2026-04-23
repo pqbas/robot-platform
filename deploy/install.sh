@@ -80,6 +80,11 @@ if [[ "$MODE" == "robot" ]]; then
         uv sync
     fi
     cd "$INSTALL_DIR"
+
+    info "Installing Python dependencies (camera worker)..."
+    cd "$INSTALL_DIR/camera_worker"
+    uv sync
+    cd "$INSTALL_DIR"
 fi
 
 # --- 5. Build frontend ---
