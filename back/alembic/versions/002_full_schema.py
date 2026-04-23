@@ -98,18 +98,15 @@ def upgrade() -> None:
 
     # --- Alter existing tables from 001 to add new columns ---
 
-    with op.batch_alter_table("camellones") as batch_op:
-        batch_op.add_column(sa.Column("uuid", sa.Text(), unique=True))
-        batch_op.add_column(sa.Column("device_id", sa.Text(), nullable=True))
-        batch_op.add_column(sa.Column("fundo_uuid", sa.Text(), sa.ForeignKey("fundos.uuid"), nullable=True))
+    op.add_column("camellones", sa.Column("uuid", sa.Text()))
+    op.add_column("camellones", sa.Column("device_id", sa.Text(), nullable=True))
+    op.add_column("camellones", sa.Column("fundo_uuid", sa.Text(), nullable=True))
 
-    with op.batch_alter_table("sessions") as batch_op:
-        batch_op.add_column(sa.Column("uuid", sa.Text(), unique=True))
-        batch_op.add_column(sa.Column("device_id", sa.Text(), nullable=True))
+    op.add_column("sessions", sa.Column("uuid", sa.Text()))
+    op.add_column("sessions", sa.Column("device_id", sa.Text(), nullable=True))
 
-    with op.batch_alter_table("events") as batch_op:
-        batch_op.add_column(sa.Column("uuid", sa.Text(), unique=True))
-        batch_op.add_column(sa.Column("device_id", sa.Text(), nullable=True))
+    op.add_column("events", sa.Column("uuid", sa.Text()))
+    op.add_column("events", sa.Column("device_id", sa.Text(), nullable=True))
 
     # --- Capture and classification models ---
 

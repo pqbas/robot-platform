@@ -68,4 +68,5 @@ update:
 	uv sync
 	cd front && npm ci && npm run build
 	-sudo systemctl restart inference-worker
+	-sudo systemctl restart camera-worker
 	sudo systemctl restart robot-platform
