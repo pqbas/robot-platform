@@ -21,8 +21,10 @@
 ## Camera Worker
 - Proyecto uv separado en `camera_worker/` con opencv-python y numpy
 - El backend NO accede a V4L2 directamente — lee frames raw BGR del socket `/tmp/camera.sock`
-- Protocolo: handshake JSON (width, height, channels) + stream de frames length-prefixed
+- Protocolo: handshake JSON (width, height, channels, fps) + stream de frames length-prefixed
 - **Fan-out**: el worker abre la cámara una sola vez y reparte cada frame a todos los clientes conectados (backend WebRTC + recording-worker simultáneos). Cola por cliente con drop-oldest si se atrasa.
+- Default: captura ZED 2i estéreo SBS a 3840×1080@30 YUYV, crop al ojo izquierdo → frame de salida 1920×1080 BGR.
+- Para volver a 720p: `CAMERA_WIDTH=2560 CAMERA_HEIGHT=720 CAMERA_CROP=1280` en `.env.robot` y `make restart`.
 - Iniciar worker: `make run-camera` o `cd camera_worker && uv run camera-worker`
 
 ## Recording Worker
@@ -33,7 +35,7 @@
 - En Jetson el plugin `nvv4l2h264enc` viene de `nvidia-l4t-gstreamer` (JetPack); PyGObject solo no es suficiente — el deploy verifica los plugins con `gst-inspect-1.0` antes de habilitar la unidad.
 - Iniciar worker: `make run-recording` o `cd recording_worker && uv run recording-worker`.
 - Probar backend detectado: `cd recording_worker && uv run python -c "from recording_worker.encoder import detect_backend; print(detect_backend())"`.
-- Defaults de calidad (hardcoded — Phase 7 los expone como env vars): NVENC 8 Mbps profile=High preset=Slow; libx264 6 Mbps preset=medium crf=20. El FPS se toma del handshake del camera-worker, no se hardcodea.
+- Bitrate auto-escalado por altura del frame (Phase 7 lo expondrá como env var): NVENC 12 Mbps a 1080p, 8 Mbps a 720p; libx264 9/6 Mbps respectivamente. Profile=High preset=Slow (NVENC); preset=medium crf=20 (libx264). El FPS se toma del handshake del camera-worker, no se hardcodea.
 
 ## Comandos
 - Camera worker: `make run-camera`
