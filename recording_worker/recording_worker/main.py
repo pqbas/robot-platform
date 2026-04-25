@@ -178,6 +178,15 @@ async def cmd_start(state: RecordingState, payload: dict, camera_socket: str) ->
         logger.error("Camera socket unavailable: %s", exc)
         return {"ok": False, "error": "camera_unavailable"}
 
+    # Make sure the output directory exists before handing the path to the
+    # encoder — PyAV defers the file open until the first mux, so a missing
+    # dir would crash the encode loop mid-recording instead of failing fast.
+    try:
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    except OSError as exc:
+        reader.close()
+        return {"ok": False, "error": f"cannot_create_output_dir: {exc}"}
+
     encoder = make_encoder()
     fps = 30.0
     try:
@@ -212,38 +221,53 @@ async def cmd_stop(state: RecordingState) -> dict:
     if not state.recording:
         return {"ok": False, "error": "not_recording"}
 
+    encoder = state.encoder
+    reader = state.reader
+    uuid = state.uuid
+    output_path = state.output_path
+    backend = encoder.backend if encoder else None
+
     state.stop_requested = True
+
+    # Drain the encode task. If it died with an exception (e.g. PyAV
+    # mux failure mid-recording), wait_for re-raises it — we must not
+    # let it abort the cleanup path or the state will stay 'recording'
+    # forever and every subsequent start will 409.
+    task_error: Exception | None = None
     if state.task is not None:
         try:
             await asyncio.wait_for(state.task, timeout=10.0)
         except asyncio.TimeoutError:
             logger.warning("encode_loop did not exit within 10s — cancelling")
             state.task.cancel()
+        except Exception as exc:
+            logger.warning("encode_loop crashed mid-recording: %s", exc)
+            task_error = exc
 
     loop = asyncio.get_event_loop()
-    assert state.encoder is not None and state.reader is not None
-    stats = await loop.run_in_executor(None, state.encoder.stop)
-    state.reader.close()
+
+    stats: dict = {}
+    if encoder is not None:
+        try:
+            stats = await loop.run_in_executor(None, encoder.stop)
+        except Exception:
+            logger.exception("Encoder stop raised — continuing cleanup")
+
+    if reader is not None:
+        try:
+            reader.close()
+        except Exception:
+            pass
 
     file_size = 0
-    try:
-        file_size = os.path.getsize(state.output_path)  # type: ignore[arg-type]
-    except OSError:
-        pass
+    if output_path:
+        try:
+            file_size = os.path.getsize(output_path)
+        except OSError:
+            pass
 
-    response = {
-        "ok": True,
-        "state": "idle",
-        "uuid": state.uuid,
-        "duration_seconds": stats.get("duration_seconds"),
-        "file_size_bytes": file_size,
-        "width": stats.get("width"),
-        "height": stats.get("height"),
-        "fps": stats.get("fps"),
-        "backend": state.encoder.backend,
-    }
-    logger.info("Recording stopped: %s", response)
-
+    # Reset state BEFORE building the response so that even if logging
+    # raises, the next start() will succeed.
     state.encoder = None
     state.reader = None
     state.uuid = None
@@ -251,6 +275,21 @@ async def cmd_stop(state: RecordingState) -> dict:
     state.started_at = None
     state.task = None
     state.last_stats = stats
+
+    response = {
+        "ok": True,
+        "state": "idle",
+        "uuid": uuid,
+        "duration_seconds": stats.get("duration_seconds"),
+        "file_size_bytes": file_size,
+        "width": stats.get("width"),
+        "height": stats.get("height"),
+        "fps": stats.get("fps"),
+        "backend": backend,
+    }
+    if task_error is not None:
+        response["warning"] = f"encode_loop crashed: {task_error}"
+    logger.info("Recording stopped: %s", response)
     return response
 
 

@@ -58,8 +58,13 @@ async def start_recording(db: AsyncSession = Depends(get_db)):
         raise HTTPException(409, "A recording is already in progress")
 
     uuid = _new_uuid()
-    output_path = os.path.join(config.storage.recordings_dir, f"{uuid}.mp4")
-    os.makedirs(config.storage.recordings_dir, exist_ok=True)
+    # Always send an absolute path: the recording-worker runs from a
+    # different cwd, so a relative path resolves against /tmp or wherever
+    # systemd dropped it and the MP4 ends up in the wrong place.
+    output_path = os.path.abspath(
+        os.path.join(config.storage.recordings_dir, f"{uuid}.mp4")
+    )
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     # session_uuid: the active counting session is in-memory only and has no
     # uuid until the operator saves it. For now we always store NULL — the
