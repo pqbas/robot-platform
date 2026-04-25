@@ -99,3 +99,24 @@ Rollback completo (revert del PR) solo si el modo 720p también regresa por alg�
 ## Definition of Done
 
 Todas las cajas arriba marcadas, branch rebaseado contra `master` sin conflictos, sin `print` de debug ni TODOs nuevos. La nitidez del 1080p confirmada con comparación lado a lado de un MP4 grabado en hardware real (Jetson + ZED 2i) frente al MP4 720p de Phase 8. El operador valida visualmente que "se ve mejor" sin necesidad de explicación técnica, y el switch a 720p sigue funcionando vía env vars como red de seguridad documentada.
+
+## Resultado medido (post-merge)
+
+`about:webrtc` en Firefox sobre la red local del Jetson reportó:
+
+- `frameWidth=1920, frameHeight=1080` ✓
+- `framesPerSecond=14` (avg `13.93`) ✗ — debajo del umbral de ≥25 que pide
+  esta validación, y debajo del umbral de rollback `<20` de la Phase.
+- `packetsLost=0, framesDropped=0, nackCount=0, pliCount=0`, RTT=3 ms.
+  La red NO es el cuello de botella.
+- Throughput real ~200 kbps (3.48 MB en 136 s) para 1080p — el encoder
+  VP8 software de `aiortc` corriendo en el event loop de Python no
+  sostiene 30 fps a 2.25× pixels.
+
+Decisión: se mergea Phase 9 con el código + auto-bitrate como soporte
+para el modo 1080p, pero el README del `camera_worker` recomienda dejar
+el override 720p en `.env.robot` hasta que aterrice una phase de
+per-client downscale (live a 720p mientras recording captura 1080p) o
+se reemplace el encoder VP8 por NVENC H.264 en el path WebRTC. La
+nitidez del 1080p sí se preserva para grabación cuando el operador
+explícitamente activa el modo.

@@ -25,7 +25,29 @@ Defaults (`.env.robot`) target the ZED 2i over USB 3.0 SuperSpeed.
 sensor; `CAMERA_CROP` selects the left eye out of the side-by-side
 frame (the worker outputs `CROP × HEIGHT` to consumers).
 
-### 1080p (default)
+> **Recommended in production: override to 720p.** The argparse default
+> is 1080p (the higher-quality recording target), but `aiortc`'s
+> software VP8 encoder can't sustain 30 fps at 1920×1080 on the Jetson
+> — measured ~14 fps on the live WebRTC stream while recording stays
+> nítido. Until per-client downscale lands (live to 720p, recording at
+> 1080p), put the **720p block below** in `.env.robot` so live stays
+> fluido. The 1080p code path stays available for operators with
+> upstream-quality bandwidth budgets that need recording at full
+> resolution.
+
+### 720p (recommended `.env.robot`)
+
+```
+CAMERA_WIDTH=2560
+CAMERA_HEIGHT=720
+CAMERA_CROP=1280
+CAMERA_FPS=30
+```
+
+YUYV bandwidth ≈ 110 MB/s. Output frame: 1280×720 BGR. Apply with
+`make restart`.
+
+### 1080p (argparse default; opt-in via env)
 
 ```
 CAMERA_WIDTH=3840
@@ -36,20 +58,8 @@ CAMERA_FPS=30
 
 Native sensor capture at 30 fps. YUYV bandwidth ≈ 250 MB/s
 (`3840·1080·2 B · 30 fps`), well inside USB 3.0 headroom.
-Output frame: 1920×1080 BGR.
-
-### 720p (alternative)
-
-```
-CAMERA_WIDTH=2560
-CAMERA_HEIGHT=720
-CAMERA_CROP=1280
-CAMERA_FPS=30
-```
-
-For weak USB links, tighter disk budgets, or laptop dev cameras that
-don't negotiate 1080p. YUYV bandwidth ≈ 110 MB/s. Output frame:
-1280×720 BGR. Switch is `make restart` after editing `.env.robot`.
+Output frame: 1920×1080 BGR. Live FPS will degrade until the
+WebRTC encoder is offloaded.
 
 The recording-worker reads height from the handshake and auto-scales
 the encoder bitrate accordingly — no extra config needed when toggling.
