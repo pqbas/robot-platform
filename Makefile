@@ -22,6 +22,12 @@ run-camera:
 logs-camera:
 	sudo journalctl -u camera-worker -f
 
+run-recording:
+	cd recording_worker && uv run recording-worker
+
+logs-recording:
+	sudo journalctl -u recording-worker -f
+
 db-up:
 	docker compose -f docker-compose.server.yml up -d
 
@@ -49,6 +55,7 @@ deploy-server:
 restart:
 	-sudo systemctl restart inference-worker
 	-sudo systemctl restart camera-worker
+	-sudo systemctl restart recording-worker
 	sudo systemctl restart robot-platform
 
 logs:
@@ -70,4 +77,5 @@ update:
 	cd front && npm ci && npm run build
 	-sudo systemctl restart inference-worker
 	-sudo systemctl restart camera-worker
+	-sudo systemctl restart recording-worker
 	sudo systemctl restart robot-platform

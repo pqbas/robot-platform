@@ -85,6 +85,39 @@ if [[ "$MODE" == "robot" ]]; then
     cd "$INSTALL_DIR/camera_worker"
     uv sync
     cd "$INSTALL_DIR"
+
+    info "Installing Python dependencies (recording worker)..."
+    cd "$INSTALL_DIR/recording_worker"
+    if [[ "$(uname -m)" == "aarch64" ]]; then
+        # Jetson: install with the [gstreamer] extra so PyGObject is built
+        # against system gobject-introspection and the worker can drive
+        # the nvv4l2h264enc plugin shipped by nvidia-l4t-gstreamer.
+        info "Jetson detected (aarch64): installing recording worker with --extra gstreamer"
+        uv sync --extra gstreamer
+    else
+        uv sync
+    fi
+    cd "$INSTALL_DIR"
+
+    if [[ "$(uname -m)" == "aarch64" ]]; then
+        info "Verifying gstreamer plugins required for hardware-accelerated recording..."
+        if command -v gst-inspect-1.0 &>/dev/null; then
+            REQUIRED_GST_ELEMENTS="nvv4l2h264enc videoconvert h264parse mp4mux filesink appsrc"
+            for elem in $REQUIRED_GST_ELEMENTS; do
+                if ! gst-inspect-1.0 "$elem" >/dev/null 2>&1; then
+                    error "gstreamer plugin '$elem' not found. Install with:
+   sudo apt install gstreamer1.0-plugins-{base,good,bad,ugly} gstreamer1.0-tools
+   On Jetson, the 'nvv4l2h264enc' plugin ships with 'nvidia-l4t-gstreamer' (JetPack)."
+                fi
+            done
+            info "All required gstreamer plugins present"
+        else
+            error "gst-inspect-1.0 not found. Install with: sudo apt install gstreamer1.0-tools"
+        fi
+    fi
+
+    info "Creating recordings directory..."
+    mkdir -p "$INSTALL_DIR/data/robot/recordings"
 fi
 
 # --- 5. Build frontend ---
@@ -176,6 +209,11 @@ if [[ "$MODE" == "robot" ]]; then
         -e "s|DEPLOY_DIR|${INSTALL_DIR}/camera_worker|g" \
         "$INSTALL_DIR/deploy/camera-worker.service" \
         | sudo tee /etc/systemd/system/camera-worker.service > /dev/null
+
+    sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
+        -e "s|DEPLOY_DIR|${INSTALL_DIR}/recording_worker|g" \
+        "$INSTALL_DIR/deploy/recording-worker.service" \
+        | sudo tee /etc/systemd/system/recording-worker.service > /dev/null
 fi
 
 sudo systemctl daemon-reload
@@ -188,6 +226,10 @@ if [[ "$MODE" == "robot" ]]; then
     sudo systemctl enable camera-worker
     sudo systemctl restart camera-worker
     info "Camera worker service enabled and started"
+
+    sudo systemctl enable recording-worker
+    sudo systemctl restart recording-worker
+    info "Recording worker service enabled and started"
 fi
 
 sudo systemctl enable robot-platform
