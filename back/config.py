@@ -34,6 +34,9 @@ class PerceptionConfig:
 class StorageConfig:
     models_dir: str = os.getenv("MODELS_DIR", "data/robot/models")
     frames_dir: str = os.getenv("FRAMES_DIR", "data/server/frames")
+    device_context_path: str = os.getenv(
+        "DEVICE_CONTEXT_PATH", "data/robot/device_context.json"
+    )
 
 
 @dataclass

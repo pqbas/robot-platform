@@ -12,6 +12,7 @@ from back.routes.camellones import router as camellones_router
 from back.routes.config_routes import router as config_router
 from back.routes.counting import router as counting_router
 from back.routes.dashboard import router as dashboard_router
+from back.routes.device_context import router as device_context_router
 from back.routes.locations import router as locations_router
 from back.routes.stream import router as stream_router
 from back.routes.auth import router as auth_router
@@ -68,6 +69,10 @@ app.include_router(dashboard_router)
 app.include_router(sync_router)
 app.include_router(setup_router)
 app.include_router(auth_router)
+
+# Robot-only routes
+if app_config.mode == AppMode.ROBOT:
+    app.include_router(device_context_router)
 
 # Admin CRUD routes — server mode only
 if app_config.mode == AppMode.SERVER:
