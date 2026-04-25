@@ -91,7 +91,18 @@
 
 ---
 
-## Phase 7: Nuevo método de conteo
+## Phase 7: Configurabilidad del recording-worker (calidad/CPU/disco)
+
+**Goal:** los parámetros de encoding son ajustables por env sin tocar código, para que dev en laptop (libx264, CPU caro) pueda bajar carga y producción en Jetson (NVENC, ~no-CPU) mantenga calidad alta.
+
+- [ ] El bitrate del recording-worker se controla por env var (`RECORDING_BITRATE_BPS`); default 4 Mbps
+- [ ] El preset de libx264 (laptop dev) se controla por env (`RECORDING_X264_PRESET`); default `veryfast`, sin afectar el path NVENC de Jetson
+- [ ] El framerate efectivo se respeta del handshake del camera-worker en vez del 30 hardcodeado actual
+- [ ] Documentado en `recording_worker/README.md` qué env vars existen y cuál es el default por backend
+
+---
+
+## Phase 8: Nuevo método de conteo
 
 **Goal:** el conteo es más robusto y no depende exclusivamente del tracker de YOLO.
 
@@ -101,7 +112,7 @@
 
 ---
 
-## Phase 8: Deploy servidor + validación end-to-end
+## Phase 9: Deploy servidor + validación end-to-end
 
 **Goal:** el flujo completo robot → servidor funciona en producción y el operador siempre sabe qué modelo está activo.
 
@@ -111,7 +122,7 @@
 
 ---
 
-## Phase 9: Integración de otros objetos
+## Phase 10: Integración de otros objetos
 
 **Goal:** el sistema soporta distintos tipos de fruta u objeto sin cambios de código.
 
