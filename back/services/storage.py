@@ -72,8 +72,10 @@ async def delete_location(db: AsyncSession, location_id: int) -> bool:
 # --- Camellones ---
 
 
-async def create_camellon(db: AsyncSession, nombre: str) -> Camellon:
-    cam = Camellon(nombre=nombre)
+async def create_camellon(
+    db: AsyncSession, nombre: str, fundo_uuid: str | None = None
+) -> Camellon:
+    cam = Camellon(nombre=nombre, fundo_uuid=fundo_uuid)
     db.add(cam)
     await db.flush()
     return cam
