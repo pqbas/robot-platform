@@ -16,23 +16,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "detection_models",
-        sa.Column("source", sa.Text(), nullable=False, server_default="uploaded"),
-    )
-    op.alter_column(
-        "detection_models",
-        "file_hash",
-        existing_type=sa.Text(),
-        nullable=True,
-    )
+    with op.batch_alter_table("detection_models") as batch_op:
+        batch_op.add_column(
+            sa.Column("source", sa.Text(), nullable=False, server_default="uploaded"),
+        )
+        batch_op.alter_column(
+            "file_hash",
+            existing_type=sa.Text(),
+            nullable=True,
+        )
 
 
 def downgrade() -> None:
-    op.alter_column(
-        "detection_models",
-        "file_hash",
-        existing_type=sa.Text(),
-        nullable=False,
-    )
-    op.drop_column("detection_models", "source")
+    with op.batch_alter_table("detection_models") as batch_op:
+        batch_op.alter_column(
+            "file_hash",
+            existing_type=sa.Text(),
+            nullable=False,
+        )
+        batch_op.drop_column("source")
