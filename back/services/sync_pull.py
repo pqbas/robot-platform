@@ -47,6 +47,7 @@ async def _upsert_models(remote_models: list[dict]) -> None:
             existing = result.scalar_one_or_none()
             if existing:
                 existing.file_hash = m["file_hash"]
+                existing.source = m.get("source", "uploaded")
                 existing.version = m["version"]
                 existing.class_mapping = m.get("class_mapping")
                 existing.notes = m.get("notes")
@@ -55,6 +56,7 @@ async def _upsert_models(remote_models: list[dict]) -> None:
                     uuid=m["uuid"],
                     filename=m["filename"],
                     file_hash=m["file_hash"],
+                    source=m.get("source", "uploaded"),
                     version=m["version"],
                     class_mapping=m.get("class_mapping"),
                     notes=m.get("notes"),
@@ -86,11 +88,16 @@ async def pull_models() -> None:
                 logger.info("Sync pull: no models assigned to this device")
                 return
 
-            # 3. Download new/updated model files
-            latest_model_path = None
+            # 3. Download new/updated model files (skip library models — managed by ultralytics)
+            latest_target = None  # tuple (path_for_worker, display_name)
             for model in remote_models:
+                if model.get("source") == "library":
+                    logger.info("Sync pull: %s is library model, skipping download", model["filename"])
+                    latest_target = (model["filename"], model["filename"])
+                    continue
+
                 local_path = models_dir / model["filename"]
-                latest_model_path = local_path
+                latest_target = (str(local_path.resolve()), model["filename"])
                 if local_path.exists():
                     local_hash = _file_hash(local_path)
                     if local_hash == model["file_hash"]:
@@ -110,15 +117,15 @@ async def pull_models() -> None:
                     logger.info("Sync pull: downloaded %s (%d bytes)", model["filename"], len(content))
 
             # 4. Ensure worker is using one of the assigned models
-            if latest_model_path and latest_model_path.exists():
-                abs_path = str(latest_model_path.resolve())
+            if latest_target:
+                worker_path, display_name = latest_target
                 client = InferenceClient(config.perception.socket_path)
                 status = client.send_command("status")
                 current = status.get("model_path", "") if status else ""
-                if abs_path != current:
-                    result = client.reload_model(abs_path)
+                if worker_path != current:
+                    result = client.reload_model(worker_path)
                     if result and result.get("ok"):
-                        logger.info("Sync pull: worker reloaded with %s", latest_model_path.name)
+                        logger.info("Sync pull: worker reloaded with %s", display_name)
                     else:
                         logger.warning("Sync pull: worker reload failed: %s", result)
 

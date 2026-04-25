@@ -111,6 +111,7 @@ async def list_models(db: AsyncSession = Depends(get_db), device: Device | None 
             "uuid": m.uuid,
             "filename": m.filename,
             "file_hash": m.file_hash,
+            "source": m.source,
             "version": m.version,
             "class_mapping": m.class_mapping,
             "notes": m.notes,
