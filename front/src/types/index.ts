@@ -132,7 +132,8 @@ export type DetectionModel = {
   uuid: string
   version: string
   filename: string
-  file_hash: string
+  file_hash: string | null
+  source: "uploaded" | "library"
   class_mapping: ClassMappingItem[]
   epochs: number | null
   map50: number | null

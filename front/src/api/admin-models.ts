@@ -76,3 +76,19 @@ export function deleteModel(uuid: string) {
     method: "DELETE",
   })
 }
+
+export type RegisterLibraryModelInput = {
+  filename: string
+  version: string
+  uploaded_by: string
+  class_mapping: string
+  notes?: string | null
+  is_active: boolean
+}
+
+export function registerLibraryModel(payload: RegisterLibraryModelInput) {
+  return apiFetch<DetectionModel>("/api/detection-models/library", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}

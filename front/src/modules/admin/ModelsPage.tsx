@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table"
 import ModelUploadDialog from "./components/ModelUploadDialog"
 import ModelEditDialog from "./components/ModelEditDialog"
+import LibraryModelDialog from "./components/LibraryModelDialog"
 import { toast } from "sonner"
 
 function formatClasses(mapping: ClassMappingItem[]): string {
@@ -35,6 +36,7 @@ export default function ModelsPage() {
   const [models, setModels] = useState<DetectionModel[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [editingModel, setEditingModel] = useState<DetectionModel | null>(null)
 
   const load = useCallback(async () => {
@@ -95,7 +97,12 @@ export default function ModelsPage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Modelos de deteccion</h2>
-          <Button onClick={() => setUploadOpen(true)}>Subir modelo</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setLibraryOpen(true)}>
+              Registrar libreria
+            </Button>
+            <Button onClick={() => setUploadOpen(true)}>Subir modelo</Button>
+          </div>
         </div>
         <div className="overflow-x-auto rounded-md border">
           <Table>
@@ -114,7 +121,14 @@ export default function ModelsPage() {
                 <TableRow key={model.uuid}>
                   <TableCell>{model.version}</TableCell>
                   <TableCell className="font-mono text-xs">
-                    {model.filename}
+                    <div className="flex items-center gap-2">
+                      <span>{model.filename}</span>
+                      {model.source === "library" && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          libreria
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="max-w-[200px] truncate text-muted-foreground">
                     {formatClasses(model.class_mapping)}
@@ -182,6 +196,11 @@ export default function ModelsPage() {
       <ModelUploadDialog
         open={uploadOpen}
         onOpenChange={setUploadOpen}
+        onSuccess={load}
+      />
+      <LibraryModelDialog
+        open={libraryOpen}
+        onOpenChange={setLibraryOpen}
         onSuccess={load}
       />
       {editingModel && (
