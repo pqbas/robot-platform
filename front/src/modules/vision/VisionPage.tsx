@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useBlocker } from "react-router-dom"
 import { toast } from "sonner"
-import { MapPin, Settings } from "lucide-react"
+import { Circle, MapPin, Settings, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { Camellon } from "@/types"
@@ -9,6 +9,7 @@ import { getCamellones } from "@/api/camellones"
 import { useWebRTC } from "@/hooks/useWebRTC"
 import { useCounting } from "@/hooks/useCounting"
 import { useDeviceContext } from "@/hooks/useDeviceContext"
+import { useRecording } from "@/hooks/useRecording"
 import { useAppMode } from "@/context/AppModeContext"
 import VideoStream from "./components/VideoStream"
 import ObjectPicker from "./components/ObjectPicker"
@@ -28,6 +29,7 @@ export default function VisionPage() {
   const { videoRef, connectionState, frameData, fps, connect, disconnect } =
     useWebRTC()
   const counting = useCounting()
+  const recording = useRecording()
   const { mode } = useAppMode()
   const { context: deviceContext } = useDeviceContext(mode === "robot")
 
@@ -47,20 +49,53 @@ export default function VisionPage() {
 
   const connected = connectionState === "connected"
   const isCounting = counting.state === "COUNTING"
+  const isRecording = recording.recording != null
   const busy = connected || connectionState === "connecting"
 
+  const handleStartRecording = async () => {
+    try {
+      await recording.start()
+      toast.success("Grabación iniciada")
+    } catch (e) {
+      toast.error(
+        "Error al iniciar grabación: " +
+          (e instanceof Error ? e.message : "desconocido"),
+      )
+    }
+  }
+
+  const handleStopRecording = async () => {
+    try {
+      const row = await recording.stop()
+      const dur = row.duration_seconds
+        ? `${Math.round(row.duration_seconds)}s`
+        : "—"
+      const size = row.file_size_bytes
+        ? `${(row.file_size_bytes / 1_048_576).toFixed(1)} MB`
+        : "—"
+      toast.success(`Video guardado — ${dur}, ${size}`)
+    } catch (e) {
+      toast.error(
+        "Error al detener grabación: " +
+          (e instanceof Error ? e.message : "desconocido"),
+      )
+    }
+  }
+
   // Block navigation while camera is active
-  const blocker = useBlocker(busy)
+  const blocker = useBlocker(busy || isRecording)
   useEffect(() => {
     if (blocker.state === "blocked") {
       blocker.reset()
-      if (isCounting) {
+      if (isRecording) {
+        toast.warning("Detene la grabación antes de salir")
+      } else if (isCounting) {
         toast.warning("Detene el conteo y desconecta la camara antes de salir")
       } else {
         toast.warning("Desconecta la camara antes de salir")
       }
     }
-  }, [blocker, isCounting])
+  }, [blocker, isCounting, isRecording])
 
   // Feed frame data to counting hook
   useEffect(() => {
@@ -100,6 +135,13 @@ export default function VisionPage() {
     } catch (e) {
       toast.error("Error al iniciar conteo: " + (e instanceof Error ? e.message : "desconocido"))
     }
+  }
+
+  const handleDisconnect = async () => {
+    if (isRecording) {
+      await handleStopRecording()
+    }
+    disconnect()
   }
 
   const handleStop = async () => {
@@ -176,13 +218,24 @@ export default function VisionPage() {
           />
         )}
         {connected && (
-          <div className="absolute top-2 right-2 flex gap-2">
-            <Badge variant="outline" className="bg-black/60 text-white border-none text-xs">
-              Stream: {fps.streamFps} FPS
-            </Badge>
-            {isCounting && (
+          <div className="absolute top-2 right-2 flex flex-col items-end gap-2">
+            <div className="flex gap-2">
               <Badge variant="outline" className="bg-black/60 text-white border-none text-xs">
-                YOLO: {fps.inferenceFps} FPS
+                Stream: {fps.streamFps} FPS
+              </Badge>
+              {isCounting && (
+                <Badge variant="outline" className="bg-black/60 text-white border-none text-xs">
+                  YOLO: {fps.inferenceFps} FPS
+                </Badge>
+              )}
+            </div>
+            {isRecording && (
+              <Badge
+                variant="destructive"
+                className="bg-red-600/90 text-white border-none text-xs flex items-center gap-1.5 animate-pulse"
+              >
+                <Circle className="size-2 fill-current" />
+                REC {recording.durationStr}
               </Badge>
             )}
           </div>
@@ -223,7 +276,7 @@ export default function VisionPage() {
         ) : connectionState === "connecting" ? (
           <Button disabled>Conectando...</Button>
         ) : (
-          <Button variant="destructive" onClick={disconnect}>
+          <Button variant="destructive" onClick={handleDisconnect}>
             Desconectar
           </Button>
         )}
@@ -241,6 +294,30 @@ export default function VisionPage() {
               {durationStr}
             </Badge>
           </>
+        )}
+
+        {connected && (
+          <div className="ml-auto">
+            {!isRecording ? (
+              <Button
+                variant="outline"
+                onClick={handleStartRecording}
+                disabled={recording.loading}
+              >
+                <Circle className="size-4 mr-1 fill-red-500 text-red-500" />
+                Grabar
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={handleStopRecording}
+                disabled={recording.loading}
+              >
+                <Square className="size-4 mr-1" />
+                Detener grabación
+              </Button>
+            )}
+          </div>
         )}
       </div>
 

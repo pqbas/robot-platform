@@ -1,0 +1,19 @@
+[Unit]
+Description=Recording Worker (MP4 H.264 encoder via Unix socket)
+Before=robot-platform.service
+After=network.target camera-worker.service
+Wants=camera-worker.service
+
+[Service]
+Type=simple
+User=DEPLOY_USER
+WorkingDirectory=DEPLOY_DIR
+ExecStartPre=/bin/rm -f /tmp/recording.sock
+ExecStart=/opt/robot-platform/recording_worker/.venv/bin/recording-worker
+Restart=on-failure
+RestartSec=2
+Environment=CAMERA_SOCKET=/tmp/camera.sock
+Environment=RECORDING_SOCKET=/tmp/recording.sock
+
+[Install]
+WantedBy=multi-user.target

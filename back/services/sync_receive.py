@@ -11,6 +11,7 @@ from back.models import (
     Event,
     Fundo,
     Location,
+    Recording,
     Session,
 )
 from back.schemas import (
@@ -19,6 +20,7 @@ from back.schemas import (
     SyncEvent,
     SyncFundo,
     SyncLocation,
+    SyncRecording,
     SyncResult,
     SyncSession,
 )
@@ -164,3 +166,48 @@ async def receive_events(db: AsyncSession, items: list[SyncEvent]) -> SyncResult
         ok.append(item.uuid)
     await db.commit()
     return SyncResult(received=len(items), inserted=inserted, skipped=skipped, errors=errors, successful_uuids=ok)
+
+
+async def receive_recordings(
+    db: AsyncSession, items: list[SyncRecording], device_id: str
+) -> SyncResult:
+    """Ingest recording metadata. session_uuid is informational — do not
+    reject if it doesn't resolve on this server (the session may not have
+    been synced yet, or may be a robot-only recording with session_uuid=null).
+    The blob is uploaded separately via /api/sync/recordings/{uuid}/upload.
+    """
+    inserted = 0
+    skipped = 0
+    errors: list[str] = []
+    ok: list[str] = []
+    for item in items:
+        existing = await db.execute(select(Recording).where(Recording.uuid == item.uuid))
+        if existing.scalar_one_or_none():
+            skipped += 1
+            ok.append(item.uuid)
+            continue
+        # Trust the device_id from the authenticated device, not the payload
+        # (defence in depth — robots could otherwise spoof another device).
+        db.add(Recording(
+            uuid=item.uuid,
+            device_id=device_id,
+            session_uuid=item.session_uuid,
+            started_at=item.started_at,
+            ended_at=item.ended_at,
+            duration_seconds=item.duration_seconds,
+            file_path=item.file_path,
+            file_size_bytes=item.file_size_bytes,
+            width=item.width,
+            height=item.height,
+            fps=item.fps,
+        ))
+        inserted += 1
+        ok.append(item.uuid)
+    await db.commit()
+    return SyncResult(
+        received=len(items),
+        inserted=inserted,
+        skipped=skipped,
+        errors=errors,
+        successful_uuids=ok,
+    )

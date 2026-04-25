@@ -37,6 +37,7 @@ class StorageConfig:
     device_context_path: str = os.getenv(
         "DEVICE_CONTEXT_PATH", "data/robot/device_context.json"
     )
+    recordings_dir: str = os.getenv("RECORDINGS_DIR", "data/robot/recordings")
 
 
 @dataclass
@@ -56,6 +57,11 @@ class CountingConfig:
     threshold: int = 360                # position in px of the counting line
     direction: str = "top2down"         # "top2down" | "down2top" | "left2right" | "right2left"
     confidence_threshold: float = 0.5
+
+
+@dataclass
+class RecordingConfig:
+    control_socket_path: str = os.getenv("RECORDING_SOCKET", "/tmp/recording.sock")
 
 
 @dataclass
@@ -88,6 +94,7 @@ class Config:
     storage: StorageConfig = field(default_factory=StorageConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
+    recording: RecordingConfig = field(default_factory=RecordingConfig)
     sync: SyncConfig = field(default_factory=SyncConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
 
