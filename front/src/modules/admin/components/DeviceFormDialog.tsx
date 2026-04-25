@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import type { Device } from "@/types"
+import type { Device, Fundo } from "@/types"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -10,9 +10,19 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { createDevice, rotateApiKey, updateDevice } from "@/api/admin-devices"
+import { getFundos } from "@/api/admin"
 import { toast } from "sonner"
 import ApiKeyDisplay from "./ApiKeyDisplay"
+
+const NO_FUNDO = "__none__"
 
 type Props = {
   open: boolean
@@ -30,6 +40,8 @@ export default function DeviceFormDialog({
   const [deviceId, setDeviceId] = useState("")
   const [label, setLabel] = useState("")
   const [isActive, setIsActive] = useState(true)
+  const [fundoUuid, setFundoUuid] = useState<string>(NO_FUNDO)
+  const [fundos, setFundos] = useState<Fundo[]>([])
   const [saving, setSaving] = useState(false)
   const [rotating, setRotating] = useState(false)
   const [createdApiKey, setCreatedApiKey] = useState<string | null>(null)
@@ -37,14 +49,17 @@ export default function DeviceFormDialog({
   useEffect(() => {
     if (open) {
       setCreatedApiKey(null)
+      getFundos().then(setFundos).catch(() => setFundos([]))
       if (editing) {
         setDeviceId(editing.id)
         setLabel(editing.label)
         setIsActive(editing.is_active)
+        setFundoUuid(editing.fundo_uuid ?? NO_FUNDO)
       } else {
         setDeviceId("")
         setLabel("")
         setIsActive(true)
+        setFundoUuid(NO_FUNDO)
       }
     }
   }, [editing, open])
@@ -57,7 +72,11 @@ export default function DeviceFormDialog({
     setSaving(true)
     try {
       if (editing) {
-        await updateDevice(editing.id, { label, is_active: isActive })
+        await updateDevice(editing.id, {
+          label,
+          is_active: isActive,
+          fundo_uuid: fundoUuid === NO_FUNDO ? null : fundoUuid,
+        })
         toast.success("Dispositivo actualizado")
         onSuccess()
         onOpenChange(false)
@@ -118,6 +137,22 @@ export default function DeviceFormDialog({
           </div>
           {editing && (
             <>
+              <div className="space-y-2">
+                <Label>Fundo</Label>
+                <Select value={fundoUuid} onValueChange={setFundoUuid}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar fundo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_FUNDO}>Sin fundo</SelectItem>
+                    {fundos.map((f) => (
+                      <SelectItem key={f.uuid} value={f.uuid}>
+                        {f.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
-import type { Device } from "@/types"
+import type { Device, Fundo } from "@/types"
 import { getDevices } from "@/api/admin-devices"
+import { getFundos } from "@/api/admin"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -24,6 +25,7 @@ function isOnline(last_sync_at: string | null): boolean {
 
 export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([])
+  const [fundos, setFundos] = useState<Map<string, Fundo>>(new Map())
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Device | null>(null)
@@ -31,7 +33,12 @@ export default function DevicesPage() {
 
   const load = useCallback(async () => {
     try {
-      setDevices(await getDevices())
+      const [devicesRes, fundosRes] = await Promise.all([
+        getDevices(),
+        getFundos().catch(() => [] as Fundo[]),
+      ])
+      setDevices(devicesRes)
+      setFundos(new Map(fundosRes.map((f) => [f.uuid, f])))
     } catch {
       toast.error("Error al cargar dispositivos")
     } finally {
@@ -72,6 +79,7 @@ export default function DevicesPage() {
             <TableRow>
               <TableHead>ID</TableHead>
               <TableHead>Label</TableHead>
+              <TableHead>Fundo</TableHead>
               <TableHead>Ultimo sync</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="w-[140px]">Acciones</TableHead>
@@ -82,6 +90,11 @@ export default function DevicesPage() {
               <TableRow key={device.id}>
                 <TableCell className="font-mono text-sm">{device.id}</TableCell>
                 <TableCell className="font-medium">{device.label}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {device.fundo_uuid
+                    ? fundos.get(device.fundo_uuid)?.name ?? device.fundo_uuid
+                    : "—"}
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <span
