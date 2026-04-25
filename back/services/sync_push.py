@@ -13,6 +13,7 @@ from back.models import (
     Event,
     Fundo,
     Location,
+    Recording,
     Session,
     SyncLog,
 )
@@ -72,6 +73,7 @@ async def push_all(db: AsyncSession) -> None:
         ("camellones", Camellon),
         ("sessions", Session),
         ("events", Event),
+        ("recordings", Recording),
     ]:
         pending = await _get_unsynced_uuids(db, table_name, model_class)
         queue_summary[table_name] = len(pending)
@@ -160,3 +162,20 @@ async def push_all(db: AsyncSession) -> None:
             result = await _post_batch(http, "events", data)
             if result and result.get("successful_uuids"):
                 await _mark_synced(db, "events", result["successful_uuids"])
+
+        # 8. Recordings (only push closed rows — in-progress lack final stats)
+        unsynced = await _get_unsynced_uuids(db, "recordings", Recording)
+        unsynced = [r for r in unsynced if r.ended_at is not None]
+        if unsynced:
+            data = [{
+                "uuid": r.uuid, "device_id": r.device_id,
+                "session_uuid": r.session_uuid,
+                "started_at": r.started_at, "ended_at": r.ended_at,
+                "duration_seconds": r.duration_seconds,
+                "file_path": r.file_path,
+                "file_size_bytes": r.file_size_bytes,
+                "width": r.width, "height": r.height, "fps": r.fps,
+            } for r in unsynced]
+            result = await _post_batch(http, "recordings", data)
+            if result and result.get("successful_uuids"):
+                await _mark_synced(db, "recordings", result["successful_uuids"])

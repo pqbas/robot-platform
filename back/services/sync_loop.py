@@ -40,9 +40,11 @@ async def _sync_cycle() -> None:
     from back.services.sync_pull import pull_models
     from back.services.sync_pull_context import pull_device_context
     from back.services.sync_push import push_all
+    from back.services.sync_recordings_upload import upload_pending_recordings
 
     async with AsyncSessionLocal() as db:
         await push_all(db)
+        await upload_pending_recordings(db)
 
     await pull_models()
     await pull_device_context()
