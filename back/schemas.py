@@ -297,3 +297,4 @@ class SyncResult(BaseModel):
     inserted: int
     skipped: int
     errors: list[str] = []
+    successful_uuids: list[str] = []  # uuids that were inserted or skipped (idempotent)
