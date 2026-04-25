@@ -5,6 +5,7 @@
 - El operador puede ver el stream en vivo desde el robot en cualquier navegador via WebRTC
 - El sistema detecta objetos con YOLO en tiempo real y dibuja bounding boxes sobre el video
 - El operador puede iniciar y detener sesiones de conteo por cruce de línea
+- El operador puede grabar sesiones en MP4 con calidad HD nítida (NVENC en Jetson, libx264 en laptop dev)
 - Los resultados de cada sesión quedan guardados y asociados a un camellón
 - El admin puede subir, activar, editar y eliminar modelos de detección desde el servidor
 - El AI engineer puede reemplazar el archivo `.pt` de un modelo sin eliminarlo y volverlo a subir
@@ -91,29 +92,40 @@
 
 ---
 
-## Phase 7: Configurabilidad del recording-worker (calidad/CPU/disco)
+## Phase 7: Configurabilidad del recording-worker (calidad/CPU/disco) (In Progress)
 
 **Goal:** los parámetros de encoding son ajustables por env sin tocar código, para que dev en laptop (libx264, CPU caro) pueda bajar carga y producción en Jetson (NVENC, ~no-CPU) mantenga calidad alta.
 
-- [ ] El bitrate del recording-worker se controla por env var (`RECORDING_BITRATE_BPS`); default 4 Mbps
-- [ ] El preset de libx264 (laptop dev) se controla por env (`RECORDING_X264_PRESET`); default `veryfast`, sin afectar el path NVENC de Jetson
-- [ ] El framerate efectivo se respeta del handshake del camera-worker en vez del 30 hardcodeado actual
+- [ ] El bitrate del recording-worker se controla por env var (`RECORDING_BITRATE_BPS`); default 8 Mbps NVENC / 6 Mbps libx264
+- [ ] El preset de libx264 (laptop dev) se controla por env (`RECORDING_X264_PRESET`); default `medium`, sin afectar el path NVENC de Jetson
+- [x] El framerate efectivo se respeta del handshake del camera-worker en vez del 30 hardcodeado actual
 - [ ] Documentado en `recording_worker/README.md` qué env vars existen y cuál es el default por backend
 
 ---
 
-## Phase 8: Calidad HD de la grabación
+## Phase 8: Calidad HD de la grabación (Complete)
 
 **Goal:** el video grabado se ve nítido y aprovecha la cámara para revisión posterior, sin perder fluidez ni saturar disco.
 
-- [ ] El recording-worker graba a la resolución completa de la cámara (sin crop innecesario)
-- [ ] Bitrate y parámetros de NVENC afinados para HD nítido manteniendo el tamaño de archivo razonable
-- [ ] La nitidez del MP4 grabado coincide visualmente con el stream en vivo
-- [ ] Documentado el preset elegido y por qué (tradeoff calidad / disco / CPU)
+- [x] El recording-worker graba a 1280x720 con captura YUYV (sin re-encoding MJPEG intermedio)
+- [x] Bitrate y parámetros de NVENC afinados para HD nítido manteniendo el tamaño de archivo razonable (8 Mbps CBR, profile=High, preset=Slow)
+- [x] La nitidez del MP4 grabado coincide visualmente con el stream en vivo
+- [x] Documentado el preset elegido y por qué (tradeoff calidad / disco / CPU) en `recording_worker/README.md`
 
 ---
 
-## Phase 9: Nuevo método de conteo
+## Phase 9: Resolución mayor en grabación
+
+**Goal:** el operador puede revisar grabaciones con más detalle del que cabe en 720p, aprovechando lo que el sensor de la cámara realmente captura.
+
+- [ ] El video grabado supera la resolución actual (1280x720) sin degradar fluidez ni saturar disco
+- [ ] Detalles finos (textura de hojas, bordes de fruta, letras pequeñas) se ven en la revisión posterior con claridad mayor que en 720p
+- [ ] La transmisión en vivo no sufre regresión perceptible de FPS o latencia mientras se graba a la nueva resolución
+- [ ] Documentado en `recording_worker/README.md` el techo de resolución viable con el hardware actual y el por qué del trade-off elegido (un ojo / estéreo, live downscale o no)
+
+---
+
+## Phase 10: Nuevo método de conteo
 
 **Goal:** el conteo es más robusto y no depende exclusivamente del tracker de YOLO.
 
@@ -123,7 +135,7 @@
 
 ---
 
-## Phase 10: Deploy servidor + validación end-to-end
+## Phase 11: Deploy servidor + validación end-to-end
 
 **Goal:** el flujo completo robot → servidor funciona en producción y el operador siempre sabe qué modelo está activo.
 
@@ -133,7 +145,7 @@
 
 ---
 
-## Phase 11: Integración de otros objetos
+## Phase 12: Integración de otros objetos
 
 **Goal:** el sistema soporta distintos tipos de fruta u objeto sin cambios de código.
 
