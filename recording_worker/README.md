@@ -56,21 +56,31 @@ cd recording_worker && uv run python -c \
 
 ## Quality
 
-Defaults are tuned for legible 720p footage on each backend. They are
-hardcoded for now — a future phase exposes them as env vars.
+The encoder reads frame height from the camera-worker handshake and
+auto-scales the bitrate. No env vars yet — Phase 7 will expose them
+(`RECORDING_BITRATE_BPS`).
 
-- **`nvv4l2h264enc` (Jetson, NVENC)**: 8 Mbps CBR, profile=High (4),
+| Frame height | NVENC (Jetson) | libx264 (CPU) |
+|--------------|----------------|----------------|
+| ≥ 1080       | 12 Mbps        | 9 Mbps         |
+| < 1080       | 8 Mbps         | 6 Mbps         |
+
+So toggling `camera_worker` between the 720p and 1080p modes (see
+`camera_worker/README.md`) flips the recording bitrate too — no
+recording-worker change needed.
+
+- **`nvv4l2h264enc` (Jetson, NVENC)**: CBR, profile=High (4),
   preset-level=Slow (4), keyframe every 60 frames. The HW encoder makes
   Slow basically free, and High profile enables CABAC + B-frames for
-  better compression at the same bitrate. ~60 MB/min, ~3.6 GB/h.
+  better compression at the same bitrate. At 1080p / 12 Mbps:
+  ~90 MB/min, ~5.4 GB/h. At 720p / 8 Mbps: ~60 MB/min, ~3.6 GB/h.
   Inspect available presets/profiles with:
   ```bash
   gst-inspect-1.0 nvv4l2h264enc | grep -EA5 'preset-level|profile'
   ```
-- **`libx264` (laptop dev fallback)**: 6 Mbps ceiling with `preset=medium
-  crf=20`. CRF gates quality; bit_rate caps file size. `tune=zerolatency`
-  is intentionally NOT set — it disables B-frames and only matters for
-  live streams.
+- **`libx264` (laptop dev fallback)**: `preset=medium crf=20`. CRF gates
+  quality; bit_rate caps file size. `tune=zerolatency` is intentionally
+  NOT set — it disables B-frames and only matters for live streams.
 
 The recording fps is read from the camera-worker handshake (no longer
 hardcoded at 30) so playback speed reflects the real capture rate.
