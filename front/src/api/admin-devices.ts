@@ -17,7 +17,7 @@ export function createDevice(data: { id: string; label: string }) {
 
 export function updateDevice(
   id: string,
-  data: { label?: string; is_active?: boolean },
+  data: { label?: string; is_active?: boolean; fundo_uuid?: string | null },
 ) {
   return apiFetch<Device>(`/api/devices/${id}`, {
     method: "PUT",
