@@ -129,11 +129,20 @@ class GstMp4Encoder(Encoder):
             Gst.init(None)
 
         framerate_n = max(1, int(round(fps)))
+        # nvv4l2h264enc only accepts NVMM-tagged buffers; bridge system memory
+        # (BGR from the camera worker) → NV12 in NVMM via videoconvert + nvvidconv.
+        # Without nvvidconv the encoder silently drops every buffer and mp4mux
+        # writes a 0-byte file. do-timestamp=true lets GStreamer stamp PTS from
+        # the pipeline clock, so playback speed reflects actual capture rate.
         pipeline_str = (
-            "appsrc name=src is-live=true format=time do-timestamp=false "
+            "appsrc name=src is-live=true do-timestamp=true format=time "
             f"caps=video/x-raw,format=BGR,width={width},height={height},"
             f"framerate={framerate_n}/1 "
+            "! queue "
             "! videoconvert "
+            "! video/x-raw,format=NV12 "
+            "! nvvidconv "
+            "! video/x-raw(memory:NVMM),format=NV12 "
             f"! nvv4l2h264enc bitrate={self._bitrate} "
             "preset-level=1 profile=0 control-rate=1 iframeinterval=60 "
             "! h264parse "
@@ -145,7 +154,13 @@ class GstMp4Encoder(Encoder):
         self._pipeline = Gst.parse_launch(pipeline_str)
         self._appsrc = self._pipeline.get_by_name("src")
         self._bus = self._pipeline.get_bus()
-        self._pipeline.set_state(Gst.State.PLAYING)
+        ret = self._pipeline.set_state(Gst.State.PLAYING)
+        if ret == Gst.StateChangeReturn.FAILURE:
+            self._pipeline.set_state(Gst.State.NULL)
+            self._pipeline = None
+            self._appsrc = None
+            self._bus = None
+            raise RuntimeError("GStreamer pipeline failed to enter PLAYING state")
         self._width = width
         self._height = height
         self._fps = fps
@@ -163,9 +178,7 @@ class GstMp4Encoder(Encoder):
         raw = frame.tobytes()
         buf = Gst.Buffer.new_allocate(None, len(raw), None)
         buf.fill(0, raw)
-        duration = int(Gst.SECOND / max(1.0, self._fps))
-        buf.pts = self._frame_count * duration
-        buf.duration = duration
+        # PTS is set by appsrc (do-timestamp=true) using the pipeline clock.
         self._frame_count += 1
         ret = self._appsrc.emit("push-buffer", buf)
         if ret != Gst.FlowReturn.OK:
@@ -184,10 +197,18 @@ class GstMp4Encoder(Encoder):
             self._appsrc.emit("end-of-stream")
 
         if self._bus is not None:
-            # Wait up to 5 seconds for EOS so mp4mux finalises the moov atom.
-            self._bus.timed_pop_filtered(
-                5 * Gst.SECOND, Gst.MessageType.EOS | Gst.MessageType.ERROR
+            # mp4mux only writes the moov atom on EOS — if EOS doesn't arrive
+            # within the timeout the file stays empty. Bumped to 15s for slow
+            # finalisation; on timeout/error log explicitly so the failure mode
+            # is visible instead of leaving a 0-byte mp4 silently.
+            msg = self._bus.timed_pop_filtered(
+                15 * Gst.SECOND, Gst.MessageType.EOS | Gst.MessageType.ERROR
             )
+            if msg is None:
+                logger.error("EOS timed out after 15s — mp4mux likely did not finalise")
+            elif msg.type == Gst.MessageType.ERROR:
+                err, debug = msg.parse_error()
+                logger.error("Pipeline error during EOS: %s (%s)", err, debug)
 
         self._pipeline.set_state(Gst.State.NULL)
         self._pipeline = None

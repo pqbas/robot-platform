@@ -49,9 +49,8 @@ function formatDate(iso: string): string {
 
 type RowStatus = "active" | "uploaded" | "pending" | "missing"
 
-function rowStatus(rec: Recording, mode: "robot" | "server"): RowStatus {
+function rowStatus(rec: Recording): RowStatus {
   if (rec.ended_at == null) return "active"
-  if (mode === "server") return rec.uploaded_at ? "uploaded" : "pending"
   return rec.uploaded_at ? "uploaded" : "pending"
 }
 
@@ -151,7 +150,7 @@ export default function RecordingsPage() {
               </TableRow>
             ) : (
               rows.map((r) => {
-                const status = rowStatus(r, mode)
+                const status = rowStatus(r)
                 const canDownload = mode === "robot" || r.uploaded_at != null
                 return (
                   <TableRow key={r.uuid}>
