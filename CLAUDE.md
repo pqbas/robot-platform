@@ -33,6 +33,7 @@
 - En Jetson el plugin `nvv4l2h264enc` viene de `nvidia-l4t-gstreamer` (JetPack); PyGObject solo no es suficiente — el deploy verifica los plugins con `gst-inspect-1.0` antes de habilitar la unidad.
 - Iniciar worker: `make run-recording` o `cd recording_worker && uv run recording-worker`.
 - Probar backend detectado: `cd recording_worker && uv run python -c "from recording_worker.encoder import detect_backend; print(detect_backend())"`.
+- Defaults de calidad (hardcoded — Phase 7 los expone como env vars): NVENC 8 Mbps profile=High preset=Slow; libx264 6 Mbps preset=medium crf=20. El FPS se toma del handshake del camera-worker, no se hardcodea.
 
 ## Comandos
 - Camera worker: `make run-camera`

@@ -53,3 +53,24 @@ make run-recording             # = cd recording_worker && uv run recording-worke
 cd recording_worker && uv run python -c \
   "from recording_worker.encoder import detect_backend; print(detect_backend())"
 ```
+
+## Quality
+
+Defaults are tuned for legible 720p footage on each backend. They are
+hardcoded for now — a future phase exposes them as env vars.
+
+- **`nvv4l2h264enc` (Jetson, NVENC)**: 8 Mbps CBR, profile=High (4),
+  preset-level=Slow (4), keyframe every 60 frames. The HW encoder makes
+  Slow basically free, and High profile enables CABAC + B-frames for
+  better compression at the same bitrate. ~60 MB/min, ~3.6 GB/h.
+  Inspect available presets/profiles with:
+  ```bash
+  gst-inspect-1.0 nvv4l2h264enc | grep -EA5 'preset-level|profile'
+  ```
+- **`libx264` (laptop dev fallback)**: 6 Mbps ceiling with `preset=medium
+  crf=20`. CRF gates quality; bit_rate caps file size. `tune=zerolatency`
+  is intentionally NOT set — it disables B-frames and only matters for
+  live streams.
+
+The recording fps is read from the camera-worker handshake (no longer
+hardcoded at 30) so playback speed reflects the real capture rate.

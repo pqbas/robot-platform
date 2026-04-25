@@ -101,7 +101,7 @@ class Encoder(ABC):
 class GstMp4Encoder(Encoder):
     backend = "nvv4l2h264enc"
 
-    def __init__(self, bitrate: int = 4_000_000) -> None:
+    def __init__(self, bitrate: int = 8_000_000) -> None:
         self._bitrate = bitrate
         self._pipeline = None
         self._appsrc = None
@@ -143,8 +143,13 @@ class GstMp4Encoder(Encoder):
             "! video/x-raw,format=NV12 "
             "! nvvidconv "
             "! video/x-raw(memory:NVMM),format=NV12 "
+            # NVENC tuning (gst-inspect-1.0 nvv4l2h264enc):
+            #   preset-level=4 (Slow)  → better motion estimation than 1 (UltraFast)
+            #   profile=4      (High)  → CABAC + B-frames vs 0 (Baseline)
+            #   control-rate=1 (CBR)   → predictable disk budget
+            #   iframeinterval=60      → keyframe every 2s @30fps
             f"! nvv4l2h264enc bitrate={self._bitrate} "
-            "preset-level=1 profile=0 control-rate=1 iframeinterval=60 "
+            "preset-level=4 profile=4 control-rate=1 iframeinterval=60 "
             "! h264parse "
             "! mp4mux "
             f"! filesink location={output_path}"
@@ -235,7 +240,7 @@ class GstMp4Encoder(Encoder):
 
 
 class PyAvEncoder(Encoder):
-    def __init__(self, codec: str, bitrate: int = 4_000_000) -> None:
+    def __init__(self, codec: str, bitrate: int = 6_000_000) -> None:
         self.backend = codec
         self._codec = codec
         self._bitrate = bitrate
@@ -265,7 +270,10 @@ class PyAvEncoder(Encoder):
         self._stream.pix_fmt = "yuv420p"
         self._stream.bit_rate = self._bitrate
         if self._codec == "libx264":
-            self._stream.options = {"preset": "veryfast", "tune": "zerolatency"}
+            # CRF 20 = visually transparent at 720p; bit_rate above acts as a
+            # ceiling. tune=zerolatency disables B-frames and hurts efficiency
+            # — only worth it for live streaming, not file recording.
+            self._stream.options = {"preset": "medium", "crf": "20"}
         self._width = width
         self._height = height
         self._fps = fps
