@@ -6,7 +6,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.database import get_db
-from back.models import DetectionModel, Device, DeviceModel
+from back.models import DetectionModel, Device, DeviceModel, Empresa, Fundo
 from back.services.auth import generate_api_key, hash_api_key, require_role
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
@@ -35,6 +35,7 @@ class DeviceCreate(BaseModel):
 class DeviceUpdate(BaseModel):
     label: str | None = None
     is_active: bool | None = None
+    fundo_uuid: str | None = None
 
 
 class DeviceOut(BaseModel):
@@ -42,8 +43,30 @@ class DeviceOut(BaseModel):
     label: str
     last_sync_at: str | None
     is_active: bool
+    fundo_uuid: str | None
 
     model_config = {"from_attributes": True}
+
+
+class FundoOut(BaseModel):
+    uuid: str
+    name: str
+    region: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class EmpresaOut(BaseModel):
+    uuid: str
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
+class DeviceContextOut(BaseModel):
+    device_id: str
+    empresa: EmpresaOut | None
+    fundo: FundoOut | None
 
 
 class DeviceCreateResponse(BaseModel):
@@ -120,10 +143,44 @@ async def update_device(device_id: str, body: DeviceUpdate, db: AsyncSession = D
     device = result.scalar_one_or_none()
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
-    if body.label is not None:
+    fields_set = body.model_fields_set
+    if "label" in fields_set and body.label is not None:
         device.label = body.label
-    if body.is_active is not None:
+    if "is_active" in fields_set and body.is_active is not None:
         device.is_active = body.is_active
+    if "fundo_uuid" in fields_set:
+        if body.fundo_uuid is not None:
+            fundo_check = await db.execute(
+                select(Fundo).where(Fundo.uuid == body.fundo_uuid)
+            )
+            if not fundo_check.scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="Fundo not found")
+        device.fundo_uuid = body.fundo_uuid
     await db.commit()
     await db.refresh(device)
     return device
+
+
+@router.get("/{device_id}/context", response_model=DeviceContextOut)
+async def get_device_context(device_id: str, db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    device = result.scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    if not device.fundo_uuid:
+        return DeviceContextOut(device_id=device.id, empresa=None, fundo=None)
+    fundo_result = await db.execute(
+        select(Fundo).where(Fundo.uuid == device.fundo_uuid)
+    )
+    fundo = fundo_result.scalar_one_or_none()
+    if not fundo:
+        return DeviceContextOut(device_id=device.id, empresa=None, fundo=None)
+    empresa_result = await db.execute(
+        select(Empresa).where(Empresa.uuid == fundo.empresa_uuid)
+    )
+    empresa = empresa_result.scalar_one_or_none()
+    return DeviceContextOut(
+        device_id=device.id,
+        empresa=EmpresaOut.model_validate(empresa) if empresa else None,
+        fundo=FundoOut.model_validate(fundo),
+    )
