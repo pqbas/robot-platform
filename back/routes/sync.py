@@ -48,7 +48,19 @@ async def force_pull():
     if config.mode != AppMode.ROBOT:
         return {"ok": False, "reason": "only available in robot mode"}
     from back.services.sync_pull import pull_models
+    from back.services.sync_pull_context import pull_device_context
     await pull_models()
+    await pull_device_context()
+    return {"ok": True}
+
+
+@router.post("/push")
+async def force_push(db: AsyncSession = Depends(get_db)):
+    """Trigger an immediate sync push of unsynced records (robot mode only)."""
+    if config.mode != AppMode.ROBOT:
+        return {"ok": False, "reason": "only available in robot mode"}
+    from back.services.sync_push import push_all
+    await push_all(db)
     return {"ok": True}
 
 
@@ -134,8 +146,9 @@ async def device_context(
         raise HTTPException(status_code=401, detail="device key required")
 
     if device is None:
+        from back.config import get_device_id
         return {
-            "device_id": config.device.id,
+            "device_id": get_device_id(),
             "empresa": None,
             "fundo": None,
         }
