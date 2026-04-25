@@ -64,6 +64,19 @@ async def _post_batch(session: aiohttp.ClientSession, endpoint: str, data: list[
 
 async def push_all(db: AsyncSession) -> None:
     """Push all unsynced records to the server in dependency order."""
+    queue_summary = {}
+    for table_name, model_class in [
+        ("empresas", Empresa),
+        ("fundos", Fundo),
+        ("locations", Location),
+        ("camellones", Camellon),
+        ("sessions", Session),
+        ("events", Event),
+    ]:
+        pending = await _get_unsynced_uuids(db, table_name, model_class)
+        queue_summary[table_name] = len(pending)
+    logger.info("Sync push: queue=%s", queue_summary)
+
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as http:
         # 1. Empresas
         unsynced = await _get_unsynced_uuids(db, "empresas", Empresa)
