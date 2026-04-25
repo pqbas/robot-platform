@@ -159,10 +159,21 @@ async def get_available_labels(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/select-label")
-async def select_label(body: SelectLabelRequest):
-    abs_path = str(Path(config.storage.models_dir) / body.model_filename)
+async def select_label(body: SelectLabelRequest, db: AsyncSession = Depends(get_db)):
+    # Determine if this filename refers to a library model (managed by ultralytics)
+    # or an uploaded model (file in storage). Library models receive the bare
+    # filename; uploaded models receive the absolute path.
+    result = await db.execute(
+        select(DetectionModel).where(DetectionModel.filename == body.model_filename)
+    )
+    model = result.scalar_one_or_none()
+    if model and model.source == "library":
+        worker_path = body.model_filename
+    else:
+        worker_path = str(Path(config.storage.models_dir) / body.model_filename)
+
     client = InferenceClient(config.perception.socket_path)
-    result = client.reload_model(abs_path)
-    if result is None:
+    reload_result = client.reload_model(worker_path)
+    if reload_result is None:
         raise HTTPException(status_code=503, detail="Inference worker not available")
     return {"ok": True, "model": body.model_filename}

@@ -48,6 +48,7 @@ deploy-server:
 
 restart:
 	-sudo systemctl restart inference-worker
+	-sudo systemctl restart camera-worker
 	sudo systemctl restart robot-platform
 
 logs:

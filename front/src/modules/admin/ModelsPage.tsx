@@ -114,7 +114,14 @@ export default function ModelsPage() {
                 <TableRow key={model.uuid}>
                   <TableCell>{model.version}</TableCell>
                   <TableCell className="font-mono text-xs">
-                    {model.filename}
+                    <div className="flex items-center gap-2">
+                      <span>{model.filename}</span>
+                      {model.source === "library" && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          libreria
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="max-w-[200px] truncate text-muted-foreground">
                     {formatClasses(model.class_mapping)}

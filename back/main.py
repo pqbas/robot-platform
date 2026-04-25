@@ -28,6 +28,12 @@ async def lifespan(app: FastAPI):
     init_nvenc()
     await init_db()
 
+    # Seed standard ultralytics models (server mode — source of truth)
+    if app_config.mode == AppMode.SERVER:
+        from back.services.seed_library_models import seed_library_models
+
+        await seed_library_models()
+
     # Start sync loop in robot mode (if server URL is configured)
     sync_task = None
     if app_config.mode == AppMode.ROBOT and app_config.sync.server_url:

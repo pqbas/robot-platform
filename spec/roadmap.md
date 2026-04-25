@@ -32,37 +32,48 @@
 
 ---
 
-## Phase 2: Estabilidad de cámara WebRTC (In Progress)
+## Phase 2: Estabilidad de cámara WebRTC (Complete)
 
 **Goal:** el robot no requiere reinicio manual ante fallos de cámara.
 
-- [ ] Si la cámara se desconecta físicamente, la peer connection WebRTC se cierra limpiamente
-- [ ] El frontend detecta el cierre y sale del estado "cargando" con un mensaje de error
-- [ ] Si la cámara cae durante una sesión, la sesión se cierra y se puede iniciar una nueva sin reiniciar
+- [x] Si la cámara se desconecta físicamente, la peer connection WebRTC se cierra limpiamente
+- [x] El frontend detecta el cierre y sale del estado "cargando" con un mensaje de error
+- [x] Si la cámara cae durante una sesión, la sesión se cierra y se puede iniciar una nueva sin reiniciar
 
 ---
 
-## Phase 3: Servicio de cámara independiente
+## Phase 3: Servicio de cámara independiente (Complete)
 
 **Goal:** la captura V4L2 corre en un proceso separado para que los fallos de cámara no afecten el event loop de FastAPI.
 
-- [ ] `camera-worker` es un proceso independiente que captura frames y los sirve por Unix socket (frames raw, protocolo length-prefixed)
-- [ ] `CameraStreamTrack` lee frames del socket en vez de acceder a V4L2 directamente
-- [ ] Si el worker se cae o la cámara se desconecta, el worker se reinicia solo y el backend reconecta sin intervención
-- [ ] El servicio se instala como unidad systemd separada junto al robot
+- [x] `camera-worker` es un proceso independiente que captura frames y los sirve por Unix socket (frames raw, protocolo length-prefixed)
+- [x] `CameraStreamTrack` lee frames del socket en vez de acceder a V4L2 directamente
+- [x] Si el worker se cae o la cámara se desconecta, el worker se reinicia solo y el backend reconecta sin intervención
+- [x] El servicio se instala como unidad systemd separada junto al robot
 
 ---
 
-## Phase 4: Grabación de video
+## Phase 4: Verificación del conteo con pesos estándar (24–25 Apr)
 
-**Goal:** el robot puede grabar sesiones en video además de contar.
+**Goal:** verificar que el conteo en tiempo real funciona correctamente en el laboratorio antes del día de campo.
 
-- [ ] El operador puede elegir entre modo conteo y modo grabación
-- [ ] En modo grabación el stream se guarda como MP4
+- [ ] El operador puede seleccionar y activar pesos estándar de YOLO (personas) desde el frontend
+- [ ] El conteo por cruce de línea funciona correctamente con personas en condiciones de laboratorio
+- [ ] El sistema permite cambiar el modelo activo sin reiniciar el robot
 
 ---
 
-## Phase 5: Nuevo método de conteo
+## Phase 5: Grabación de video (26 Apr)
+
+**Goal:** el robot puede grabar sesiones en video como fallback al conteo en tiempo real.
+
+- [ ] El operador puede iniciar y detener grabación desde el frontend
+- [ ] El stream se guarda como MP4 en el robot durante la sesión
+- [ ] Los videos grabados son descargables o sincronizables al servidor
+
+---
+
+## Phase 6: Nuevo método de conteo (28–30 Apr)
 
 **Goal:** el conteo es más robusto y no depende exclusivamente del tracker de YOLO.
 
@@ -72,7 +83,7 @@
 
 ---
 
-## Phase 6: Deploy servidor + validación end-to-end
+## Phase 7: Deploy servidor + validación end-to-end
 
 **Goal:** el flujo completo robot → servidor funciona en producción y el operador siempre sabe qué modelo está activo.
 
@@ -82,7 +93,7 @@
 
 ---
 
-## Phase 7: Integración de otros objetos
+## Phase 8: Integración de otros objetos
 
 **Goal:** el sistema soporta distintos tipos de fruta u objeto sin cambios de código.
 

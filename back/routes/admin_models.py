@@ -22,7 +22,8 @@ class DetectionModelOut(BaseModel):
     uuid: str
     version: str
     filename: str
-    file_hash: str
+    file_hash: str | None
+    source: str
     class_mapping: list = []
     epochs: int | None
     map50: float | None
@@ -36,6 +37,15 @@ class DetectionModelOut(BaseModel):
     created_at: str | None
 
     model_config = {"from_attributes": True}
+
+
+class LibraryModelIn(BaseModel):
+    filename: str
+    version: str
+    uploaded_by: str
+    class_mapping: str = "[]"
+    notes: str | None = None
+    is_active: bool = False
 
 
 def _parse_class_mapping(raw: str | None) -> list:
@@ -89,6 +99,7 @@ async def upload_detection_model(
         version=version,
         filename=file.filename,
         file_hash=file_hash,
+        source="uploaded",
         class_mapping=class_mapping,
         uploaded_by=uploaded_by,
         epochs=epochs,
@@ -98,6 +109,30 @@ async def upload_detection_model(
         recall=recall,
         dataset_size=dataset_size,
         notes=notes,
+    )
+    db.add(model)
+    await db.commit()
+    await db.refresh(model)
+    return _model_to_out(model)
+
+
+@router.post("/detection-models/library", response_model=DetectionModelOut, status_code=201)
+async def register_library_model(
+    body: LibraryModelIn,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(admin_dep),
+):
+    """Register a library model (e.g. yolo11n.pt). No file upload — ultralytics
+    downloads it on demand when the worker calls reload_model."""
+    model = DetectionModel(
+        version=body.version,
+        filename=body.filename,
+        file_hash=None,
+        source="library",
+        class_mapping=body.class_mapping,
+        uploaded_by=body.uploaded_by,
+        notes=body.notes,
+        is_active=body.is_active,
     )
     db.add(model)
     await db.commit()
@@ -127,6 +162,11 @@ async def update_detection_model(
         raise HTTPException(status_code=404, detail="Model not found")
 
     if file and file.filename:
+        if model.source == "library":
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot replace .pt for library models — managed by ultralytics",
+            )
         models_dir = Path(config.storage.models_dir)
         models_dir.mkdir(parents=True, exist_ok=True)
         content = await file.read()
@@ -197,10 +237,11 @@ async def delete_model(uuid: str, db: AsyncSession = Depends(get_db), _=Depends(
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    # Delete file from disk
-    file_path = Path(config.storage.models_dir) / model.filename
-    if file_path.exists():
-        file_path.unlink()
+    # Delete file from disk (uploaded models only — library models managed by ultralytics)
+    if model.source != "library":
+        file_path = Path(config.storage.models_dir) / model.filename
+        if file_path.exists():
+            file_path.unlink()
 
     await db.delete(model)
     await db.commit()
