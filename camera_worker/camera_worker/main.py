@@ -32,23 +32,34 @@ def parse_args():
     parser.add_argument("--width", type=int, default=int(os.getenv("CAMERA_WIDTH", "2560")))
     parser.add_argument("--height", type=int, default=int(os.getenv("CAMERA_HEIGHT", "720")))
     parser.add_argument("--crop", type=int, default=int(os.getenv("CAMERA_CROP", "1280")))
+    parser.add_argument("--fps", type=float, default=float(os.getenv("CAMERA_FPS", "30")))
     return parser.parse_args()
 
 
 def open_camera(args):
     while True:
         cap = cv2.VideoCapture(args.index)
+        # Force YUYV (uncompressed) so the encoder receives clean pixels
+        # instead of a re-encoded MJPEG source. Falls back silently to
+        # whatever the camera negotiates if YUYV is rejected.
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"YUYV"))
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+        cap.set(cv2.CAP_PROP_FPS, args.fps)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if cap.isOpened():
             actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            logger.info(
-                "Camera opened (index=%d) — actual resolution %dx%d",
-                args.index, actual_width, actual_height,
+            actual_fps = float(cap.get(cv2.CAP_PROP_FPS)) or args.fps
+            actual_fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
+            fourcc_str = "".join(
+                chr((actual_fourcc >> 8 * i) & 0xFF) for i in range(4)
             )
-            return cap, actual_width, actual_height
+            logger.info(
+                "Camera opened (index=%d) — actual %dx%d @ %.1ffps fourcc=%s",
+                args.index, actual_width, actual_height, actual_fps, fourcc_str,
+            )
+            return cap, actual_width, actual_height, actual_fps
         cap.release()
         logger.warning("Camera not available — retrying in 1s")
         time.sleep(1)
@@ -66,6 +77,7 @@ class FrameBroadcaster:
         self._cap = None
         self._actual_width = 0
         self._actual_height = 0
+        self._actual_fps = 0.0
         self._out_width = 0
         self._out_height = 0
         self._clients: list[asyncio.Queue[bytes]] = []
@@ -80,11 +92,18 @@ class FrameBroadcaster:
     def out_height(self) -> int:
         return self._out_height
 
+    @property
+    def out_fps(self) -> float:
+        return self._actual_fps
+
     async def start(self):
         loop = asyncio.get_event_loop()
-        self._cap, self._actual_width, self._actual_height = await loop.run_in_executor(
-            None, open_camera, self._args
-        )
+        (
+            self._cap,
+            self._actual_width,
+            self._actual_height,
+            self._actual_fps,
+        ) = await loop.run_in_executor(None, open_camera, self._args)
         crop = self._args.crop
         self._out_width = (
             min(crop, self._actual_width) if crop > 0 else self._actual_width
@@ -124,9 +143,12 @@ class FrameBroadcaster:
                     self._cap.release()
                 except Exception:
                     pass
-                self._cap, self._actual_width, self._actual_height = await loop.run_in_executor(
-                    None, open_camera, self._args
-                )
+                (
+                    self._cap,
+                    self._actual_width,
+                    self._actual_height,
+                    self._actual_fps,
+                ) = await loop.run_in_executor(None, open_camera, self._args)
                 continue
 
             cropped = (
@@ -165,7 +187,12 @@ async def handle_client(
     logger.info("Client connected")
 
     handshake = json.dumps(
-        {"width": broadcaster.out_width, "height": broadcaster.out_height, "channels": 3}
+        {
+            "width": broadcaster.out_width,
+            "height": broadcaster.out_height,
+            "channels": 3,
+            "fps": broadcaster.out_fps,
+        }
     ).encode()
     header = struct.pack(">I", len(handshake))
     writer.write(header + handshake)
