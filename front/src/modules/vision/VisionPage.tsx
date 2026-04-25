@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useBlocker } from "react-router-dom"
 import { toast } from "sonner"
-import { Settings } from "lucide-react"
+import { MapPin, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { Camellon } from "@/types"
 import { getCamellones } from "@/api/camellones"
 import { useWebRTC } from "@/hooks/useWebRTC"
 import { useCounting } from "@/hooks/useCounting"
+import { useDeviceContext } from "@/hooks/useDeviceContext"
+import { useAppMode } from "@/context/AppModeContext"
 import VideoStream from "./components/VideoStream"
 import ObjectPicker from "./components/ObjectPicker"
 import CountOverlay from "./components/CountOverlay"
@@ -26,6 +28,8 @@ export default function VisionPage() {
   const { videoRef, connectionState, frameData, fps, connect, disconnect } =
     useWebRTC()
   const counting = useCounting()
+  const { mode } = useAppMode()
+  const { context: deviceContext } = useDeviceContext(mode === "robot")
 
   const [step, setStep] = useState<"pick" | "operate">("pick")
   const [selectedClass, setSelectedClass] = useState("")
@@ -181,6 +185,33 @@ export default function VisionPage() {
                 YOLO: {fps.inferenceFps} FPS
               </Badge>
             )}
+          </div>
+        )}
+        {connected && mode === "robot" && (
+          <div className="absolute top-2 left-2">
+            <Badge
+              variant="outline"
+              className={`flex items-center gap-1.5 border-none text-xs ${
+                deviceContext?.fundo
+                  ? "bg-black/60 text-white"
+                  : "bg-amber-500/80 text-white"
+              }`}
+            >
+              <MapPin className="size-3" />
+              {deviceContext?.fundo ? (
+                <span>
+                  <span className="opacity-70">
+                    {deviceContext.empresa?.name ?? "—"}
+                  </span>
+                  <span className="mx-1 opacity-50">›</span>
+                  <span className="font-medium">
+                    {deviceContext.fundo.name}
+                  </span>
+                </span>
+              ) : (
+                <span>Sin fundo asignado</span>
+              )}
+            </Badge>
           </div>
         )}
       </VideoStream>
