@@ -63,21 +63,21 @@
 
 ---
 
-## Phase 5: Contexto del robot — fundo + ubicación
+## Phase 5: Contexto del robot — fundo + ubicación (Complete)
 
 **Goal:** el admin define a qué empresa/fundo pertenece cada robot; el operador trabaja dentro de ese contexto creando camellones y ubicaciones sin volver a pantallas administrativas y sin ver datos de otros fundos.
 
 **Solo admin (vista de servidor):**
 
-- [ ] El admin puede asociar un robot a un fundo desde `DevicesPage` (campo `fundo_uuid` en Device)
-- [ ] La asociación es la única forma de cambiar empresa/fundo de un robot — no editable desde el robot
+- [x] El admin puede asociar un robot a un fundo desde `DevicesPage` (campo `fundo_uuid` en Device)
+- [x] La asociación es la única forma de cambiar empresa/fundo de un robot — no editable desde el robot
 
 **Solo operador (vista del robot):**
 
-- [ ] El robot muestra empresa y fundo asignados como info de contexto (read-only); no muestra otros fundos
-- [ ] El operador puede crear una ubicación nueva desde el `SaveDialog` al final de una sesión (sin volver a otra pantalla)
-- [ ] Alternativamente, el operador puede guardar la sesión sin ubicación y asignarla después desde `MapPage` (`UnlocatedList`)
-- [ ] El operador puede crear y editar camellones desde el robot (nombre/código), siempre dentro del fundo asignado
+- [x] El robot muestra empresa y fundo asignados como info de contexto (read-only); no muestra otros fundos
+- [x] El operador puede crear una ubicación nueva desde el `SaveDialog` al final de una sesión (sin volver a otra pantalla)
+- [x] Alternativamente, el operador puede guardar la sesión sin ubicación y asignarla después desde `MapPage` (`UnlocatedList`)
+- [x] El operador puede crear y editar camellones desde el robot (nombre/código), siempre dentro del fundo asignado
 
 ---
 
