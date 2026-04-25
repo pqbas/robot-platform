@@ -67,6 +67,19 @@ def detect_backend() -> str:
     return "libx264"
 
 
+def _bitrate_for_height(height: int, hw_accelerated: bool) -> int:
+    """Auto-pick H.264 bitrate from frame height.
+
+    720p and 1080p are the two canonical camera_worker modes. NVENC
+    compresses better than libx264 at equal perceived quality, so the HW
+    path runs leaner. Sweet spots calibrated against profile=High preset=Slow
+    (NVENC) and preset=medium crf=20 (libx264).
+    """
+    if height >= 1080:
+        return 12_000_000 if hw_accelerated else 9_000_000
+    return 8_000_000 if hw_accelerated else 6_000_000
+
+
 # ---------------------------------------------------------------------------
 # Common interface
 # ---------------------------------------------------------------------------
@@ -101,8 +114,9 @@ class Encoder(ABC):
 class GstMp4Encoder(Encoder):
     backend = "nvv4l2h264enc"
 
-    def __init__(self, bitrate: int = 8_000_000) -> None:
-        self._bitrate = bitrate
+    def __init__(self, bitrate: Optional[int] = None) -> None:
+        self._bitrate_override = bitrate
+        self._bitrate = 0
         self._pipeline = None
         self._appsrc = None
         self._bus = None
@@ -128,6 +142,13 @@ class GstMp4Encoder(Encoder):
         if not Gst.is_initialized():
             Gst.init(None)
 
+        self._bitrate = self._bitrate_override or _bitrate_for_height(
+            height, hw_accelerated=True
+        )
+        logger.info(
+            "GStreamer encoder — %dx%d @ %.1ffps bitrate=%d (auto)",
+            width, height, fps, self._bitrate,
+        )
         framerate_n = max(1, int(round(fps)))
         # nvv4l2h264enc only accepts NVMM-tagged buffers; bridge system memory
         # (BGR from the camera worker) → NV12 in NVMM via videoconvert + nvvidconv.
@@ -240,10 +261,11 @@ class GstMp4Encoder(Encoder):
 
 
 class PyAvEncoder(Encoder):
-    def __init__(self, codec: str, bitrate: int = 6_000_000) -> None:
+    def __init__(self, codec: str, bitrate: Optional[int] = None) -> None:
         self.backend = codec
         self._codec = codec
-        self._bitrate = bitrate
+        self._bitrate_override = bitrate
+        self._bitrate = 0
         self._container = None
         self._stream = None
         self._width = 0
@@ -262,6 +284,13 @@ class PyAvEncoder(Encoder):
     ) -> None:
         import av
 
+        self._bitrate = self._bitrate_override or _bitrate_for_height(
+            height, hw_accelerated=False
+        )
+        logger.info(
+            "PyAV encoder (%s) — %dx%d @ %.1ffps bitrate=%d (auto)",
+            self._codec, width, height, fps, self._bitrate,
+        )
         framerate = max(1, int(round(fps)))
         self._container = av.open(output_path, mode="w")
         self._stream = self._container.add_stream(self._codec, rate=framerate)
