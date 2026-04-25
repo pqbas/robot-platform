@@ -126,12 +126,24 @@ async def stop_recording(db: AsyncSession = Depends(get_db)):
 
     if not worker_resp.get("ok"):
         err = worker_resp.get("error", "unknown")
-        # If the worker isn't recording but our DB says it is, force-close
-        # the row so the operator isn't stuck. File may be incomplete.
-        logger.warning("Worker stop failed (%s) — closing DB row anyway", err)
+        # Drift recovery: worker is idle but DB had an open row (e.g. the
+        # worker restarted while a recording was in flight). Close the
+        # row gracefully and return 200 — the file may be incomplete but
+        # the operator should not get stuck behind a 500 with no way out.
+        logger.warning(
+            "Worker stop returned not-ok (%s) — closing DB row to recover", err
+        )
         row.ended_at = _now_iso()
+        if not os.path.isfile(row.file_path):
+            row.file_size_bytes = 0
+        else:
+            try:
+                row.file_size_bytes = os.path.getsize(row.file_path)
+            except OSError:
+                row.file_size_bytes = 0
         await db.flush()
-        raise HTTPException(500, f"Recording worker error: {err}")
+        await db.refresh(row)
+        return row
 
     row.ended_at = _now_iso()
     row.duration_seconds = worker_resp.get("duration_seconds")
