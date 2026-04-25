@@ -1,4 +1,8 @@
-"""Camera worker — captures V4L2 frames and serves them via Unix socket."""
+"""Camera worker — captures V4L2 frames and serves them via Unix socket.
+
+Fan-out: opens the camera once, broadcasts each frame to every connected client
+(per-client asyncio.Queue with maxsize=2 + drop-oldest if a consumer lags).
+"""
 
 import asyncio
 import json
@@ -50,42 +54,137 @@ def open_camera(args):
         time.sleep(1)
 
 
-async def handle_client(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter, args):
-    logger.info("Client connected")
+class FrameBroadcaster:
+    """Single producer (V4L2 capture), multiple consumers (asyncio Queues).
 
-    loop = asyncio.get_event_loop()
-    cap, actual_width, actual_height = await loop.run_in_executor(None, open_camera, args)
+    Each consumer gets its own queue (maxsize=2). When a queue is full, the
+    oldest frame is dropped — slow consumers cannot stall fast ones.
+    """
 
-    # Clamp crop to actual width; if crop=0 or exceeds actual width, send full frame
-    out_width = min(args.crop, actual_width) if args.crop > 0 else actual_width
-    out_height = actual_height
+    def __init__(self, args):
+        self._args = args
+        self._cap = None
+        self._actual_width = 0
+        self._actual_height = 0
+        self._out_width = 0
+        self._out_height = 0
+        self._clients: list[asyncio.Queue[bytes]] = []
+        self._produce_task: asyncio.Task | None = None
+        self._lock = asyncio.Lock()
 
-    # Send handshake with real dimensions
-    handshake = json.dumps(
-        {"width": out_width, "height": out_height, "channels": 3}
-    ).encode()
-    header = struct.pack(">I", len(handshake))
-    writer.write(header + handshake)
-    await writer.drain()
+    @property
+    def out_width(self) -> int:
+        return self._out_width
 
-    def read_frame():
-        ret, frame = cap.read()
-        return ret, frame
+    @property
+    def out_height(self) -> int:
+        return self._out_height
 
-    try:
+    async def start(self):
+        loop = asyncio.get_event_loop()
+        self._cap, self._actual_width, self._actual_height = await loop.run_in_executor(
+            None, open_camera, self._args
+        )
+        crop = self._args.crop
+        self._out_width = (
+            min(crop, self._actual_width) if crop > 0 else self._actual_width
+        )
+        self._out_height = self._actual_height
+        self._produce_task = asyncio.create_task(self._produce(), name="frame-producer")
+
+    async def add_client(self) -> asyncio.Queue[bytes]:
+        q: asyncio.Queue[bytes] = asyncio.Queue(maxsize=2)
+        async with self._lock:
+            self._clients.append(q)
+        return q
+
+    async def remove_client(self, q: asyncio.Queue[bytes]) -> None:
+        async with self._lock:
+            try:
+                self._clients.remove(q)
+            except ValueError:
+                pass
+
+    async def _produce(self) -> None:
+        loop = asyncio.get_event_loop()
+
+        def read_frame():
+            return self._cap.read()
+
         while not _shutdown.is_set():
             try:
                 ret, frame = await loop.run_in_executor(None, read_frame)
             except Exception as exc:
-                logger.warning("Camera read error: %s", exc)
-                break
+                logger.warning("Camera read error: %s — reopening", exc)
+                ret, frame = False, None
 
             if not ret or frame is None:
-                logger.warning("Camera disconnected — waiting for reconnect")
-                break
+                logger.warning("Camera disconnected — reopening")
+                try:
+                    self._cap.release()
+                except Exception:
+                    pass
+                self._cap, self._actual_width, self._actual_height = await loop.run_in_executor(
+                    None, open_camera, self._args
+                )
+                continue
 
-            cropped = frame[:, :out_width] if out_width < actual_width else frame
+            cropped = (
+                frame[:, : self._out_width]
+                if self._out_width < self._actual_width
+                else frame
+            )
             raw = cropped.tobytes()
+
+            # Snapshot client list under the lock so we can iterate without holding it.
+            async with self._lock:
+                clients = list(self._clients)
+
+            for q in clients:
+                if q.full():
+                    try:
+                        q.get_nowait()
+                    except asyncio.QueueEmpty:
+                        pass
+                try:
+                    q.put_nowait(raw)
+                except asyncio.QueueFull:
+                    pass
+
+        try:
+            self._cap.release()
+        except Exception:
+            pass
+
+
+async def handle_client(
+    _reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    broadcaster: FrameBroadcaster,
+):
+    logger.info("Client connected")
+
+    handshake = json.dumps(
+        {"width": broadcaster.out_width, "height": broadcaster.out_height, "channels": 3}
+    ).encode()
+    header = struct.pack(">I", len(handshake))
+    writer.write(header + handshake)
+    try:
+        await writer.drain()
+    except (ConnectionResetError, BrokenPipeError, OSError):
+        logger.info("Client disconnected during handshake")
+        writer.close()
+        return
+
+    q = await broadcaster.add_client()
+
+    try:
+        while not _shutdown.is_set():
+            try:
+                raw = await asyncio.wait_for(q.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+
             frame_len = struct.pack(">I", len(raw))
             try:
                 writer.write(frame_len + raw)
@@ -94,7 +193,7 @@ async def handle_client(_reader: asyncio.StreamReader, writer: asyncio.StreamWri
                 logger.info("Client disconnected")
                 break
     finally:
-        cap.release()
+        await broadcaster.remove_client(q)
         writer.close()
         try:
             await writer.wait_closed()
@@ -112,8 +211,11 @@ async def serve(args):
     loop.add_signal_handler(signal.SIGTERM, _stop)
     loop.add_signal_handler(signal.SIGINT, _stop)
 
+    broadcaster = FrameBroadcaster(args)
+    await broadcaster.start()
+
     def client_handler(reader, writer):
-        asyncio.ensure_future(handle_client(reader, writer, args))
+        asyncio.ensure_future(handle_client(reader, writer, broadcaster))
 
     server = await asyncio.start_unix_server(client_handler, path=args.socket_path)
     logger.info("Listening on %s", args.socket_path)
@@ -127,7 +229,6 @@ async def serve(args):
 def main():
     args = parse_args()
 
-    # Remove stale socket
     try:
         os.unlink(args.socket_path)
     except FileNotFoundError:
