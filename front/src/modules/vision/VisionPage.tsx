@@ -4,8 +4,8 @@ import { toast } from "sonner"
 import { Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import type { MapLocation } from "@/types"
-import { getLocations } from "@/api/locations"
+import type { Camellon } from "@/types"
+import { getCamellones } from "@/api/camellones"
 import { useWebRTC } from "@/hooks/useWebRTC"
 import { useCounting } from "@/hooks/useCounting"
 import VideoStream from "./components/VideoStream"
@@ -30,11 +30,15 @@ export default function VisionPage() {
   const [step, setStep] = useState<"pick" | "operate">("pick")
   const [selectedClass, setSelectedClass] = useState("")
   const [durationStr, setDurationStr] = useState("0s")
-  const [locations, setLocations] = useState<MapLocation[]>([])
+  const [camellones, setCamellones] = useState<Camellon[]>([])
   const [configOpen, setConfigOpen] = useState(false)
 
+  const loadCamellones = () => {
+    getCamellones().then(setCamellones).catch(console.error)
+  }
+
   useEffect(() => {
-    getLocations().then(setLocations).catch(console.error)
+    loadCamellones()
   }, [])
 
   const connected = connectionState === "connected"
@@ -107,6 +111,7 @@ export default function VisionPage() {
     try {
       await counting.save(camellon)
       toast.success("Sesion guardada")
+      loadCamellones()
     } catch (e) {
       toast.error("Error al guardar: " + (e instanceof Error ? e.message : "desconocido"))
     }
@@ -214,7 +219,7 @@ export default function VisionPage() {
         open={counting.state === "SAVING"}
         totalCount={counting.sessionTotal}
         duration={savedDuration}
-        locations={locations}
+        camellones={camellones}
         onSave={handleSave}
         onDiscard={counting.discard}
       />
