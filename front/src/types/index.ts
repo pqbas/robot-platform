@@ -132,6 +132,21 @@ export type DeviceContext = {
   fundo: { uuid: string; name: string; region: string | null } | null
 }
 
+export type Recording = {
+  uuid: string
+  device_id: string
+  session_uuid: string | null
+  started_at: string
+  ended_at: string | null
+  duration_seconds: number | null
+  file_path: string
+  file_size_bytes: number | null
+  width: number | null
+  height: number | null
+  fps: number | null
+  uploaded_at: string | null
+}
+
 export type ClassMappingItem = string | { model_label: string; system_label: string }
 
 export type DetectionModel = {

@@ -13,6 +13,7 @@ import {
   RefreshCw,
   PanelLeftClose,
   PanelLeftOpen,
+  Video,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAppMode } from "@/context/AppModeContext"
@@ -56,6 +57,7 @@ export default function Sidebar() {
         { label: "Vision", path: "/vision", icon: Eye },
         { label: "Mapa", path: "/mapa", icon: Map },
         { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
+        { label: "Grabaciones", path: "/recordings", icon: Video },
       ]
       if (!configured) {
         robotItems.push({ label: "Servidor", path: "/setup", icon: Settings, separator: true })
@@ -66,6 +68,7 @@ export default function Sidebar() {
     const base: NavItem[] = [
       { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
       { label: "Mapa", path: "/mapa", icon: Map },
+      { label: "Grabaciones", path: "/recordings", icon: Video },
     ]
 
     if (user?.role === "admin") {

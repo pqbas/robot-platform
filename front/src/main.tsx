@@ -10,6 +10,7 @@ import LoginPage from "./modules/auth/LoginPage"
 import VisionPage from "./modules/vision/VisionPage"
 import MapPage from "./modules/map/MapPage"
 import DashboardPage from "./modules/dashboard/DashboardPage"
+import RecordingsPage from "./modules/recordings/RecordingsPage"
 import UsersPage from "./modules/admin/UsersPage"
 import EmpresasPage from "./modules/admin/EmpresasPage"
 import FundosPage from "./modules/admin/FundosPage"
@@ -37,6 +38,7 @@ const router = createBrowserRouter([
       { path: "vision", element: <VisionPage /> },
       { path: "mapa", element: <MapPage /> },
       { path: "dashboard", element: <DashboardPage /> },
+      { path: "recordings", element: <RecordingsPage /> },
       {
         path: "admin/users",
         element: (
