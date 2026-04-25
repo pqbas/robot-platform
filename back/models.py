@@ -82,6 +82,10 @@ class Device(Base):
     api_key_hash: Mapped[str] = mapped_column(Text, nullable=False)
     last_sync_at: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    fundo_uuid: Mapped[str | None] = mapped_column(
+        ForeignKey("fundos.uuid"), nullable=True
+    )
+    fundo: Mapped["Fundo | None"] = relationship()
 
 
 class User(Base):
