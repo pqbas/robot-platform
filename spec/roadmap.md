@@ -81,13 +81,13 @@
 
 ---
 
-## Phase 6: Grabación de video
+## Phase 6: Grabación de video (Complete)
 
 **Goal:** el robot puede grabar sesiones en video como fallback al conteo en tiempo real.
 
-- [ ] El operador puede iniciar y detener grabación desde el frontend
-- [ ] El stream se guarda como MP4 en el robot durante la sesión
-- [ ] Los videos grabados son descargables o sincronizables al servidor
+- [x] El operador puede iniciar y detener grabación desde el frontend
+- [x] El stream se guarda como MP4 en el robot durante la sesión
+- [x] Los videos grabados son descargables o sincronizables al servidor
 
 ---
 
@@ -102,7 +102,18 @@
 
 ---
 
-## Phase 8: Nuevo método de conteo
+## Phase 8: Calidad HD de la grabación
+
+**Goal:** el video grabado se ve nítido y aprovecha la cámara para revisión posterior, sin perder fluidez ni saturar disco.
+
+- [ ] El recording-worker graba a la resolución completa de la cámara (sin crop innecesario)
+- [ ] Bitrate y parámetros de NVENC afinados para HD nítido manteniendo el tamaño de archivo razonable
+- [ ] La nitidez del MP4 grabado coincide visualmente con el stream en vivo
+- [ ] Documentado el preset elegido y por qué (tradeoff calidad / disco / CPU)
+
+---
+
+## Phase 9: Nuevo método de conteo
 
 **Goal:** el conteo es más robusto y no depende exclusivamente del tracker de YOLO.
 
@@ -112,7 +123,7 @@
 
 ---
 
-## Phase 9: Deploy servidor + validación end-to-end
+## Phase 10: Deploy servidor + validación end-to-end
 
 **Goal:** el flujo completo robot → servidor funciona en producción y el operador siempre sabe qué modelo está activo.
 
@@ -122,7 +133,7 @@
 
 ---
 
-## Phase 10: Integración de otros objetos
+## Phase 11: Integración de otros objetos
 
 **Goal:** el sistema soporta distintos tipos de fruta u objeto sin cambios de código.
 

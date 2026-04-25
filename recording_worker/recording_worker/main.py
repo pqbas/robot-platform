@@ -77,6 +77,7 @@ class CameraReader:
         self.width = 0
         self.height = 0
         self.channels = 3
+        self.fps: float = 30.0
 
     def connect(self) -> None:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -89,6 +90,9 @@ class CameraReader:
         self.width = handshake["width"]
         self.height = handshake["height"]
         self.channels = handshake["channels"]
+        # fps is optional for backwards compat with older camera_worker builds
+        # that didn't include it in the handshake.
+        self.fps = float(handshake.get("fps") or 30.0)
 
     def close(self) -> None:
         if self._sock is not None:
@@ -188,7 +192,7 @@ async def cmd_start(state: RecordingState, payload: dict, camera_socket: str) ->
         return {"ok": False, "error": f"cannot_create_output_dir: {exc}"}
 
     encoder = make_encoder()
-    fps = 30.0
+    fps = reader.fps
     try:
         encoder.start(uuid, output_path, reader.width, reader.height, fps)
     except Exception as exc:
@@ -205,8 +209,8 @@ async def cmd_start(state: RecordingState, payload: dict, camera_socket: str) ->
     state.task = asyncio.create_task(encode_loop(state), name=f"encode-{uuid[:8]}")
 
     logger.info(
-        "Recording started uuid=%s backend=%s out=%s %dx%d",
-        uuid, encoder.backend, output_path, reader.width, reader.height,
+        "Recording started uuid=%s backend=%s out=%s %dx%d @ %.1ffps",
+        uuid, encoder.backend, output_path, reader.width, reader.height, fps,
     )
     return {
         "ok": True,
