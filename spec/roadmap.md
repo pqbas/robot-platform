@@ -53,17 +53,35 @@
 
 ---
 
-## Phase 4: Verificación del conteo con pesos estándar (24–25 Apr)
+## Phase 4: Verificación del conteo con pesos estándar (Complete)
 
 **Goal:** verificar que el conteo en tiempo real funciona correctamente en el laboratorio antes del día de campo.
 
-- [ ] El operador puede seleccionar y activar pesos estándar de YOLO (personas) desde el frontend
-- [ ] El conteo por cruce de línea funciona correctamente con personas en condiciones de laboratorio
-- [ ] El sistema permite cambiar el modelo activo sin reiniciar el robot
+- [x] El operador puede seleccionar y activar pesos estándar de YOLO (personas) desde el frontend
+- [x] El conteo por cruce de línea funciona correctamente con personas en condiciones de laboratorio
+- [x] El sistema permite cambiar el modelo activo sin reiniciar el robot
 
 ---
 
-## Phase 5: Grabación de video (26 Apr)
+## Phase 5: Contexto del robot — fundo + ubicación
+
+**Goal:** el admin define a qué empresa/fundo pertenece cada robot; el operador trabaja dentro de ese contexto creando camellones y ubicaciones sin volver a pantallas administrativas y sin ver datos de otros fundos.
+
+**Solo admin (vista de servidor):**
+
+- [ ] El admin puede asociar un robot a un fundo desde `DevicesPage` (campo `fundo_uuid` en Device)
+- [ ] La asociación es la única forma de cambiar empresa/fundo de un robot — no editable desde el robot
+
+**Solo operador (vista del robot):**
+
+- [ ] El robot muestra empresa y fundo asignados como info de contexto (read-only); no muestra otros fundos
+- [ ] El operador puede crear una ubicación nueva desde el `SaveDialog` al final de una sesión (sin volver a otra pantalla)
+- [ ] Alternativamente, el operador puede guardar la sesión sin ubicación y asignarla después desde `MapPage` (`UnlocatedList`)
+- [ ] El operador puede crear y editar camellones desde el robot (nombre/código), siempre dentro del fundo asignado
+
+---
+
+## Phase 6: Grabación de video
 
 **Goal:** el robot puede grabar sesiones en video como fallback al conteo en tiempo real.
 
@@ -73,7 +91,7 @@
 
 ---
 
-## Phase 6: Nuevo método de conteo (28–30 Apr)
+## Phase 7: Nuevo método de conteo
 
 **Goal:** el conteo es más robusto y no depende exclusivamente del tracker de YOLO.
 
@@ -83,7 +101,7 @@
 
 ---
 
-## Phase 7: Deploy servidor + validación end-to-end
+## Phase 8: Deploy servidor + validación end-to-end
 
 **Goal:** el flujo completo robot → servidor funciona en producción y el operador siempre sabe qué modelo está activo.
 
@@ -93,7 +111,7 @@
 
 ---
 
-## Phase 8: Integración de otros objetos
+## Phase 9: Integración de otros objetos
 
 **Goal:** el sistema soporta distintos tipos de fruta u objeto sin cambios de código.
 
