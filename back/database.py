@@ -36,6 +36,7 @@ async def init_db() -> None:
     # Ensure data directories exist
     Path(config.storage.models_dir).mkdir(parents=True, exist_ok=True)
     Path(config.storage.frames_dir).mkdir(parents=True, exist_ok=True)
+    Path(config.storage.recordings_dir).mkdir(parents=True, exist_ok=True)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

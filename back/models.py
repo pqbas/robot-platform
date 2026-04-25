@@ -212,6 +212,23 @@ class FrameDetection(Base):
     frame: Mapped["CaptureFrame"] = relationship(back_populates="detections")
 
 
+class Recording(Base):
+    __tablename__ = "recordings"
+
+    uuid: Mapped[str] = mapped_column(Text, primary_key=True, default=_new_uuid)
+    device_id: Mapped[str] = mapped_column(Text, default=get_device_id)
+    session_uuid: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[str] = mapped_column(Text, nullable=False)
+    ended_at: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    file_path: Mapped[str] = mapped_column(Text, nullable=False)
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fps: Mapped[float | None] = mapped_column(Float, nullable=True)
+    uploaded_at: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class FruitCrop(Base):
     __tablename__ = "fruit_crops"
 
