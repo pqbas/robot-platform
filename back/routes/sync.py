@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import AppMode, config
 from back.database import get_db
-from back.models import DetectionModel, Device, DeviceModel
+from back.models import DetectionModel, Device, DeviceModel, Empresa, Fundo
 from back.services.auth import get_device_or_none, verify_device_key
 from back.schemas import (
     SyncCamellon,
@@ -48,7 +48,19 @@ async def force_pull():
     if config.mode != AppMode.ROBOT:
         return {"ok": False, "reason": "only available in robot mode"}
     from back.services.sync_pull import pull_models
+    from back.services.sync_pull_context import pull_device_context
     await pull_models()
+    await pull_device_context()
+    return {"ok": True}
+
+
+@router.post("/push")
+async def force_push(db: AsyncSession = Depends(get_db)):
+    """Trigger an immediate sync push of unsynced records (robot mode only)."""
+    if config.mode != AppMode.ROBOT:
+        return {"ok": False, "reason": "only available in robot mode"}
+    from back.services.sync_push import push_all
+    await push_all(db)
     return {"ok": True}
 
 
@@ -118,6 +130,55 @@ async def list_models(db: AsyncSession = Depends(get_db), device: Device | None 
         }
         for m in models
     ]
+
+
+@router.get("/device-context")
+async def device_context(
+    db: AsyncSession = Depends(get_db),
+    device: Device | None = Depends(get_device_or_none),
+):
+    """Return the empresa+fundo associated with the requesting device.
+
+    Server mode: requires device API key. Resolves the join.
+    Robot mode: returns nulls (lab default — used when running unauthenticated).
+    """
+    if config.mode == AppMode.SERVER and device is None:
+        raise HTTPException(status_code=401, detail="device key required")
+
+    if device is None:
+        from back.config import get_device_id
+        return {
+            "device_id": get_device_id(),
+            "empresa": None,
+            "fundo": None,
+        }
+
+    device.last_sync_at = datetime.now(timezone.utc).isoformat()
+
+    if not device.fundo_uuid:
+        await db.commit()
+        return {"device_id": device.id, "empresa": None, "fundo": None}
+
+    fundo_result = await db.execute(
+        select(Fundo).where(Fundo.uuid == device.fundo_uuid)
+    )
+    fundo = fundo_result.scalar_one_or_none()
+    if not fundo:
+        await db.commit()
+        return {"device_id": device.id, "empresa": None, "fundo": None}
+
+    empresa_result = await db.execute(
+        select(Empresa).where(Empresa.uuid == fundo.empresa_uuid)
+    )
+    empresa = empresa_result.scalar_one_or_none()
+    await db.commit()
+    return {
+        "device_id": device.id,
+        "empresa": (
+            {"uuid": empresa.uuid, "name": empresa.name} if empresa else None
+        ),
+        "fundo": {"uuid": fundo.uuid, "name": fundo.name, "region": fundo.region},
+    }
 
 
 @router.get("/models/{model_uuid}", dependencies=_device_dep)

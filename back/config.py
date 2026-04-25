@@ -34,6 +34,9 @@ class PerceptionConfig:
 class StorageConfig:
     models_dir: str = os.getenv("MODELS_DIR", "data/robot/models")
     frames_dir: str = os.getenv("FRAMES_DIR", "data/server/frames")
+    device_context_path: str = os.getenv(
+        "DEVICE_CONTEXT_PATH", "data/robot/device_context.json"
+    )
 
 
 @dataclass
@@ -93,9 +96,15 @@ config = Config()
 
 
 def get_device_id() -> str:
-    """Auto-detect robot ID from Jetson serial number, fallback to env var."""
+    """Auto-detect robot ID from Jetson serial number, fallback to env var.
+
+    The Jetson devicetree file is a fixed-size blob padded with NUL bytes;
+    str.strip() doesn't remove those, so we strip them explicitly to keep
+    the value safe for PostgreSQL (which rejects \\x00 in TEXT/VARCHAR).
+    """
     try:
         with open("/sys/firmware/devicetree/base/serial-number") as f:
-            return f"jetson-{f.read().strip()}"
+            raw = f.read().strip().strip("\x00")
+            return f"jetson-{raw}"
     except FileNotFoundError:
         return os.getenv("ROBOT_ID", "dev-local")

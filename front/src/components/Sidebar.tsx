@@ -10,11 +10,15 @@ import {
   HardDrive,
   Brain,
   Settings,
+  RefreshCw,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react"
+import { toast } from "sonner"
 import { useAppMode } from "@/context/AppModeContext"
 import { useAuth } from "@/context/AuthContext"
+import { useDeviceContext } from "@/hooks/useDeviceContext"
+import { forceSyncPull, forceSyncPush } from "@/api/sync"
 import UserMenu from "./UserMenu"
 import { Separator } from "@/components/ui/separator"
 
@@ -31,6 +35,20 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const { mode, configured } = useAppMode()
   const { user } = useAuth()
+  const { context: deviceContext } = useDeviceContext(mode === "robot")
+  const [syncing, setSyncing] = useState(false)
+
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      await Promise.all([forceSyncPush(), forceSyncPull()])
+      toast.success("Sincronizado")
+    } catch {
+      toast.error("Error de sincronización — revisa la conexión al server")
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const items = useMemo<NavItem[]>(() => {
     if (mode === "robot") {
@@ -94,6 +112,33 @@ export default function Sidebar() {
           collapsed ? "md:w-14" : "md:w-[180px]"
         }`}
       >
+        {mode === "robot" && !collapsed && (
+          <div className="border-b border-sidebar-border px-3 py-2 text-xs space-y-2">
+            {deviceContext?.fundo ? (
+              <div>
+                <div className="text-sidebar-foreground/60 truncate">
+                  {deviceContext.empresa?.name ?? "—"}
+                </div>
+                <div className="font-medium truncate">
+                  {deviceContext.fundo.name}
+                </div>
+              </div>
+            ) : (
+              <div className="text-sidebar-foreground/50 italic">
+                Sin fundo asignado
+              </div>
+            )}
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-sidebar-border bg-sidebar-accent/30 px-2 py-1 text-xs font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground disabled:opacity-50"
+              title="Forzar sincronización con el servidor"
+            >
+              <RefreshCw className={`size-3 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "Sincronizando..." : "Sincronizar ahora"}
+            </button>
+          </div>
+        )}
         <nav className="flex flex-1 flex-col gap-1 p-2">
           {items.map((item) => {
             const active = location.pathname.startsWith(item.path)

@@ -64,14 +64,27 @@ async def _post_batch(session: aiohttp.ClientSession, endpoint: str, data: list[
 
 async def push_all(db: AsyncSession) -> None:
     """Push all unsynced records to the server in dependency order."""
+    queue_summary = {}
+    for table_name, model_class in [
+        ("empresas", Empresa),
+        ("fundos", Fundo),
+        ("locations", Location),
+        ("camellones", Camellon),
+        ("sessions", Session),
+        ("events", Event),
+    ]:
+        pending = await _get_unsynced_uuids(db, table_name, model_class)
+        queue_summary[table_name] = len(pending)
+    logger.info("Sync push: queue=%s", queue_summary)
+
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as http:
         # 1. Empresas
         unsynced = await _get_unsynced_uuids(db, "empresas", Empresa)
         if unsynced:
             data = [{"uuid": r.uuid, "name": r.name, "is_active": r.is_active, "created_at": r.created_at} for r in unsynced]
             result = await _post_batch(http, "empresas", data)
-            if result:
-                await _mark_synced(db, "empresas", [r.uuid for r in unsynced])
+            if result and result.get("successful_uuids"):
+                await _mark_synced(db, "empresas", result["successful_uuids"])
 
         # 2. Fundos
         unsynced = await _get_unsynced_uuids(db, "fundos", Fundo)
@@ -82,8 +95,8 @@ async def push_all(db: AsyncSession) -> None:
                 "is_active": r.is_active, "created_at": r.created_at,
             } for r in unsynced]
             result = await _post_batch(http, "fundos", data)
-            if result:
-                await _mark_synced(db, "fundos", [r.uuid for r in unsynced])
+            if result and result.get("successful_uuids"):
+                await _mark_synced(db, "fundos", result["successful_uuids"])
 
         # 4. Locations
         unsynced = await _get_unsynced_uuids(db, "locations", Location)
@@ -93,8 +106,8 @@ async def push_all(db: AsyncSession) -> None:
                 "lat": r.lat, "lng": r.lng, "zoom": r.zoom, "polygon": r.polygon,
             } for r in unsynced]
             result = await _post_batch(http, "locations", data)
-            if result:
-                await _mark_synced(db, "locations", [r.uuid for r in unsynced])
+            if result and result.get("successful_uuids"):
+                await _mark_synced(db, "locations", result["successful_uuids"])
 
         # 5. Camellones
         unsynced = await _get_unsynced_uuids(db, "camellones", Camellon)
@@ -104,8 +117,8 @@ async def push_all(db: AsyncSession) -> None:
                 "nombre": r.nombre, "lat": r.lat, "lng": r.lng,
             } for r in unsynced]
             result = await _post_batch(http, "camellones", data)
-            if result:
-                await _mark_synced(db, "camellones", [r.uuid for r in unsynced])
+            if result and result.get("successful_uuids"):
+                await _mark_synced(db, "camellones", result["successful_uuids"])
 
         # 6. Sessions (resolve camellon_id → camellon_uuid)
         unsynced = await _get_unsynced_uuids(db, "sessions", Session)
@@ -125,8 +138,8 @@ async def push_all(db: AsyncSession) -> None:
                     "target_class": r.target_class, "total_count": r.total_count,
                 })
             result = await _post_batch(http, "sessions", data)
-            if result:
-                await _mark_synced(db, "sessions", [r.uuid for r in unsynced])
+            if result and result.get("successful_uuids"):
+                await _mark_synced(db, "sessions", result["successful_uuids"])
 
         # 7. Events (resolve session_id → session_uuid)
         unsynced = await _get_unsynced_uuids(db, "events", Event)
@@ -145,5 +158,5 @@ async def push_all(db: AsyncSession) -> None:
                     "track_id": r.track_id,
                 })
             result = await _post_batch(http, "events", data)
-            if result:
-                await _mark_synced(db, "events", [r.uuid for r in unsynced])
+            if result and result.get("successful_uuids"):
+                await _mark_synced(db, "events", result["successful_uuids"])

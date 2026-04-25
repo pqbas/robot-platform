@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useBlocker } from "react-router-dom"
 import { toast } from "sonner"
-import { Settings } from "lucide-react"
+import { MapPin, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import type { MapLocation } from "@/types"
-import { getLocations } from "@/api/locations"
+import type { Camellon } from "@/types"
+import { getCamellones } from "@/api/camellones"
 import { useWebRTC } from "@/hooks/useWebRTC"
 import { useCounting } from "@/hooks/useCounting"
+import { useDeviceContext } from "@/hooks/useDeviceContext"
+import { useAppMode } from "@/context/AppModeContext"
 import VideoStream from "./components/VideoStream"
 import ObjectPicker from "./components/ObjectPicker"
 import CountOverlay from "./components/CountOverlay"
@@ -26,15 +28,21 @@ export default function VisionPage() {
   const { videoRef, connectionState, frameData, fps, connect, disconnect } =
     useWebRTC()
   const counting = useCounting()
+  const { mode } = useAppMode()
+  const { context: deviceContext } = useDeviceContext(mode === "robot")
 
   const [step, setStep] = useState<"pick" | "operate">("pick")
   const [selectedClass, setSelectedClass] = useState("")
   const [durationStr, setDurationStr] = useState("0s")
-  const [locations, setLocations] = useState<MapLocation[]>([])
+  const [camellones, setCamellones] = useState<Camellon[]>([])
   const [configOpen, setConfigOpen] = useState(false)
 
+  const loadCamellones = () => {
+    getCamellones().then(setCamellones).catch(console.error)
+  }
+
   useEffect(() => {
-    getLocations().then(setLocations).catch(console.error)
+    loadCamellones()
   }, [])
 
   const connected = connectionState === "connected"
@@ -107,6 +115,7 @@ export default function VisionPage() {
     try {
       await counting.save(camellon)
       toast.success("Sesion guardada")
+      loadCamellones()
     } catch (e) {
       toast.error("Error al guardar: " + (e instanceof Error ? e.message : "desconocido"))
     }
@@ -178,6 +187,33 @@ export default function VisionPage() {
             )}
           </div>
         )}
+        {connected && mode === "robot" && (
+          <div className="absolute top-2 left-2">
+            <Badge
+              variant="outline"
+              className={`flex items-center gap-1.5 border-none text-xs ${
+                deviceContext?.fundo
+                  ? "bg-black/60 text-white"
+                  : "bg-amber-500/80 text-white"
+              }`}
+            >
+              <MapPin className="size-3" />
+              {deviceContext?.fundo ? (
+                <span>
+                  <span className="opacity-70">
+                    {deviceContext.empresa?.name ?? "—"}
+                  </span>
+                  <span className="mx-1 opacity-50">›</span>
+                  <span className="font-medium">
+                    {deviceContext.fundo.name}
+                  </span>
+                </span>
+              ) : (
+                <span>Sin fundo asignado</span>
+              )}
+            </Badge>
+          </div>
+        )}
       </VideoStream>
 
       {/* Action bar: connect + counting controls */}
@@ -214,7 +250,7 @@ export default function VisionPage() {
         open={counting.state === "SAVING"}
         totalCount={counting.sessionTotal}
         duration={savedDuration}
-        locations={locations}
+        camellones={camellones}
         onSave={handleSave}
         onDiscard={counting.discard}
       />

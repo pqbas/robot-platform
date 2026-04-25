@@ -25,7 +25,7 @@ async def init_db() -> None:
     import logging
     from pathlib import Path
 
-    from sqlalchemy import select
+    from sqlalchemy import select, text
 
     from back.config import AppMode
     from back.models import Base, User
@@ -39,6 +39,26 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Strip NUL bytes from device_id values written by old code that didn't
+    # sanitize the Jetson devicetree file. Postgres rejects \x00 on push.
+    # SQLite's REPLACE/instr/length truncate at the first NUL on TEXT, so we
+    # read each row as a BLOB and rewrite it from Python.
+    if config.mode == AppMode.ROBOT:
+        async with AsyncSessionLocal() as session:
+            for table in ("locations", "camellones", "sessions", "events", "capture_bursts"):
+                rows = (await session.execute(
+                    text(f"SELECT rowid, CAST(device_id AS BLOB) FROM {table}")
+                )).all()
+                for rowid, blob in rows:
+                    if blob is None or b"\x00" not in bytes(blob):
+                        continue
+                    cleaned = bytes(blob).replace(b"\x00", b"").decode("utf-8")
+                    await session.execute(
+                        text(f"UPDATE {table} SET device_id = :v WHERE rowid = :r"),
+                        {"v": cleaned, "r": rowid},
+                    )
+            await session.commit()
 
     # Seed admin user in server mode if no users exist
     if config.mode == AppMode.SERVER:

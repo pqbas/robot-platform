@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from back.config import AppMode, config
 from back.database import get_db
 from back.schemas import (
     CamellonCreate,
@@ -12,6 +13,7 @@ from back.schemas import (
     CamellonSummary,
 )
 from back.services import storage
+from back.services.sync_pull_context import read_cached_context
 
 logger = logging.getLogger("camellones")
 
@@ -28,7 +30,12 @@ async def create_camellon(body: CamellonCreate, db: AsyncSession = Depends(get_d
     existing = await storage.get_camellon_by_nombre(db, body.nombre)
     if existing is not None:
         raise HTTPException(409, f"Camellon '{body.nombre}' already exists")
-    return await storage.create_camellon(db, body.nombre)
+    fundo_uuid: str | None = None
+    if config.mode == AppMode.ROBOT:
+        ctx = read_cached_context()
+        fundo = ctx.get("fundo") or {}
+        fundo_uuid = fundo.get("uuid") if isinstance(fundo, dict) else None
+    return await storage.create_camellon(db, body.nombre, fundo_uuid)
 
 
 @router.put("/{camellon_id}/location", response_model=CamellonOut)

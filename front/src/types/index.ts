@@ -124,6 +124,12 @@ export type Device = {
   label: string
   last_sync_at: string | null
   is_active: boolean
+  fundo_uuid: string | null
+}
+
+export type DeviceContext = {
+  empresa: { uuid: string; name: string } | null
+  fundo: { uuid: string; name: string; region: string | null } | null
 }
 
 export type ClassMappingItem = string | { model_label: string; system_label: string }
