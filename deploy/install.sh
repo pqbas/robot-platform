@@ -92,6 +92,12 @@ if [[ "$MODE" == "robot" ]]; then
         # Jetson: install with the [gstreamer] extra so PyGObject is built
         # against system gobject-introspection and the worker can drive
         # the nvv4l2h264enc plugin shipped by nvidia-l4t-gstreamer.
+        # PyGObject + pycairo compile from source against these headers
+        # (the venv uses Python 3.13 so system python3-gi can't be reused).
+        info "Installing build deps for PyGObject/pycairo..."
+        sudo apt-get install -y -qq \
+            libcairo2-dev libgirepository1.0-dev gobject-introspection \
+            pkg-config python3-dev
         info "Jetson detected (aarch64): installing recording worker with --extra gstreamer"
         uv sync --extra gstreamer
     else
