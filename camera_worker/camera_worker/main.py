@@ -28,7 +28,7 @@ def parse_args():
         "--socket-path",
         default=os.getenv("CAMERA_SOCKET", "/tmp/camera.sock"),
     )
-    parser.add_argument("--index", type=int, default=int(os.getenv("CAMERA_INDEX", "1")))
+    parser.add_argument("--index", type=int, default=int(os.getenv("CAMERA_INDEX", "0")))
     parser.add_argument("--width", type=int, default=int(os.getenv("CAMERA_WIDTH", "2560")))
     parser.add_argument("--height", type=int, default=int(os.getenv("CAMERA_HEIGHT", "720")))
     parser.add_argument("--crop", type=int, default=int(os.getenv("CAMERA_CROP", "1280")))
