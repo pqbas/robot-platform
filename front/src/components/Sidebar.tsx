@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { useAppMode } from "@/context/AppModeContext"
 import { useAuth } from "@/context/AuthContext"
+import { useDeviceContext } from "@/hooks/useDeviceContext"
 import UserMenu from "./UserMenu"
 import { Separator } from "@/components/ui/separator"
 
@@ -31,6 +32,7 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const { mode, configured } = useAppMode()
   const { user } = useAuth()
+  const { context: deviceContext } = useDeviceContext(mode === "robot")
 
   const items = useMemo<NavItem[]>(() => {
     if (mode === "robot") {
@@ -94,6 +96,24 @@ export default function Sidebar() {
           collapsed ? "md:w-14" : "md:w-[180px]"
         }`}
       >
+        {mode === "robot" && !collapsed && (
+          <div className="border-b border-sidebar-border px-3 py-2 text-xs">
+            {deviceContext?.fundo ? (
+              <>
+                <div className="text-sidebar-foreground/60 truncate">
+                  {deviceContext.empresa?.name ?? "—"}
+                </div>
+                <div className="font-medium truncate">
+                  {deviceContext.fundo.name}
+                </div>
+              </>
+            ) : (
+              <div className="text-sidebar-foreground/50 italic">
+                Sin fundo asignado
+              </div>
+            )}
+          </div>
+        )}
         <nav className="flex flex-1 flex-col gap-1 p-2">
           {items.map((item) => {
             const active = location.pathname.startsWith(item.path)
