@@ -298,3 +298,37 @@ class SyncResult(BaseModel):
     skipped: int
     errors: list[str] = []
     successful_uuids: list[str] = []  # uuids that were inserted or skipped (idempotent)
+
+
+# --- Recordings ---
+
+
+class RecordingOut(BaseModel):
+    uuid: str
+    device_id: str
+    session_uuid: str | None
+    started_at: str
+    ended_at: str | None
+    duration_seconds: float | None
+    file_path: str
+    file_size_bytes: int | None
+    width: int | None
+    height: int | None
+    fps: float | None
+    uploaded_at: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class SyncRecording(BaseModel):
+    uuid: str
+    device_id: str | None = None
+    session_uuid: str | None = None
+    started_at: str
+    ended_at: str | None = None
+    duration_seconds: float | None = None
+    file_path: str
+    file_size_bytes: int | None = None
+    width: int | None = None
+    height: int | None = None
+    fps: float | None = None

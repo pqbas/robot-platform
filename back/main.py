@@ -14,6 +14,7 @@ from back.routes.counting import router as counting_router
 from back.routes.dashboard import router as dashboard_router
 from back.routes.device_context import router as device_context_router
 from back.routes.locations import router as locations_router
+from back.routes.recordings import router as recordings_router
 from back.routes.stream import router as stream_router
 from back.routes.auth import router as auth_router
 from back.routes.setup import router as setup_router
@@ -64,6 +65,7 @@ app.include_router(stream_router)
 app.include_router(counting_router)
 app.include_router(camellones_router)
 app.include_router(locations_router)
+app.include_router(recordings_router)
 app.include_router(config_router)
 app.include_router(dashboard_router)
 app.include_router(sync_router)
