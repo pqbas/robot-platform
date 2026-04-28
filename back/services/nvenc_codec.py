@@ -167,18 +167,25 @@ if HAS_GSTREAMER:
             )
 
             if self._encoder_element == "nvv4l2h264enc":
-                # nvvidconv on Jetson accepts BGR system-memory directly and
-                # emits NV12 NVMM via the HW VIC, in one step. The previous
-                # "videoconvert ! NV12 ! nvvidconv" form (mirroring the
-                # recording_worker post-PR #40) ran BGR→NV12 on CPU and
-                # capped the synchronous WebRTC encode loop at ~11 fps at
-                # 1080p. Skipping videoconvert offloads everything to HW.
+                # Pipeline split intentionally:
+                #   videoconvert: BGR → BGRx (system memory). Only adds an
+                #     alpha byte; no color-matrix math. Cheap on CPU.
+                #   nvvidconv: BGRx (sysmem) → NV12 (NVMM) on the HW VIC.
+                #     The recording_worker uses 'BGR → NV12 → nvvidconv' but
+                #     that path runs the full color conversion on CPU and at
+                #     1080p caps the synchronous WebRTC encode at ~11 fps.
+                #     BGRx→NV12 stays in the HW VIC.
+                # nvvidconv on Jetson does not accept 'video/x-raw,format=BGR'
+                # in system memory reliably (returns black frames); BGRx is
+                # the cheapest input format it does accept.
                 # do-timestamp stays false because aiortc sets pts/time_base
                 # on the av.VideoFrame upstream (CameraStreamTrack.recv);
                 # letting GStreamer overwrite them breaks RTP sync.
                 pipeline_str = (
                     f"{appsrc_caps} "
                     "! queue "
+                    "! videoconvert "
+                    "! video/x-raw,format=BGRx "
                     "! nvvidconv "
                     "! video/x-raw(memory:NVMM),format=NV12 "
                     f"! nvv4l2h264enc bitrate={self.target_bitrate} "
