@@ -73,7 +73,12 @@ status:
 
 update:
 	git pull
-	uv sync
+	@if [ "$$(uname -m)" = "aarch64" ]; then \
+		echo "Jetson detected (aarch64): uv sync --extra gstreamer"; \
+		uv sync --extra gstreamer; \
+	else \
+		uv sync; \
+	fi
 	cd front && npm ci && npm run build
 	-sudo systemctl restart inference-worker
 	-sudo systemctl restart camera-worker
