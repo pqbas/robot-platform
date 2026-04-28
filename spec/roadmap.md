@@ -114,27 +114,27 @@
 
 ---
 
-## Phase 9: Resolución mayor en grabación (Shipped con caveat)
+## Phase 9: Resolución mayor en grabación (Complete)
 
 **Goal:** el operador puede revisar grabaciones con más detalle del que cabe en 720p, aprovechando lo que el sensor de la cámara realmente captura.
 
 - [x] El video grabado supera la resolución actual (1280x720) sin saturar disco — default 1920×1080 nativo del estéreo SBS de la ZED 2i, bitrate auto-escalado (12 Mbps NVENC ≥1080p, 8 Mbps a 720p)
 - [x] Detalles finos (textura de hojas, bordes de fruta, letras pequeñas) se ven en la revisión posterior con claridad mayor que en 720p
-- [ ] La transmisión en vivo no sufre regresión perceptible de FPS o latencia mientras se graba a la nueva resolución — **regresión confirmada**: el encoder VP8 software de `aiortc` no sostiene 30 fps a 1080p (medido 14 fps en `about:webrtc`). Workaround: dejar `CAMERA_WIDTH=2560 CAMERA_HEIGHT=720 CAMERA_CROP=1280` en `.env.robot` hasta que aterrice una phase de per-client downscale o se reemplace el encoder WebRTC.
-- [x] Documentado en `recording_worker/README.md` y `camera_worker/README.md` los dos modos (1080p default, 720p alternativo) y el trade-off del live encoder VP8
+- [x] La transmisión en vivo no sufre regresión perceptible de FPS o latencia mientras se graba a la nueva resolución — resuelto en Phase 10 al portar el live a H.264 NVENC con bridge NVMM y `maxperf-enable=true` (medido 25 fps a 1080p en `about:webrtc`)
+- [x] Documentado en `recording_worker/README.md` y `camera_worker/README.md` los dos modos (1080p default, 720p alternativo)
 
 ---
 
-## Phase 10: WebRTC live a H.264 NVENC sin caveat
+## Phase 10: WebRTC live a H.264 NVENC sin caveat (Complete)
 
-**Goal:** eliminar el caveat de Phase 9 — el live WebRTC sostiene 1080p @ 30fps en Jetson sin obligar al operador a volver a 720p. Portar al path WebRTC la fix NVMM y los presets de calidad ya validados en el `recording_worker`. La infraestructura para H.264 NVENC en aiortc ya existe (`back/services/nvenc_codec.py`, `nvenc_init.py`); falta paridad con la fix del recording-worker (PR #40) y con el tuning de Phase 8.
+**Goal:** eliminar el caveat de Phase 9 — el live WebRTC sostiene 1080p @ 30fps en Jetson sin obligar al operador a volver a 720p. Portar al path WebRTC la fix NVMM y los presets de calidad ya validados en el `recording_worker`.
 
-- [ ] Agregar bridge NVMM (`nvvidconv ! video/x-raw(memory:NVMM)`) al pipeline de `GstNvencEncoder` en `back/services/nvenc_codec.py` — `nvv4l2h264enc` necesita buffers NVMM, sin esto cae a un path software
-- [ ] Subir `profile` a `High` y `preset-level` a `Slow` (4) en `GstNvencEncoder`, paridad con `recording_worker` post-Phase 8
-- [ ] Logging explícito en `init_nvenc` y al primer frame de cada peer connection: qué codec negoció realmente (H264 vs VP8) y qué backend usa el encoder
-- [ ] Validar en Jetson + ZED 2i con `about:webrtc` (Firefox) y `chrome://webrtc-internals/`: codec negociado = `H264`, `framesPerSecond ≥ 25` a 1920×1080, `packetsLost = 0`
-- [ ] Quitar de `camera_worker/README.md` y `recording_worker/README.md` la recomendación de override 720p en `.env.robot`; el default 1080p deja de degradar el live
-- [ ] Marcar Phase 9 como `(Complete)` (todas las cajas) una vez confirmado que el live sostiene 1080p
+- [x] Agregar bridge NVMM (`nvvidconv ! video/x-raw(memory:NVMM)`) al pipeline de `GstNvencEncoder` en `back/services/nvenc_codec.py`
+- [x] Subir `profile` a `High` y `preset-level` a `Slow` (4) en `GstNvencEncoder`, paridad con `recording_worker` post-Phase 8
+- [x] Logging explícito en `init_nvenc` y al primer frame de cada peer connection: qué codec negoció realmente (H264 vs VP8) y qué backend usa el encoder
+- [x] Validar en Jetson + ZED 2i con `about:webrtc`: codec negociado = `H264`, `framesPerSecond ≥ 25` a 1920×1080, `packetsLost = 0` — medido 25 fps tras agregar `maxperf-enable=true` al encoder
+- [x] Quitar de `camera_worker/README.md` y `recording_worker/README.md` la recomendación de override 720p en `.env.robot`; el default 1080p deja de degradar el live
+- [x] Marcar Phase 9 como `(Complete)` (todas las cajas) una vez confirmado que el live sostiene 1080p
 
 ---
 
