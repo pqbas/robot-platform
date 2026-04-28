@@ -5,7 +5,7 @@
 - El operador puede ver el stream en vivo desde el robot en cualquier navegador via WebRTC
 - El sistema detecta objetos con YOLO en tiempo real y dibuja bounding boxes sobre el video
 - El operador puede iniciar y detener sesiones de conteo por cruce de línea
-- El operador puede grabar sesiones en MP4 con calidad HD nítida (NVENC en Jetson, libx264 en laptop dev)
+- El operador puede grabar sesiones en MP4 a 1080p o 720p (NVENC en Jetson, libx264 en laptop dev) con bitrate auto-escalado por altura del frame
 - Los resultados de cada sesión quedan guardados y asociados a un camellón
 - El admin puede subir, activar, editar y eliminar modelos de detección desde el servidor
 - El AI engineer puede reemplazar el archivo `.pt` de un modelo sin eliminarlo y volverlo a subir
@@ -114,18 +114,31 @@
 
 ---
 
-## Phase 9: Resolución mayor en grabación
+## Phase 9: Resolución mayor en grabación (Shipped con caveat)
 
 **Goal:** el operador puede revisar grabaciones con más detalle del que cabe en 720p, aprovechando lo que el sensor de la cámara realmente captura.
 
-- [ ] El video grabado supera la resolución actual (1280x720) sin degradar fluidez ni saturar disco
-- [ ] Detalles finos (textura de hojas, bordes de fruta, letras pequeñas) se ven en la revisión posterior con claridad mayor que en 720p
-- [ ] La transmisión en vivo no sufre regresión perceptible de FPS o latencia mientras se graba a la nueva resolución
-- [ ] Documentado en `recording_worker/README.md` el techo de resolución viable con el hardware actual y el por qué del trade-off elegido (un ojo / estéreo, live downscale o no)
+- [x] El video grabado supera la resolución actual (1280x720) sin saturar disco — default 1920×1080 nativo del estéreo SBS de la ZED 2i, bitrate auto-escalado (12 Mbps NVENC ≥1080p, 8 Mbps a 720p)
+- [x] Detalles finos (textura de hojas, bordes de fruta, letras pequeñas) se ven en la revisión posterior con claridad mayor que en 720p
+- [ ] La transmisión en vivo no sufre regresión perceptible de FPS o latencia mientras se graba a la nueva resolución — **regresión confirmada**: el encoder VP8 software de `aiortc` no sostiene 30 fps a 1080p (medido 14 fps en `about:webrtc`). Workaround: dejar `CAMERA_WIDTH=2560 CAMERA_HEIGHT=720 CAMERA_CROP=1280` en `.env.robot` hasta que aterrice una phase de per-client downscale o se reemplace el encoder WebRTC.
+- [x] Documentado en `recording_worker/README.md` y `camera_worker/README.md` los dos modos (1080p default, 720p alternativo) y el trade-off del live encoder VP8
 
 ---
 
-## Phase 10: Nuevo método de conteo
+## Phase 10: WebRTC live a H.264 NVENC sin caveat
+
+**Goal:** eliminar el caveat de Phase 9 — el live WebRTC sostiene 1080p @ 30fps en Jetson sin obligar al operador a volver a 720p. Portar al path WebRTC la fix NVMM y los presets de calidad ya validados en el `recording_worker`. La infraestructura para H.264 NVENC en aiortc ya existe (`back/services/nvenc_codec.py`, `nvenc_init.py`); falta paridad con la fix del recording-worker (PR #40) y con el tuning de Phase 8.
+
+- [ ] Agregar bridge NVMM (`nvvidconv ! video/x-raw(memory:NVMM)`) al pipeline de `GstNvencEncoder` en `back/services/nvenc_codec.py` — `nvv4l2h264enc` necesita buffers NVMM, sin esto cae a un path software
+- [ ] Subir `profile` a `High` y `preset-level` a `Slow` (4) en `GstNvencEncoder`, paridad con `recording_worker` post-Phase 8
+- [ ] Logging explícito en `init_nvenc` y al primer frame de cada peer connection: qué codec negoció realmente (H264 vs VP8) y qué backend usa el encoder
+- [ ] Validar en Jetson + ZED 2i con `about:webrtc` (Firefox) y `chrome://webrtc-internals/`: codec negociado = `H264`, `framesPerSecond ≥ 25` a 1920×1080, `packetsLost = 0`
+- [ ] Quitar de `camera_worker/README.md` y `recording_worker/README.md` la recomendación de override 720p en `.env.robot`; el default 1080p deja de degradar el live
+- [ ] Marcar Phase 9 como `(Complete)` (todas las cajas) una vez confirmado que el live sostiene 1080p
+
+---
+
+## Phase 11: Nuevo método de conteo
 
 **Goal:** el conteo es más robusto y no depende exclusivamente del tracker de YOLO.
 
@@ -135,7 +148,7 @@
 
 ---
 
-## Phase 11: Deploy servidor + validación end-to-end
+## Phase 12: Deploy servidor + validación end-to-end
 
 **Goal:** el flujo completo robot → servidor funciona en producción y el operador siempre sabe qué modelo está activo.
 
@@ -145,7 +158,7 @@
 
 ---
 
-## Phase 12: Integración de otros objetos
+## Phase 13: Integración de otros objetos
 
 **Goal:** el sistema soporta distintos tipos de fruta u objeto sin cambios de código.
 
