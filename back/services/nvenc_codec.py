@@ -312,8 +312,25 @@ if HAS_GSTREAMER:
 
             t_after_push = time.perf_counter()
 
-            sample = self._sink.try_pull_sample(Gst.SECOND)
+            # 1-frame pipelining: don't synchronously wait for THIS frame's
+            # encoded output. Instead, drain whatever the pipeline has ready
+            # right now (which is the previous frame after warmup). The GST
+            # pipeline keeps processing in its own threads while aiortc does
+            # RTP packetization, UDP send, and reads the next camera frame —
+            # those previously serialized 22ms after each pull, idling the
+            # pipeline. Adds ~33ms of latency (one frame), worth it for the
+            # ~2x throughput. On the very first call the pipeline is empty,
+            # so we yield nothing and aiortc moves on; second call onward we
+            # have one frame queued.
+            sample = self._sink.try_pull_sample(50 * Gst.MSECOND)
             if sample is None:
+                t_after_pull = time.perf_counter()
+                # Still log timings so the warmup is visible.
+                self._timing_count += 1
+                self._t_serialize += t_after_serialize - t0
+                self._t_push += t_after_push - t_after_serialize
+                self._t_pull += t_after_pull - t_after_push
+                self._t_total += t_after_pull - t0
                 return
 
             t_after_pull = time.perf_counter()
