@@ -178,20 +178,25 @@ if HAS_GSTREAMER:
             )
 
             if self._encoder_element == "nvv4l2h264enc":
-                # We push frames already in I420 (YUV420p) — converted by
-                # PyAV/libswscale with NEON optimizations on the encoder side
-                # (much faster than GStreamer's videoconvert at 1080p ARM).
-                # I420 is also half the size of BGR (1.5 vs 3 bpp) so the
-                # memcpy from Python into the GstBuffer is halved too.
-                # nvvidconv does the cheap I420 → NV12 NVMM lift on the HW VIC.
+                # Pipeline split intentionally:
+                #   videoconvert: BGR → BGRx (system memory). Only adds an
+                #     alpha byte; no color-matrix math. Cheap on CPU.
+                #   nvvidconv: BGRx (sysmem) → NV12 (NVMM) on the HW VIC.
+                #     The recording_worker uses 'BGR → NV12 → nvvidconv' but
+                #     that path runs the full color conversion on CPU and at
+                #     1080p caps the synchronous WebRTC encode at ~11 fps.
+                #     BGRx→NV12 stays in the HW VIC.
+                # nvvidconv on Jetson does not accept 'video/x-raw,format=BGR'
+                # in system memory reliably (returns black frames); BGRx is
+                # the cheapest input format it does accept.
                 # do-timestamp stays false because aiortc sets pts/time_base
                 # on the av.VideoFrame upstream (CameraStreamTrack.recv);
                 # letting GStreamer overwrite them breaks RTP sync.
                 pipeline_str = (
-                    "appsrc name=src is-live=true format=time do-timestamp=false "
-                    f"caps=video/x-raw,format=I420,width={width},height={height},"
-                    "framerate=30/1 "
+                    f"{appsrc_caps} "
                     "! queue "
+                    "! videoconvert "
+                    "! video/x-raw,format=BGRx "
                     "! nvvidconv "
                     "! video/x-raw(memory:NVMM),format=NV12 "
                     f"! nvv4l2h264enc bitrate={self.target_bitrate} "
@@ -287,11 +292,11 @@ if HAS_GSTREAMER:
 
             t0 = time.perf_counter()
 
-            # BGR → I420 in PyAV (libswscale with NEON), then zero-copy hand-off.
-            # I420 is 1.5 bpp at 1080p (~3 MB) vs BGR's 3 bpp (~6 MB), so the
-            # subsequent tobytes() memcpy is halved. The pipeline (NV12 NVMM)
-            # consumes I420 via nvvidconv on the HW VIC — no CPU videoconvert.
-            raw = frame.to_ndarray(format="yuv420p").tobytes()
+            # Zero-copy hand-off: tobytes() creates one contiguous bytes
+            # object; Gst.Buffer.new_wrapped takes ownership without a second
+            # memcpy. Saves ~6 MB/frame at 1080p vs new_allocate + fill
+            # (~10-15 ms/frame on Jetson ARM).
+            raw = frame.to_ndarray(format="bgr24").tobytes()
             buf = Gst.Buffer.new_wrapped(raw)
             duration = Gst.SECOND // 30
             buf.pts = self._frame_count * duration
