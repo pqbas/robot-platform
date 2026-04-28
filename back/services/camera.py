@@ -150,8 +150,11 @@ class CameraStreamTrack(VideoStreamTrack):
             self._first_frame = False
             self._worker.start()
 
-        # Submit frame to inference worker (non-blocking)
-        self._worker.submit_frame(frame.copy())
+        # Skip the frame copy + inference dispatch when no counting session
+        # is active. submit_frame would copy ~6 MB at 1080p — wasted CPU + ~5
+        # ms of dead time per frame when nobody is counting.
+        if processing_enabled and counter.get_active_session() is not None:
+            self._worker.submit_frame(frame.copy())
 
         # Send latest detection result over data channel
         result = self._worker.consume_result()

@@ -64,7 +64,21 @@ fi
 # --- 4. Python dependencies ---
 info "Installing Python dependencies (backend)..."
 cd "$INSTALL_DIR"
-uv sync
+if [[ "$MODE" == "robot" && "$(uname -m)" == "aarch64" ]]; then
+    # Jetson: install with the [gstreamer] extra so PyGObject is built
+    # against system gobject-introspection. The back process drives the
+    # nvv4l2h264enc encoder via aiortc monkey-patch (back/services/nvenc_codec.py)
+    # for the WebRTC live path. Same build deps the recording_worker block
+    # below already installs (idempotent apt step).
+    info "Installing build deps for PyGObject/pycairo (backend)..."
+    sudo apt-get install -y -qq \
+        libcairo2-dev libgirepository1.0-dev gobject-introspection \
+        pkg-config python3-dev
+    info "Jetson detected (aarch64): installing backend with --extra gstreamer"
+    uv sync --extra gstreamer
+else
+    uv sync
+fi
 
 if [[ "$MODE" == "robot" ]]; then
     info "Installing Python dependencies (inference worker)..."

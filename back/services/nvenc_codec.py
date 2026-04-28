@@ -2,6 +2,7 @@
 
 import fractions
 import logging
+import time
 from typing import Iterator, Optional
 
 import av
@@ -74,10 +75,20 @@ class PyAvNvencEncoder(H264Encoder):
     def __init__(self) -> None:
         super().__init__()
         self.codec: Optional[VideoCodecContext] = None
+        self._first_log = False
 
     def _encode_frame(
         self, frame: av.VideoFrame, force_keyframe: bool
     ) -> Iterator[bytes]:
+        if not self._first_log:
+            logger.info(
+                "WebRTC H264 encoder live: h264_nvenc @ %dx%d %d kbps",
+                frame.width,
+                frame.height,
+                self.target_bitrate // 1000,
+            )
+            self._first_log = True
+
         if self.codec and (
             frame.width != self.codec.width
             or frame.height != self.codec.height
@@ -140,6 +151,17 @@ if HAS_GSTREAMER:
             self._frame_count = 0
             self._applied_bitrate = 0
             self._encoder_element = _detect_gst_encoder()
+            self._first_log = False
+            # Periodic per-step timing accumulators. Logged every TIMING_WINDOW
+            # frames so we can pinpoint which step is the bottleneck without
+            # spamming logs on every frame. Reset after each emit.
+            self._timing_window = 60
+            self._timing_count = 0
+            self._t_serialize = 0.0
+            self._t_push = 0.0
+            self._t_pull = 0.0
+            self._t_total = 0.0
+            self._t_window_start = time.perf_counter()
             logger.info("GStreamer H.264 encoder element: %s", self._encoder_element)
 
         def _build_pipeline(self, width: int, height: int) -> None:
@@ -149,38 +171,80 @@ if HAS_GSTREAMER:
             bitrate_kbps = self.target_bitrate // 1000
             self._applied_bitrate = self.target_bitrate
 
-            if self._encoder_element == "nvv4l2h264enc":
-                enc = (
-                    f"nvv4l2h264enc bitrate={self.target_bitrate} "
-                    "preset-level=1 profile=0 control-rate=1 "
-                    "iframeinterval=60"
-                )
-            elif self._encoder_element == "nvh264enc":
-                enc = (
-                    f"nvh264enc bitrate={bitrate_kbps} "
-                    "preset=low-latency-hq rc-mode=cbr "
-                    "zerolatency=true"
-                )
-            else:
-                enc = (
-                    f"x264enc bitrate={bitrate_kbps} "
-                    "tune=zerolatency speed-preset=ultrafast "
-                    "key-int-max=60"
-                )
-
-            pipeline_str = (
+            appsrc_caps = (
                 "appsrc name=src is-live=true format=time do-timestamp=false "
                 f"caps=video/x-raw,format=BGR,width={width},height={height},"
-                "framerate=30/1 "
-                f"! videoconvert ! {enc} "
-                "! video/x-h264,stream-format=byte-stream,alignment=au "
-                "! appsink name=sink emit-signals=false sync=false"
+                "framerate=30/1"
             )
+
+            if self._encoder_element == "nvv4l2h264enc":
+                # Pipeline split intentionally:
+                #   videoconvert: BGR → BGRx (system memory). Only adds an
+                #     alpha byte; no color-matrix math. Cheap on CPU.
+                #   nvvidconv: BGRx (sysmem) → NV12 (NVMM) on the HW VIC.
+                #     The recording_worker uses 'BGR → NV12 → nvvidconv' but
+                #     that path runs the full color conversion on CPU and at
+                #     1080p caps the synchronous WebRTC encode at ~11 fps.
+                #     BGRx→NV12 stays in the HW VIC.
+                # nvvidconv on Jetson does not accept 'video/x-raw,format=BGR'
+                # in system memory reliably (returns black frames); BGRx is
+                # the cheapest input format it does accept.
+                # do-timestamp stays false because aiortc sets pts/time_base
+                # on the av.VideoFrame upstream (CameraStreamTrack.recv);
+                # letting GStreamer overwrite them breaks RTP sync.
+                pipeline_str = (
+                    f"{appsrc_caps} "
+                    "! queue "
+                    "! videoconvert "
+                    "! video/x-raw,format=BGRx "
+                    "! nvvidconv "
+                    "! video/x-raw(memory:NVMM),format=NV12 "
+                    f"! nvv4l2h264enc bitrate={self.target_bitrate} "
+                    "preset-level=4 profile=4 control-rate=1 "
+                    "iframeinterval=60 maxperf-enable=true "
+                    "! video/x-h264,stream-format=byte-stream,alignment=au "
+                    "! appsink name=sink emit-signals=false sync=false"
+                )
+            elif self._encoder_element == "nvh264enc":
+                pipeline_str = (
+                    f"{appsrc_caps} "
+                    "! videoconvert "
+                    f"! nvh264enc bitrate={bitrate_kbps} "
+                    "preset=low-latency-hq rc-mode=cbr "
+                    "zerolatency=true "
+                    "! video/x-h264,stream-format=byte-stream,alignment=au "
+                    "! appsink name=sink emit-signals=false sync=false"
+                )
+            else:
+                pipeline_str = (
+                    f"{appsrc_caps} "
+                    "! videoconvert "
+                    f"! x264enc bitrate={bitrate_kbps} "
+                    "tune=zerolatency speed-preset=ultrafast "
+                    "key-int-max=60 "
+                    "! video/x-h264,stream-format=byte-stream,alignment=au "
+                    "! appsink name=sink emit-signals=false sync=false"
+                )
 
             self._pipeline = Gst.parse_launch(pipeline_str)
             self._src = self._pipeline.get_by_name("src")
             self._sink = self._pipeline.get_by_name("sink")
-            self._pipeline.set_state(Gst.State.PLAYING)
+            ret = self._pipeline.set_state(Gst.State.PLAYING)
+            if ret == Gst.StateChangeReturn.FAILURE:
+                self._pipeline.set_state(Gst.State.NULL)
+                self._pipeline = None
+                self._src = None
+                self._sink = None
+                logger.error(
+                    "GStreamer pipeline failed to enter PLAYING state "
+                    "(encoder=%s, %dx%d)",
+                    self._encoder_element,
+                    width,
+                    height,
+                )
+                raise RuntimeError(
+                    "GStreamer pipeline failed to enter PLAYING state"
+                )
             self._width = width
             self._height = height
             self._frame_count = 0
@@ -209,6 +273,16 @@ if HAS_GSTREAMER:
             if needs_rebuild:
                 self._build_pipeline(frame.width, frame.height)
 
+            if not self._first_log:
+                logger.info(
+                    "WebRTC H264 encoder live: %s @ %dx%d %d kbps",
+                    self._encoder_element,
+                    frame.width,
+                    frame.height,
+                    self.target_bitrate // 1000,
+                )
+                self._first_log = True
+
             if force_keyframe:
                 event = Gst.Event.new_custom(
                     Gst.EventType.CUSTOM_DOWNSTREAM,
@@ -216,24 +290,50 @@ if HAS_GSTREAMER:
                 )
                 self._src.send_event(event)
 
-            bgr = frame.reformat(format="bgr24")
-            raw = bgr.to_ndarray().tobytes()
+            t0 = time.perf_counter()
 
-            buf = Gst.Buffer.new_allocate(None, len(raw), None)
-            buf.fill(0, raw)
+            # Zero-copy hand-off: tobytes() creates one contiguous bytes
+            # object; Gst.Buffer.new_wrapped takes ownership without a second
+            # memcpy. Saves ~6 MB/frame at 1080p vs new_allocate + fill
+            # (~10-15 ms/frame on Jetson ARM).
+            raw = frame.to_ndarray(format="bgr24").tobytes()
+            buf = Gst.Buffer.new_wrapped(raw)
             duration = Gst.SECOND // 30
             buf.pts = self._frame_count * duration
             buf.duration = duration
             self._frame_count += 1
+
+            t_after_serialize = time.perf_counter()
 
             ret = self._src.emit("push-buffer", buf)
             if ret != Gst.FlowReturn.OK:
                 logger.warning("appsrc push-buffer returned %s", ret)
                 return
 
-            sample = self._sink.try_pull_sample(Gst.SECOND)
+            t_after_push = time.perf_counter()
+
+            # 1-frame pipelining: don't synchronously wait for THIS frame's
+            # encoded output. Instead, drain whatever the pipeline has ready
+            # right now (which is the previous frame after warmup). The GST
+            # pipeline keeps processing in its own threads while aiortc does
+            # RTP packetization, UDP send, and reads the next camera frame —
+            # those previously serialized 22ms after each pull, idling the
+            # pipeline. Adds ~33ms of latency (one frame), worth it for the
+            # ~2x throughput. On the very first call the pipeline is empty,
+            # so we yield nothing and aiortc moves on; second call onward we
+            # have one frame queued.
+            sample = self._sink.try_pull_sample(50 * Gst.MSECOND)
             if sample is None:
+                t_after_pull = time.perf_counter()
+                # Still log timings so the warmup is visible.
+                self._timing_count += 1
+                self._t_serialize += t_after_serialize - t0
+                self._t_push += t_after_push - t_after_serialize
+                self._t_pull += t_after_pull - t_after_push
+                self._t_total += t_after_pull - t0
                 return
+
+            t_after_pull = time.perf_counter()
 
             out_buf = sample.get_buffer()
             ok, info = out_buf.map(Gst.MapFlags.READ)
@@ -241,6 +341,33 @@ if HAS_GSTREAMER:
                 return
             encoded = bytes(info.data)
             out_buf.unmap(info)
+
+            # Accumulate per-step timing and emit a summary every N frames.
+            self._t_serialize += t_after_serialize - t0
+            self._t_push += t_after_push - t_after_serialize
+            self._t_pull += t_after_pull - t_after_push
+            self._t_total += t_after_pull - t0
+            self._timing_count += 1
+            if self._timing_count >= self._timing_window:
+                wall = time.perf_counter() - self._t_window_start
+                n = self._timing_count
+                logger.info(
+                    "encode timing (n=%d): serialize=%.1fms push=%.1fms "
+                    "pull=%.1fms total=%.1fms wall=%.1fms effective_fps=%.1f",
+                    n,
+                    1000 * self._t_serialize / n,
+                    1000 * self._t_push / n,
+                    1000 * self._t_pull / n,
+                    1000 * self._t_total / n,
+                    1000 * wall / n,
+                    n / wall if wall > 0 else 0.0,
+                )
+                self._timing_count = 0
+                self._t_serialize = 0.0
+                self._t_push = 0.0
+                self._t_pull = 0.0
+                self._t_total = 0.0
+                self._t_window_start = time.perf_counter()
 
             yield from self._split_bitstream(encoded)
 

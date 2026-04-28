@@ -43,3 +43,7 @@ def init_nvenc() -> None:
     ]
 
     logger.info("aiortc H264Encoder patched → %s (%s)", encoder_cls.__name__, backend)
+    logger.info(
+        "aiortc video codec preferences after patch: %s",
+        [c.mimeType for c in aiortc.codecs.CODECS["video"]],
+    )
