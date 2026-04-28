@@ -2,6 +2,7 @@
 
 import fractions
 import logging
+import time
 from typing import Iterator, Optional
 
 import av
@@ -151,6 +152,16 @@ if HAS_GSTREAMER:
             self._applied_bitrate = 0
             self._encoder_element = _detect_gst_encoder()
             self._first_log = False
+            # Periodic per-step timing accumulators. Logged every TIMING_WINDOW
+            # frames so we can pinpoint which step is the bottleneck without
+            # spamming logs on every frame. Reset after each emit.
+            self._timing_window = 60
+            self._timing_count = 0
+            self._t_serialize = 0.0
+            self._t_push = 0.0
+            self._t_pull = 0.0
+            self._t_total = 0.0
+            self._t_window_start = time.perf_counter()
             logger.info("GStreamer H.264 encoder element: %s", self._encoder_element)
 
         def _build_pipeline(self, width: int, height: int) -> None:
@@ -279,6 +290,8 @@ if HAS_GSTREAMER:
                 )
                 self._src.send_event(event)
 
+            t0 = time.perf_counter()
+
             # Zero-copy hand-off: tobytes() creates one contiguous bytes
             # object; Gst.Buffer.new_wrapped takes ownership without a second
             # memcpy. Saves ~6 MB/frame at 1080p vs new_allocate + fill
@@ -290,14 +303,20 @@ if HAS_GSTREAMER:
             buf.duration = duration
             self._frame_count += 1
 
+            t_after_serialize = time.perf_counter()
+
             ret = self._src.emit("push-buffer", buf)
             if ret != Gst.FlowReturn.OK:
                 logger.warning("appsrc push-buffer returned %s", ret)
                 return
 
+            t_after_push = time.perf_counter()
+
             sample = self._sink.try_pull_sample(Gst.SECOND)
             if sample is None:
                 return
+
+            t_after_pull = time.perf_counter()
 
             out_buf = sample.get_buffer()
             ok, info = out_buf.map(Gst.MapFlags.READ)
@@ -305,6 +324,33 @@ if HAS_GSTREAMER:
                 return
             encoded = bytes(info.data)
             out_buf.unmap(info)
+
+            # Accumulate per-step timing and emit a summary every N frames.
+            self._t_serialize += t_after_serialize - t0
+            self._t_push += t_after_push - t_after_serialize
+            self._t_pull += t_after_pull - t_after_push
+            self._t_total += t_after_pull - t0
+            self._timing_count += 1
+            if self._timing_count >= self._timing_window:
+                wall = time.perf_counter() - self._t_window_start
+                n = self._timing_count
+                logger.info(
+                    "encode timing (n=%d): serialize=%.1fms push=%.1fms "
+                    "pull=%.1fms total=%.1fms wall=%.1fms effective_fps=%.1f",
+                    n,
+                    1000 * self._t_serialize / n,
+                    1000 * self._t_push / n,
+                    1000 * self._t_pull / n,
+                    1000 * self._t_total / n,
+                    1000 * wall / n,
+                    n / wall if wall > 0 else 0.0,
+                )
+                self._timing_count = 0
+                self._t_serialize = 0.0
+                self._t_push = 0.0
+                self._t_pull = 0.0
+                self._t_total = 0.0
+                self._t_window_start = time.perf_counter()
 
             yield from self._split_bitstream(encoded)
 
