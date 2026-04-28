@@ -74,10 +74,20 @@ class PyAvNvencEncoder(H264Encoder):
     def __init__(self) -> None:
         super().__init__()
         self.codec: Optional[VideoCodecContext] = None
+        self._first_log = False
 
     def _encode_frame(
         self, frame: av.VideoFrame, force_keyframe: bool
     ) -> Iterator[bytes]:
+        if not self._first_log:
+            logger.info(
+                "WebRTC H264 encoder live: h264_nvenc @ %dx%d %d kbps",
+                frame.width,
+                frame.height,
+                self.target_bitrate // 1000,
+            )
+            self._first_log = True
+
         if self.codec and (
             frame.width != self.codec.width
             or frame.height != self.codec.height
@@ -140,6 +150,7 @@ if HAS_GSTREAMER:
             self._frame_count = 0
             self._applied_bitrate = 0
             self._encoder_element = _detect_gst_encoder()
+            self._first_log = False
             logger.info("GStreamer H.264 encoder element: %s", self._encoder_element)
 
         def _build_pipeline(self, width: int, height: int) -> None:
@@ -149,38 +160,73 @@ if HAS_GSTREAMER:
             bitrate_kbps = self.target_bitrate // 1000
             self._applied_bitrate = self.target_bitrate
 
-            if self._encoder_element == "nvv4l2h264enc":
-                enc = (
-                    f"nvv4l2h264enc bitrate={self.target_bitrate} "
-                    "preset-level=1 profile=0 control-rate=1 "
-                    "iframeinterval=60"
-                )
-            elif self._encoder_element == "nvh264enc":
-                enc = (
-                    f"nvh264enc bitrate={bitrate_kbps} "
-                    "preset=low-latency-hq rc-mode=cbr "
-                    "zerolatency=true"
-                )
-            else:
-                enc = (
-                    f"x264enc bitrate={bitrate_kbps} "
-                    "tune=zerolatency speed-preset=ultrafast "
-                    "key-int-max=60"
-                )
-
-            pipeline_str = (
+            appsrc_caps = (
                 "appsrc name=src is-live=true format=time do-timestamp=false "
                 f"caps=video/x-raw,format=BGR,width={width},height={height},"
-                "framerate=30/1 "
-                f"! videoconvert ! {enc} "
-                "! video/x-h264,stream-format=byte-stream,alignment=au "
-                "! appsink name=sink emit-signals=false sync=false"
+                "framerate=30/1"
             )
+
+            if self._encoder_element == "nvv4l2h264enc":
+                # Mirrors recording_worker/.../encoder.py post-PR #40.
+                # nvv4l2h264enc only accepts NVMM-tagged buffers; the bridge
+                # converts NV12 system-memory → NV12 NVMM. Without it the
+                # encoder silently drops frames and the live stalls.
+                # do-timestamp stays false because aiortc sets pts/time_base
+                # on the av.VideoFrame upstream (CameraStreamTrack.recv);
+                # letting GStreamer overwrite them breaks RTP sync.
+                pipeline_str = (
+                    f"{appsrc_caps} "
+                    "! queue "
+                    "! videoconvert "
+                    "! video/x-raw,format=NV12 "
+                    "! nvvidconv "
+                    "! video/x-raw(memory:NVMM),format=NV12 "
+                    f"! nvv4l2h264enc bitrate={self.target_bitrate} "
+                    "preset-level=4 profile=4 control-rate=1 "
+                    "iframeinterval=60 "
+                    "! video/x-h264,stream-format=byte-stream,alignment=au "
+                    "! appsink name=sink emit-signals=false sync=false"
+                )
+            elif self._encoder_element == "nvh264enc":
+                pipeline_str = (
+                    f"{appsrc_caps} "
+                    "! videoconvert "
+                    f"! nvh264enc bitrate={bitrate_kbps} "
+                    "preset=low-latency-hq rc-mode=cbr "
+                    "zerolatency=true "
+                    "! video/x-h264,stream-format=byte-stream,alignment=au "
+                    "! appsink name=sink emit-signals=false sync=false"
+                )
+            else:
+                pipeline_str = (
+                    f"{appsrc_caps} "
+                    "! videoconvert "
+                    f"! x264enc bitrate={bitrate_kbps} "
+                    "tune=zerolatency speed-preset=ultrafast "
+                    "key-int-max=60 "
+                    "! video/x-h264,stream-format=byte-stream,alignment=au "
+                    "! appsink name=sink emit-signals=false sync=false"
+                )
 
             self._pipeline = Gst.parse_launch(pipeline_str)
             self._src = self._pipeline.get_by_name("src")
             self._sink = self._pipeline.get_by_name("sink")
-            self._pipeline.set_state(Gst.State.PLAYING)
+            ret = self._pipeline.set_state(Gst.State.PLAYING)
+            if ret == Gst.StateChangeReturn.FAILURE:
+                self._pipeline.set_state(Gst.State.NULL)
+                self._pipeline = None
+                self._src = None
+                self._sink = None
+                logger.error(
+                    "GStreamer pipeline failed to enter PLAYING state "
+                    "(encoder=%s, %dx%d)",
+                    self._encoder_element,
+                    width,
+                    height,
+                )
+                raise RuntimeError(
+                    "GStreamer pipeline failed to enter PLAYING state"
+                )
             self._width = width
             self._height = height
             self._frame_count = 0
@@ -208,6 +254,16 @@ if HAS_GSTREAMER:
             )
             if needs_rebuild:
                 self._build_pipeline(frame.width, frame.height)
+
+            if not self._first_log:
+                logger.info(
+                    "WebRTC H264 encoder live: %s @ %dx%d %d kbps",
+                    self._encoder_element,
+                    frame.width,
+                    frame.height,
+                    self.target_bitrate // 1000,
+                )
+                self._first_log = True
 
             if force_keyframe:
                 event = Gst.Event.new_custom(
