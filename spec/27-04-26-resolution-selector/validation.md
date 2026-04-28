@@ -48,6 +48,10 @@ Edge cases:
 - [ ] En Jetson real: `journalctl -u camera-worker | grep "Camera opened"` muestra el preset correcto al primer boot post-deploy.
 - [ ] El primer operador del día que entra a `/vision` ve el selector y puede usar el robot sin abrir terminal.
 
+## Known Caveat
+
+Después de un cambio de preset y reconexión, el primer (a veces el segundo) live a 1080p puede negociar a ~16 fps en vez de 25. `sudo systemctl restart robot-platform` lo deja a 25 fps de nuevo. La hipótesis es cleanup tardío del `GstNvencEncoder` en `back/services/nvenc_codec.py` cuando aiortc destruye la peer connection — no es regresión de Phase 11 (se reproduce con disconnect/reconnect a secas), pero el flujo del selector lo hace visible. Tracker para una próxima fase: instrumentar el ciclo de vida del pipeline GST y forzar `set_state(NULL)` al cierre de la track en vez de depender de `__del__`.
+
 ## Rollback Criteria
 
 Si después del deploy el camera-worker no arranca (loop de restart en systemd) o el live no negocia con el frontend, revertir el merge: el comportamiento previo (env vars en `.env.robot` + `make restart`) sigue funcionando porque el preset cargado del JSON sólo sobrescribe los env vars cuando el JSON existe.
