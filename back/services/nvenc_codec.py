@@ -201,7 +201,7 @@ if HAS_GSTREAMER:
                     "! video/x-raw(memory:NVMM),format=NV12 "
                     f"! nvv4l2h264enc bitrate={self.target_bitrate} "
                     "preset-level=4 profile=4 control-rate=1 "
-                    "iframeinterval=60 "
+                    "iframeinterval=60 maxperf-enable=true "
                     "! video/x-h264,stream-format=byte-stream,alignment=au "
                     "! appsink name=sink emit-signals=false sync=false"
                 )
