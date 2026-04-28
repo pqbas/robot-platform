@@ -16,9 +16,12 @@ export function useWebRTC() {
   const [fps, setFps] = useState<FpsStats>({ streamFps: 0, inferenceFps: 0 })
 
   // FPS counters (refs to avoid re-renders on every frame)
-  const streamFrameCount = useRef(0)
   const inferenceFrameCount = useRef(0)
   const fpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Stream FPS comes from RTCPeerConnection.getStats() — framesDecoded delta
+  // over real elapsed time, matching what about:webrtc reports. Counting
+  // requestVideoFrameCallback fires double-counts repaints.
+  const lastStreamSample = useRef<{ framesDecoded: number; timestamp: number } | null>(null)
 
   const connect = useCallback(async () => {
     setConnectionState("connecting")
@@ -46,16 +49,6 @@ export function useWebRTC() {
       if (videoRef.current) {
         videoRef.current.srcObject = event.streams[0]
         videoRef.current.play().catch((e) => console.error("Play error:", e))
-
-        // Count stream frames via requestVideoFrameCallback
-        const video = videoRef.current
-        if ("requestVideoFrameCallback" in video) {
-          const countFrame = () => {
-            streamFrameCount.current++
-            video.requestVideoFrameCallback(countFrame)
-          }
-          video.requestVideoFrameCallback(countFrame)
-        }
       }
     }
 
@@ -78,13 +71,36 @@ export function useWebRTC() {
       }
     }
 
-    // Update FPS display every second
-    fpsIntervalRef.current = setInterval(() => {
+    // Update FPS display every second.
+    // Stream FPS: read framesDecoded from inbound-rtp video stats and divide
+    // by real elapsed time. This matches about:webrtc's `framesPerSecond`.
+    // Inference FPS: count of data channel messages received in the last second.
+    fpsIntervalRef.current = setInterval(async () => {
+      let streamFps = 0
+      try {
+        const stats = await pc.getStats()
+        stats.forEach((report) => {
+          if (report.type === "inbound-rtp" && report.kind === "video") {
+            const framesDecoded = report.framesDecoded ?? 0
+            const timestamp = report.timestamp
+            const last = lastStreamSample.current
+            if (last && timestamp > last.timestamp) {
+              const dtSec = (timestamp - last.timestamp) / 1000
+              if (dtSec > 0) {
+                streamFps = Math.round((framesDecoded - last.framesDecoded) / dtSec)
+              }
+            }
+            lastStreamSample.current = { framesDecoded, timestamp }
+          }
+        })
+      } catch (e) {
+        console.debug("[WebRTC] getStats failed", e)
+      }
+
       setFps({
-        streamFps: streamFrameCount.current,
+        streamFps,
         inferenceFps: inferenceFrameCount.current,
       })
-      streamFrameCount.current = 0
       inferenceFrameCount.current = 0
     }, 1000)
 
@@ -123,6 +139,7 @@ export function useWebRTC() {
     }
     setFrameData(null)
     setFps({ streamFps: 0, inferenceFps: 0 })
+    lastStreamSample.current = null
     setConnectionState("disconnected")
   }, [])
 
