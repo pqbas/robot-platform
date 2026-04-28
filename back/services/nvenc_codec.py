@@ -167,18 +167,18 @@ if HAS_GSTREAMER:
             )
 
             if self._encoder_element == "nvv4l2h264enc":
-                # Mirrors recording_worker/.../encoder.py post-PR #40.
-                # nvv4l2h264enc only accepts NVMM-tagged buffers; the bridge
-                # converts NV12 system-memory → NV12 NVMM. Without it the
-                # encoder silently drops frames and the live stalls.
+                # nvvidconv on Jetson accepts BGR system-memory directly and
+                # emits NV12 NVMM via the HW VIC, in one step. The previous
+                # "videoconvert ! NV12 ! nvvidconv" form (mirroring the
+                # recording_worker post-PR #40) ran BGR→NV12 on CPU and
+                # capped the synchronous WebRTC encode loop at ~11 fps at
+                # 1080p. Skipping videoconvert offloads everything to HW.
                 # do-timestamp stays false because aiortc sets pts/time_base
                 # on the av.VideoFrame upstream (CameraStreamTrack.recv);
                 # letting GStreamer overwrite them breaks RTP sync.
                 pipeline_str = (
                     f"{appsrc_caps} "
                     "! queue "
-                    "! videoconvert "
-                    "! video/x-raw,format=NV12 "
                     "! nvvidconv "
                     "! video/x-raw(memory:NVMM),format=NV12 "
                     f"! nvv4l2h264enc bitrate={self.target_bitrate} "
