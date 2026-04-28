@@ -24,7 +24,8 @@
 - Protocolo: handshake JSON (width, height, channels, fps) + stream de frames length-prefixed
 - **Fan-out**: el worker abre la cámara una sola vez y reparte cada frame a todos los clientes conectados (backend WebRTC + recording-worker simultáneos). Cola por cliente con drop-oldest si se atrasa.
 - Default: captura ZED 2i estéreo SBS a 3840×1080@30 YUYV, crop al ojo izquierdo → frame de salida 1920×1080 BGR. Live WebRTC y recording sostienen 1080p@30 (NVENC en Jetson).
-- Troubleshooting: si la red entre Jetson y operador es débil, bajar a 720p con `CAMERA_WIDTH=2560 CAMERA_HEIGHT=720 CAMERA_CROP=1280` en `.env.robot` y `make restart`.
+- Resolución activa: `data/robot/camera_settings.json` (`{"preset": "1080p" | "720p"}`). El operador la cambia desde el frontend (Vision); el backend pinguea `/tmp/camera-control.sock` (`{"cmd":"reload"}`) y el worker reabre V4L2. Si el JSON falta o es inválido, fallback a 1080p.
+- Troubleshooting: si la red entre Jetson y operador es débil, cambiar a 720p desde el selector en /vision (no requiere SSH al robot).
 - Iniciar worker: `make run-camera` o `cd camera_worker && uv run camera-worker`
 
 ## Recording Worker
