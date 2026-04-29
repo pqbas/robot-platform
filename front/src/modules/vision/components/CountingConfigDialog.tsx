@@ -22,6 +22,7 @@ import {
 import {
   type CameraConfig,
   type CameraDevice,
+  type CameraPreset,
   type CountingConfig,
   getCameraConfig,
   getCountingConfig,
@@ -29,6 +30,11 @@ import {
   updateCameraConfig,
   updateCountingConfig,
 } from "@/api/config"
+import {
+  getAvailableLabels,
+  selectLabel,
+  type AvailableLabelItem,
+} from "@/api/vision"
 
 const directionsByMode: Record<string, { value: string; label: string }[]> = {
   vertical: [
@@ -44,19 +50,36 @@ const directionsByMode: Record<string, { value: string; label: string }[]> = {
 type CountingConfigDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  selectedClass: string
+  onObjectChanged: (label: string) => void
+  resolutionPreset: CameraPreset | null
+  onResolutionChange: (preset: CameraPreset) => Promise<unknown>
+  resolutionLocked: boolean
 }
 
 export default function CountingConfigDialog({
   open,
   onOpenChange,
+  selectedClass,
+  onObjectChanged,
+  resolutionPreset,
+  onResolutionChange,
+  resolutionLocked,
 }: CountingConfigDialogProps) {
   const [config, setConfig] = useState<CountingConfig | null>(null)
   const [cameras, setCameras] = useState<CameraDevice[]>([])
   const [cameraConfig, setCameraConfig] = useState<CameraConfig | null>(null)
+  const [labels, setLabels] = useState<AvailableLabelItem[]>([])
+  const [draftLabel, setDraftLabel] = useState<string>(selectedClass)
+  const [draftResolution, setDraftResolution] = useState<CameraPreset | null>(
+    resolutionPreset,
+  )
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (open) {
+      setDraftLabel(selectedClass)
+      setDraftResolution(resolutionPreset)
       getCountingConfig()
         .then(setConfig)
         .catch(() => toast.error("Error al cargar configuracion"))
@@ -66,8 +89,11 @@ export default function CountingConfigDialog({
       getCameraConfig()
         .then(setCameraConfig)
         .catch(() => {})
+      getAvailableLabels()
+        .then(setLabels)
+        .catch(() => {})
     }
-  }, [open])
+  }, [open, selectedClass, resolutionPreset])
 
   function handleModeChange(mode: string) {
     if (!config) return
@@ -83,6 +109,16 @@ export default function CountingConfigDialog({
       setConfig(updated)
       if (cameraConfig) {
         await updateCameraConfig(cameraConfig)
+      }
+      if (draftLabel && draftLabel !== selectedClass) {
+        const item = labels.find((l) => l.label === draftLabel)
+        if (item) {
+          await selectLabel(item.label, item.model_filename)
+          onObjectChanged(item.label)
+        }
+      }
+      if (draftResolution && draftResolution !== resolutionPreset) {
+        await onResolutionChange(draftResolution)
       }
       toast.success("Configuracion guardada")
       onOpenChange(false)
@@ -110,6 +146,57 @@ export default function CountingConfigDialog({
 
         {config && (
           <div className="space-y-4">
+            {labels.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="object-select">Objeto a detectar</Label>
+                <Select
+                  value={draftLabel}
+                  onValueChange={setDraftLabel}
+                >
+                  <SelectTrigger id="object-select" className="w-full capitalize">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {labels.map((l) => (
+                      <SelectItem
+                        key={`${l.model_filename}-${l.label}`}
+                        value={l.label}
+                        className="capitalize"
+                      >
+                        {l.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {resolutionPreset && (
+              <div className="space-y-2">
+                <Label htmlFor="resolution-select">Resolución de captura</Label>
+                <Select
+                  value={draftResolution ?? resolutionPreset}
+                  onValueChange={(v) => setDraftResolution(v as CameraPreset)}
+                  disabled={resolutionLocked}
+                >
+                  <SelectTrigger id="resolution-select" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1080p">1080p</SelectItem>
+                    <SelectItem value="720p">720p</SelectItem>
+                  </SelectContent>
+                </Select>
+                {resolutionLocked && (
+                  <p className="text-muted-foreground text-xs">
+                    Desconecta la cámara y detén conteo/grabación para cambiar la resolución
+                  </p>
+                )}
+              </div>
+            )}
+
+            {(labels.length > 0 || resolutionPreset) && <Separator />}
+
             {cameras.length > 0 && cameraConfig && (
               <>
                 <div className="space-y-2">

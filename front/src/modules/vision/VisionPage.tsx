@@ -1,18 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useBlocker } from "react-router-dom"
 import { toast } from "sonner"
-import { Circle, MapPin, Settings, Square } from "lucide-react"
+import { Circle, MapPin, Monitor, ScanEye, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import type { Camellon } from "@/types"
-import type { CameraPreset } from "@/api/config"
 import { getCamellones } from "@/api/camellones"
 import { useWebRTC } from "@/hooks/useWebRTC"
 import { useCounting } from "@/hooks/useCounting"
@@ -21,10 +13,16 @@ import { useRecording } from "@/hooks/useRecording"
 import { useCameraResolution } from "@/hooks/useCameraResolution"
 import { useAppMode } from "@/context/AppModeContext"
 import VideoStream from "./components/VideoStream"
-import ObjectPicker from "./components/ObjectPicker"
 import CountOverlay from "./components/CountOverlay"
-import CountingConfigDialog from "./components/CountingConfigDialog"
 import SaveDialog from "./components/SaveDialog"
+import {
+  getAvailableLabels,
+  selectLabel,
+  type AvailableLabelItem,
+} from "@/api/vision"
+import { apiFetch } from "@/api/client"
+
+const SELECTED_LABEL_KEY = "vision.selectedLabel"
 
 function formatDuration(start: Date | null): string {
   if (!start) return "0s"
@@ -35,19 +33,19 @@ function formatDuration(start: Date | null): string {
 }
 
 export default function VisionPage() {
-  const { videoRef, connectionState, frameData, fps, connect, disconnect } =
-    useWebRTC()
+  const { videoRef, connectionState, frameData, fps, connect } = useWebRTC()
   const counting = useCounting()
   const recording = useRecording()
   const { mode } = useAppMode()
   const { context: deviceContext } = useDeviceContext(mode === "robot")
   const resolution = useCameraResolution(mode === "robot")
 
-  const [step, setStep] = useState<"pick" | "operate">("pick")
   const [selectedClass, setSelectedClass] = useState("")
+  const [labels, setLabels] = useState<AvailableLabelItem[]>([])
+  const [labelsLoading, setLabelsLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
   const [durationStr, setDurationStr] = useState("0s")
   const [camellones, setCamellones] = useState<Camellon[]>([])
-  const [configOpen, setConfigOpen] = useState(false)
 
   const loadCamellones = () => {
     getCamellones().then(setCamellones).catch(console.error)
@@ -56,6 +54,56 @@ export default function VisionPage() {
   useEffect(() => {
     loadCamellones()
   }, [])
+
+  // Fetch labels, restore last selection from localStorage
+  useEffect(() => {
+    let cancelled = false
+    getAvailableLabels()
+      .then((items) => {
+        if (cancelled) return
+        setLabels(items)
+        setLabelsLoading(false)
+        if (items.length === 0) return
+        const stored = localStorage.getItem(SELECTED_LABEL_KEY) ?? ""
+        const initial = items.find((i) => i.label === stored) ?? items[0]
+        setSelectedClass(initial.label)
+        selectLabel(initial.label, initial.model_filename).catch(console.error)
+      })
+      .catch(() => {
+        if (!cancelled) setLabelsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Persist selection
+  useEffect(() => {
+    if (selectedClass) localStorage.setItem(SELECTED_LABEL_KEY, selectedClass)
+  }, [selectedClass])
+
+  // Auto-connect when an object is selected and we're idle
+  useEffect(() => {
+    if (selectedClass && connectionState === "disconnected") {
+      connect()
+    }
+  }, [selectedClass, connectionState, connect])
+
+  const handleForcePull = async () => {
+    setSyncing(true)
+    try {
+      await apiFetch("/api/sync/pull", { method: "POST" })
+      const fresh = await getAvailableLabels()
+      setLabels(fresh)
+      if (fresh.length > 0 && !selectedClass) {
+        const first = fresh[0]
+        setSelectedClass(first.label)
+        await selectLabel(first.label, first.model_filename)
+      }
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const connected = connectionState === "connected"
   const isCounting = counting.state === "COUNTING"
@@ -92,17 +140,16 @@ export default function VisionPage() {
     }
   }
 
-  // Block navigation while camera is active
-  const blocker = useBlocker(busy || isRecording)
+  // Block navigation only while counting or recording — idle connections
+  // disconnect automatically via useWebRTC's unmount cleanup.
+  const blocker = useBlocker(isCounting || isRecording)
   useEffect(() => {
     if (blocker.state === "blocked") {
       blocker.reset()
       if (isRecording) {
-        toast.warning("Detene la grabación antes de salir")
+        toast.warning("Detén la grabación antes de salir")
       } else if (isCounting) {
-        toast.warning("Detene el conteo y desconecta la camara antes de salir")
-      } else {
-        toast.warning("Desconecta la camara antes de salir")
+        toast.warning("Detén el conteo antes de salir")
       }
     }
   }, [blocker, isCounting, isRecording])
@@ -147,13 +194,6 @@ export default function VisionPage() {
     }
   }
 
-  const handleDisconnect = async () => {
-    if (isRecording) {
-      await handleStopRecording()
-    }
-    disconnect()
-  }
-
   const handleStop = async () => {
     setDurationStr(formatDuration(counting.startTime))
     try {
@@ -173,72 +213,32 @@ export default function VisionPage() {
     }
   }
 
-  if (step === "pick") {
+  if (labelsLoading) {
     return (
-      <div className="flex h-[calc(100dvh-3.5rem)] flex-col md:h-auto md:flex-1">
-        <ObjectPicker
-          onSelect={(label) => {
-            setSelectedClass(label)
-            setStep("operate")
-          }}
-        />
+      <div className="flex h-[calc(100dvh-3.5rem)] flex-1 items-center justify-center text-sm text-muted-foreground">
+        Cargando etiquetas
+      </div>
+    )
+  }
+
+  if (labels.length === 0) {
+    return (
+      <div className="flex h-[calc(100dvh-3.5rem)] flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+        <p>No hay modelos asignados a este robot.</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleForcePull}
+          disabled={syncing}
+        >
+          {syncing ? "Sincronizando" : "Sincronizar ahora"}
+        </Button>
       </div>
     )
   }
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col md:h-auto md:flex-1">
-      {/* Config bar: selected class + settings */}
-      <div className="flex shrink-0 items-center gap-3 border-b px-4 py-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setStep("pick")}
-          disabled={busy}
-        >
-          ← Cambiar
-        </Button>
-        <span className="text-sm text-muted-foreground">
-          Detectando: <span className="font-medium text-foreground capitalize">{selectedClass}</span>
-        </span>
-        {mode === "robot" && resolution.preset && (
-          <div
-            className="ml-auto flex items-center gap-2"
-            title={
-              busy || isCounting || isRecording
-                ? "Desconecta la cámara y detén conteo/grabación antes de cambiar la resolución"
-                : "Cambiar resolución de captura"
-            }
-          >
-            <span className="text-xs text-muted-foreground">Resolución</span>
-            <Select
-              value={resolution.preset}
-              onValueChange={(v) => resolution.change(v as CameraPreset)}
-              disabled={busy || isCounting || isRecording || resolution.changing}
-            >
-              <SelectTrigger size="sm" className="w-[110px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1080p">1080p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className={mode === "robot" && resolution.preset ? "" : "ml-auto"}
-          onClick={() => setConfigOpen(true)}
-          disabled={isCounting}
-          title="Configuracion de conteo"
-          aria-label="Configuracion de conteo"
-        >
-          <Settings className="size-4" />
-        </Button>
-      </div>
-
       <VideoStream
         videoRef={videoRef}
         connected={connected}
@@ -247,13 +247,12 @@ export default function VisionPage() {
       >
         {isCounting && frameData && (
           <CountOverlay
-            count={frameData.count}
             sessionTotal={counting.sessionTotal}
             targetClass={selectedClass}
           />
         )}
         {connected && (
-          <div className="absolute top-2 right-2 flex flex-col items-end gap-2">
+          <div className="absolute top-2 left-2 flex flex-col items-start gap-2">
             <div className="flex gap-2">
               <Badge variant="outline" className="bg-black/60 text-white border-none text-xs">
                 Stream: {fps.streamFps} FPS
@@ -273,90 +272,110 @@ export default function VisionPage() {
                 REC {recording.durationStr}
               </Badge>
             )}
-          </div>
-        )}
-        {connected && mode === "robot" && (
-          <div className="absolute top-2 left-2">
-            <Badge
-              variant="outline"
-              className={`flex items-center gap-1.5 border-none text-xs ${
-                deviceContext?.fundo
-                  ? "bg-black/60 text-white"
-                  : "bg-amber-500/80 text-white"
-              }`}
-            >
-              <MapPin className="size-3" />
-              {deviceContext?.fundo ? (
-                <span>
-                  <span className="opacity-70">
-                    {deviceContext.empresa?.name ?? "—"}
+            {mode === "robot" && (
+              <Badge
+                variant="outline"
+                className="bg-black/60 text-white border-none text-xs flex items-center gap-1.5"
+              >
+                <MapPin className="size-3" />
+                {deviceContext?.fundo ? (
+                  <span>
+                    <span className="opacity-70">
+                      {deviceContext.empresa?.name ?? "—"}
+                    </span>
+                    <span className="mx-1 opacity-50">›</span>
+                    <span className="font-medium">
+                      {deviceContext.fundo.name}
+                    </span>
                   </span>
-                  <span className="mx-1 opacity-50">›</span>
-                  <span className="font-medium">
-                    {deviceContext.fundo.name}
-                  </span>
-                </span>
-              ) : (
-                <span>Sin fundo asignado</span>
-              )}
-            </Badge>
+                ) : (
+                  <span>Sin fundo asignado</span>
+                )}
+              </Badge>
+            )}
+            {selectedClass && (
+              <Badge
+                variant="outline"
+                className="bg-black/60 text-white border-none text-xs flex items-center gap-1.5"
+              >
+                <ScanEye className="size-3" />
+                <span className="opacity-70">Detectando</span>
+                <span className="font-medium capitalize">{selectedClass}</span>
+              </Badge>
+            )}
+            {mode === "robot" && resolution.preset && (
+              <Badge
+                variant="outline"
+                className="bg-black/60 text-white border-none text-xs flex items-center gap-1.5"
+              >
+                <Monitor className="size-3" />
+                <span className="opacity-70">Resolución</span>
+                <span className="font-medium">{resolution.preset}</span>
+              </Badge>
+            )}
           </div>
         )}
       </VideoStream>
 
-      {/* Action bar: connect + counting controls */}
-      <div className="flex shrink-0 items-center gap-3 border-t px-4 py-3">
-        {connectionState === "disconnected" || connectionState === "failed" ? (
-          <Button onClick={connect}>Conectar</Button>
-        ) : connectionState === "connecting" ? (
-          <Button disabled>Conectando...</Button>
-        ) : (
-          <Button variant="destructive" onClick={handleDisconnect}>
-            Desconectar
+      {/* Action bar */}
+      <div className="flex shrink-0 items-center justify-center gap-3 px-4 py-3">
+        {connectionState === "failed" && (
+          <Button variant="outline" onClick={connect}>
+            Reintentar conexión
           </Button>
         )}
 
-        {connected && counting.state === "IDLE" && (
-          <Button onClick={handleStart}>Iniciar conteo</Button>
+        {connected && !isCounting && (
+          <Button
+            size="lg"
+            className="min-w-[180px]"
+            onClick={handleStart}
+            disabled={counting.state !== "IDLE"}
+          >
+            <ScanEye className="size-4 mr-2" />
+            Contar
+          </Button>
         )}
 
         {connected && isCounting && (
-          <>
-            <Button variant="destructive" onClick={handleStop}>
-              Detener conteo
-            </Button>
-            <Badge variant="secondary">
-              {durationStr}
-            </Badge>
-          </>
+          <Button
+            size="lg"
+            variant="destructive"
+            className="min-w-[180px]"
+            onClick={handleStop}
+          >
+            <Square className="size-4 mr-2 fill-current" />
+            Detener
+          </Button>
         )}
 
         {connected && (
-          <div className="ml-auto">
-            {!isRecording ? (
-              <Button
-                variant="outline"
-                onClick={handleStartRecording}
-                disabled={recording.loading}
-              >
-                <Circle className="size-4 mr-1 fill-red-500 text-red-500" />
-                Grabar
-              </Button>
-            ) : (
-              <Button
-                variant="destructive"
-                onClick={handleStopRecording}
-                disabled={recording.loading}
-              >
-                <Square className="size-4 mr-1" />
-                Detener grabación
-              </Button>
-            )}
-          </div>
+          !isRecording ? (
+            <Button
+              size="lg"
+              className="min-w-[180px]"
+              onClick={handleStartRecording}
+              disabled={recording.loading || counting.state === "SAVING"}
+              title="Iniciar grabación"
+            >
+              <Circle className="size-4 mr-2 fill-red-500 text-red-500" />
+              Grabar
+            </Button>
+          ) : (
+            <Button
+              size="lg"
+              variant="destructive"
+              className="min-w-[180px]"
+              onClick={handleStopRecording}
+              disabled={recording.loading || counting.state === "SAVING"}
+              title="Detener grabación"
+            >
+              <Square className="size-4 mr-2" />
+              Detener {recording.durationStr}
+            </Button>
+          )
         )}
       </div>
-
-      <CountingConfigDialog open={configOpen} onOpenChange={setConfigOpen} />
 
       <SaveDialog
         open={counting.state === "SAVING"}

@@ -18,7 +18,6 @@ import {
 import { toast } from "sonner"
 import { useAppMode } from "@/context/AppModeContext"
 import { useAuth } from "@/context/AuthContext"
-import { useDeviceContext } from "@/hooks/useDeviceContext"
 import { forceSyncPull, forceSyncPush } from "@/api/sync"
 import UserMenu from "./UserMenu"
 import { Separator } from "@/components/ui/separator"
@@ -34,9 +33,8 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
-  const { mode, configured } = useAppMode()
+  const { mode } = useAppMode()
   const { user } = useAuth()
-  const { context: deviceContext } = useDeviceContext(mode === "robot")
   const [syncing, setSyncing] = useState(false)
 
   const handleSync = async () => {
@@ -59,9 +57,6 @@ export default function Sidebar() {
         { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
         { label: "Grabaciones", path: "/recordings", icon: Video },
       ]
-      if (!configured) {
-        robotItems.push({ label: "Servidor", path: "/setup", icon: Settings, separator: true })
-      }
       return robotItems
     }
 
@@ -115,33 +110,6 @@ export default function Sidebar() {
           collapsed ? "md:w-14" : "md:w-[180px]"
         }`}
       >
-        {mode === "robot" && !collapsed && (
-          <div className="border-b border-sidebar-border px-3 py-2 text-xs space-y-2">
-            {deviceContext?.fundo ? (
-              <div>
-                <div className="text-sidebar-foreground/60 truncate">
-                  {deviceContext.empresa?.name ?? "—"}
-                </div>
-                <div className="font-medium truncate">
-                  {deviceContext.fundo.name}
-                </div>
-              </div>
-            ) : (
-              <div className="text-sidebar-foreground/50 italic">
-                Sin fundo asignado
-              </div>
-            )}
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-sidebar-border bg-sidebar-accent/30 px-2 py-1 text-xs font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground disabled:opacity-50"
-              title="Forzar sincronización con el servidor"
-            >
-              <RefreshCw className={`size-3 ${syncing ? "animate-spin" : ""}`} />
-              {syncing ? "Sincronizando..." : "Sincronizar ahora"}
-            </button>
-          </div>
-        )}
         <nav className="flex flex-1 flex-col gap-1 p-2">
           {items.map((item) => {
             const active = location.pathname.startsWith(item.path)
@@ -164,13 +132,52 @@ export default function Sidebar() {
           })}
         </nav>
 
-        <div className="border-t border-sidebar-border p-2">
+        <div className="p-2 space-y-1">
+          {mode === "robot" && (
+            <>
+              <button
+                onClick={() => navigate("/settings")}
+                title="Configuración"
+                className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  location.pathname.startsWith("/settings")
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                } ${collapsed ? "justify-center" : ""}`}
+              >
+                <Settings className="size-5 shrink-0" />
+                {!collapsed && <span className="whitespace-nowrap">Configuración</span>}
+              </button>
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                title={syncing ? "Sincronizando..." : "Sincronizar ahora"}
+                className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground disabled:opacity-50 ${
+                  collapsed ? "justify-center" : ""
+                }`}
+              >
+                <RefreshCw className={`size-5 shrink-0 ${syncing ? "animate-spin" : ""}`} />
+                {!collapsed && (
+                  <span className="whitespace-nowrap">
+                    {syncing ? "Sincronizando..." : "Sincronizar"}
+                  </span>
+                )}
+              </button>
+            </>
+          )}
           {mode === "server" && user && <UserMenu collapsed={collapsed} />}
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="flex w-full items-center justify-center rounded-md px-3 py-2 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            title={collapsed ? "Expandir" : "Colapsar"}
+            className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground ${
+              collapsed ? "justify-center" : ""
+            }`}
           >
-            {collapsed ? <PanelLeftOpen className="size-5" /> : <PanelLeftClose className="size-5" />}
+            {collapsed ? (
+              <PanelLeftOpen className="size-5 shrink-0" />
+            ) : (
+              <PanelLeftClose className="size-5 shrink-0" />
+            )}
+            {!collapsed && <span className="whitespace-nowrap">Colapsar</span>}
           </button>
         </div>
       </aside>
