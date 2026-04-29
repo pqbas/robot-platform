@@ -176,6 +176,7 @@ async def get_counting_config():
         threshold=c.threshold,
         direction=c.direction,
         confidence_threshold=c.confidence_threshold,
+        roi_mode=c.roi_mode,  # type: ignore[arg-type]
     )
 
 
@@ -190,11 +191,14 @@ async def update_counting_config(body: CountingConfigUpdate):
         c.direction = body.direction
     if body.confidence_threshold is not None:
         c.confidence_threshold = body.confidence_threshold
+    if body.roi_mode is not None:
+        c.roi_mode = body.roi_mode
     return CountingConfigOut(
         count_mode=c.count_mode,
         threshold=c.threshold,
         direction=c.direction,
         confidence_threshold=c.confidence_threshold,
+        roi_mode=c.roi_mode,  # type: ignore[arg-type]
     )
 
 

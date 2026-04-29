@@ -59,7 +59,11 @@ class InferenceClient:
         return self.send_command("reload_model", model_path=model_path)
 
     def detect(
-        self, frame: np.ndarray, target_class: str | None = None, conf: float = 0.5
+        self,
+        frame: np.ndarray,
+        target_class: str | None = None,
+        conf: float = 0.5,
+        roi_mode: str = "square",
     ) -> dict | None:
         """Send frame to worker, return detections dict or None on failure."""
         try:
@@ -69,7 +73,11 @@ class InferenceClient:
             return None
 
         _, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-        header = {"target_class": target_class, "confidence": conf}
+        header = {
+            "target_class": target_class,
+            "confidence": conf,
+            "roi_mode": roi_mode,
+        }
 
         try:
             send_request(self._sock, header, jpeg.tobytes())
