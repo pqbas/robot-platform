@@ -53,9 +53,9 @@ def parse_args():
         default=os.getenv("CAMERA_SETTINGS_PATH", "data/robot/camera_settings.json"),
     )
     parser.add_argument("--index", type=int, default=int(os.getenv("CAMERA_INDEX", "0")))
-    parser.add_argument("--width", type=int, default=int(os.getenv("CAMERA_WIDTH", "3840")))
-    parser.add_argument("--height", type=int, default=int(os.getenv("CAMERA_HEIGHT", "1080")))
-    parser.add_argument("--crop", type=int, default=int(os.getenv("CAMERA_CROP", "1920")))
+    parser.add_argument("--width", type=int, default=int(os.getenv("CAMERA_WIDTH", "2560")))
+    parser.add_argument("--height", type=int, default=int(os.getenv("CAMERA_HEIGHT", "720")))
+    parser.add_argument("--crop", type=int, default=int(os.getenv("CAMERA_CROP", "1280")))
     parser.add_argument("--fps", type=float, default=float(os.getenv("CAMERA_FPS", "30")))
     return parser.parse_args()
 

@@ -1,7 +1,7 @@
 import json
 from typing import Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- Camellon ---
@@ -151,16 +151,16 @@ class CameraResolutionUpdate(BaseModel):
 
 class CountingConfigOut(BaseModel):
     count_mode: str
-    threshold: int
+    threshold: float = Field(ge=0.0, le=1.0)
     direction: str
-    confidence_threshold: float
+    confidence_threshold: float = Field(ge=0.0, le=1.0)
 
 
 class CountingConfigUpdate(BaseModel):
     count_mode: str | None = None
-    threshold: int | None = None
+    threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     direction: str | None = None
-    confidence_threshold: float | None = None
+    confidence_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 # --- Location ---

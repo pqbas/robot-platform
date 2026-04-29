@@ -28,8 +28,8 @@ class CameraConfig:
 @dataclass
 class PerceptionConfig:
     model_name: str = "yolo11n.pt"
-    default_target_class: str = "person"
-    confidence_threshold: float = 0.5
+    default_target_class: str = "blueberry"
+    confidence_threshold: float = 0.25
     socket_path: str = os.getenv("INFERENCE_SOCKET", "/tmp/inference.sock")
 
 
@@ -59,10 +59,10 @@ class ServerConfig:
 
 @dataclass
 class CountingConfig:
-    count_mode: str = "vertical"        # "vertical" | "horizontal"
-    threshold: int = 360                # position in px of the counting line
-    direction: str = "top2down"         # "top2down" | "down2top" | "left2right" | "right2left"
-    confidence_threshold: float = 0.5
+    count_mode: str = "horizontal"      # "vertical" | "horizontal"
+    threshold: float = 0.5              # normalized line position in [0, 1]
+    direction: str = "left2right"       # "top2down" | "down2top" | "left2right" | "right2left"
+    confidence_threshold: float = 0.25
 
 
 @dataclass

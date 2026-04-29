@@ -37,6 +37,11 @@ class Detector:
         tracking_data: list[dict] = []
         count = 0
 
+        # Normalize tracking centroids to [0, 1] so the line-crossing counter
+        # is independent of capture resolution. Bboxes stay in pixels because
+        # the frontend overlay uses the rendered video size to rescale them.
+        h, w = frame.shape[:2]
+
         for box in result.boxes:
             cls_id = int(box.cls[0])
             cls_name = self._model.names[cls_id]
@@ -47,7 +52,11 @@ class Detector:
             if box.id is not None:
                 track_id = int(box.id[0])
                 xywh = box.xywh[0].tolist()
-                tracking_data.append({"track_id": track_id, "cx": xywh[0], "cy": xywh[1]})
+                tracking_data.append({
+                    "track_id": track_id,
+                    "cx": xywh[0] / w,
+                    "cy": xywh[1] / h,
+                })
 
             detections.append({
                 "class_name": cls_name,
