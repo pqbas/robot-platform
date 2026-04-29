@@ -9,7 +9,7 @@ type VideoStreamProps = {
   connected: boolean
   detections?: Detection[]
   showDetections?: boolean
-  countingLine?: { mode: string; threshold: number } | null
+  countingLine?: { mode: string; threshold: number; direction: string } | null
   children?: ReactNode
 }
 
@@ -38,6 +38,7 @@ export default function VideoStream({
         videoRef={videoRef}
         mode={countingLine?.mode ?? "horizontal"}
         threshold={countingLine?.threshold ?? 0.5}
+        direction={countingLine?.direction ?? "left2right"}
         visible={countingLine != null}
       />
       {!connected && (
