@@ -108,7 +108,6 @@ export default function VisionPage() {
   const connected = connectionState === "connected"
   const isCounting = counting.state === "COUNTING"
   const isRecording = recording.recording != null
-  const busy = connected || connectionState === "connecting"
 
   const handleStartRecording = async () => {
     try {
