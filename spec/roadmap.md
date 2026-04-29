@@ -92,18 +92,7 @@
 
 ---
 
-## Phase 7: Configurabilidad del recording-worker (calidad/CPU/disco) (In Progress)
-
-**Goal:** los parámetros de encoding son ajustables por env sin tocar código, para que dev en laptop (libx264, CPU caro) pueda bajar carga y producción en Jetson (NVENC, ~no-CPU) mantenga calidad alta.
-
-- [ ] El bitrate del recording-worker se controla por env var (`RECORDING_BITRATE_BPS`); default 8 Mbps NVENC / 6 Mbps libx264
-- [ ] El preset de libx264 (laptop dev) se controla por env (`RECORDING_X264_PRESET`); default `medium`, sin afectar el path NVENC de Jetson
-- [x] El framerate efectivo se respeta del handshake del camera-worker en vez del 30 hardcodeado actual
-- [ ] Documentado en `recording_worker/README.md` qué env vars existen y cuál es el default por backend
-
----
-
-## Phase 8: Calidad HD de la grabación (Complete)
+## Phase 7: Calidad HD de la grabación (Complete)
 
 **Goal:** el video grabado se ve nítido y aprovecha la cámara para revisión posterior, sin perder fluidez ni saturar disco.
 
@@ -114,38 +103,49 @@
 
 ---
 
-## Phase 9: Resolución mayor en grabación (Complete)
+## Phase 8: Resolución mayor en grabación (Complete)
 
 **Goal:** el operador puede revisar grabaciones con más detalle del que cabe en 720p, aprovechando lo que el sensor de la cámara realmente captura.
 
 - [x] El video grabado supera la resolución actual (1280x720) sin saturar disco — default 1920×1080 nativo del estéreo SBS de la ZED 2i, bitrate auto-escalado (12 Mbps NVENC ≥1080p, 8 Mbps a 720p)
 - [x] Detalles finos (textura de hojas, bordes de fruta, letras pequeñas) se ven en la revisión posterior con claridad mayor que en 720p
-- [x] La transmisión en vivo no sufre regresión perceptible de FPS o latencia mientras se graba a la nueva resolución — resuelto en Phase 10 al portar el live a H.264 NVENC con bridge NVMM y `maxperf-enable=true` (medido 25 fps a 1080p en `about:webrtc`)
+- [x] La transmisión en vivo no sufre regresión perceptible de FPS o latencia mientras se graba a la nueva resolución — resuelto en Phase 9 al portar el live a H.264 NVENC con bridge NVMM y `maxperf-enable=true` (medido 25 fps a 1080p en `about:webrtc`)
 - [x] Documentado en `recording_worker/README.md` y `camera_worker/README.md` los dos modos (1080p default, 720p alternativo)
 
 ---
 
-## Phase 10: WebRTC live a H.264 NVENC sin caveat (Complete)
+## Phase 9: WebRTC live a H.264 NVENC sin caveat (Complete)
 
-**Goal:** eliminar el caveat de Phase 9 — el live WebRTC sostiene 1080p @ 30fps en Jetson sin obligar al operador a volver a 720p. Portar al path WebRTC la fix NVMM y los presets de calidad ya validados en el `recording_worker`.
+**Goal:** eliminar el caveat de Phase 8 — el live WebRTC sostiene 1080p @ 30fps en Jetson sin obligar al operador a volver a 720p. Portar al path WebRTC la fix NVMM y los presets de calidad ya validados en el `recording_worker`.
 
 - [x] Agregar bridge NVMM (`nvvidconv ! video/x-raw(memory:NVMM)`) al pipeline de `GstNvencEncoder` en `back/services/nvenc_codec.py`
-- [x] Subir `profile` a `High` y `preset-level` a `Slow` (4) en `GstNvencEncoder`, paridad con `recording_worker` post-Phase 8
+- [x] Subir `profile` a `High` y `preset-level` a `Slow` (4) en `GstNvencEncoder`, paridad con `recording_worker` post-Phase 7
 - [x] Logging explícito en `init_nvenc` y al primer frame de cada peer connection: qué codec negoció realmente (H264 vs VP8) y qué backend usa el encoder
 - [x] Validar en Jetson + ZED 2i con `about:webrtc`: codec negociado = `H264`, `framesPerSecond ≥ 25` a 1920×1080, `packetsLost = 0` — medido 25 fps tras agregar `maxperf-enable=true` al encoder
 - [x] Quitar de `camera_worker/README.md` y `recording_worker/README.md` la recomendación de override 720p en `.env.robot`; el default 1080p deja de degradar el live
-- [x] Marcar Phase 9 como `(Complete)` (todas las cajas) una vez confirmado que el live sostiene 1080p
+- [x] Marcar Phase 8 como `(Complete)` (todas las cajas) una vez confirmado que el live sostiene 1080p
 
 ---
 
-## Phase 11: Selector de resolución desde el frontend
+## Phase 10: Selector de resolución desde el frontend (Complete)
 
 **Goal:** el operador puede bajar la calidad del live cuando la red entre Jetson y operador está débil, sin entrar al robot ni reiniciar servicios.
 
-- [ ] El operador elige la resolución de captura (1080p / 720p) desde un control en la pantalla Vision
-- [ ] El cambio se aplica sin reiniciar servicios systemd; el live se renegocia automáticamente
-- [ ] La grabación toma siempre la misma resolución que el live (un solo modo activo por robot)
-- [ ] La elección persiste entre sesiones (sobrevive al reinicio del robot)
+- [x] El operador elige la resolución de captura (1080p / 720p) desde un control en la pantalla Vision
+- [x] El cambio se aplica sin reiniciar servicios systemd; el live se renegocia automáticamente
+- [x] La grabación toma siempre la misma resolución que el live (un solo modo activo por robot)
+- [x] La elección persiste entre sesiones (sobrevive al reinicio del robot)
+
+---
+
+## Phase 11: Configurabilidad del recording-worker (calidad/CPU/disco)
+
+**Goal:** los parámetros de encoding son ajustables por env sin tocar código, para que dev en laptop (libx264, CPU caro) pueda bajar carga y producción en Jetson (NVENC, ~no-CPU) mantenga calidad alta.
+
+- [ ] El bitrate del recording-worker se controla por env var (`RECORDING_BITRATE_BPS`); default 8 Mbps NVENC / 6 Mbps libx264
+- [ ] El preset de libx264 (laptop dev) se controla por env (`RECORDING_X264_PRESET`); default `medium`, sin afectar el path NVENC de Jetson
+- [x] El framerate efectivo se respeta del handshake del camera-worker en vez del 30 hardcodeado actual
+- [ ] Documentado en `recording_worker/README.md` qué env vars existen y cuál es el default por backend
 
 ---
 

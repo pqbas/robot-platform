@@ -17,6 +17,7 @@ import FundosPage from "./modules/admin/FundosPage"
 import DevicesPage from "./modules/admin/DevicesPage"
 import ModelsPage from "./modules/admin/ModelsPage"
 import SetupPage from "./modules/setup/SetupPage"
+import SettingsPage from "./modules/settings/SettingsPage"
 
 function ModeRedirect() {
   const { mode, configured } = useAppMode()
@@ -39,6 +40,7 @@ const router = createBrowserRouter([
       { path: "mapa", element: <MapPage /> },
       { path: "dashboard", element: <DashboardPage /> },
       { path: "recordings", element: <RecordingsPage /> },
+      { path: "settings", element: <SettingsPage /> },
       {
         path: "admin/users",
         element: (

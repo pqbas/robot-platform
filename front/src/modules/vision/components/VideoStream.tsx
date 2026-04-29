@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Video } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import type { Detection } from "@/types"
 import DetectionOverlay from "./DetectionOverlay"
 
@@ -33,10 +33,8 @@ export default function VideoStream({
       />
       {!connected && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-          <Video className="text-muted-foreground size-10 opacity-40" />
-          <p className="text-muted-foreground text-sm">
-            Presiona <span className="font-medium text-foreground">Conectar</span> para iniciar la camara
-          </p>
+          <Loader2 className="size-8 animate-spin text-white/60" />
+          <p className="text-sm text-white/60">Conectando...</p>
         </div>
       )}
       {children}
