@@ -1,4 +1,5 @@
 import json
+from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -133,6 +134,17 @@ class CameraConfigUpdate(BaseModel):
     frame_width: int | None = None
     frame_height: int | None = None
     crop_width: int | None = None
+
+
+# --- Camera resolution preset (Phase 11) ---
+
+
+class CameraResolutionOut(BaseModel):
+    preset: Literal["1080p", "720p"]
+
+
+class CameraResolutionUpdate(BaseModel):
+    preset: Literal["1080p", "720p"]
 
 
 # --- Counting config ---

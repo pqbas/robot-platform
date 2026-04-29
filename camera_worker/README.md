@@ -11,6 +11,15 @@ never opens `/dev/video*` directly.
     `{width, height, channels, fps}`.
   - Frame stream: 4-byte big-endian length + raw BGR bytes
     (`width * height * 3` bytes per frame).
+- **Control (server)**: `/tmp/camera-control.sock`. JSON length-prefixed
+  request/response. Used by the backend to swap the active resolution
+  preset without restarting the systemd unit (Phase 11).
+  - `{"cmd": "reload"}` → re-reads `data/robot/camera_settings.json`,
+    closes V4L2, reopens at the new dimensions, and kicks every consumer
+    (WebRTC backend + recording-worker) with a sentinel so they reconnect
+    and pick up the new handshake. Response: `{"ok": true, "width": ...,
+    "height": ..., "fps": ...}`.
+  - `{"cmd": "status"}` → current dimensions/fps without touching V4L2.
 
 ## Run
 
@@ -20,10 +29,24 @@ make run-camera                # = cd camera_worker && uv run camera-worker
 
 ## Resolution modes
 
-Defaults (`.env.robot`) target the ZED 2i over USB 3.0 SuperSpeed.
-`CAMERA_WIDTH × CAMERA_HEIGHT` is the **stereo SBS** capture from the
-sensor; `CAMERA_CROP` selects the left eye out of the side-by-side
-frame (the worker outputs `CROP × HEIGHT` to consumers).
+The active preset lives in `data/robot/camera_settings.json`:
+
+```json
+{ "preset": "1080p" }
+```
+
+The operator switches between presets from the **Vision** screen in
+the frontend (Phase 11). The backend writes the file and pings the
+control socket; no systemd restart, no SSH. If the file is missing or
+the JSON is corrupt, the worker falls back to `1080p` and logs a
+warning. The env vars `CAMERA_WIDTH/HEIGHT/CROP` only apply when the
+JSON file is absent and remain documented here as the underlying
+dimensions per preset.
+
+| Preset  | CAMERA_WIDTH | CAMERA_HEIGHT | CAMERA_CROP | Output frame |
+|---------|--------------|---------------|-------------|--------------|
+| `1080p` | 3840         | 1080          | 1920        | 1920×1080    |
+| `720p`  | 2560         | 720           | 1280        | 1280×720     |
 
 1080p is the production default and works end-to-end: the recording
 worker writes 1080p / 12 Mbps NVENC and the WebRTC live sustains
@@ -33,33 +56,20 @@ fallback only.
 
 ### 1080p (default)
 
-```
-CAMERA_WIDTH=3840
-CAMERA_HEIGHT=1080
-CAMERA_CROP=1920
-CAMERA_FPS=30
-```
-
 Native sensor capture at 30 fps. YUYV bandwidth ≈ 250 MB/s
 (`3840·1080·2 B · 30 fps`), well inside USB 3.0 headroom.
 Output frame: 1920×1080 BGR.
 
 ### 720p (troubleshooting fallback)
 
-Only use if the network between the Jetson and the operator laptop is
-weak (RTT > 200 ms or sustained packet loss > 2%). The live stream
-adapts bitrate, but on lossy links a smaller frame helps. Override in
-`.env.robot`:
+Toggle from the Vision screen if the network between the Jetson and
+the operator laptop is weak (RTT > 200 ms or sustained packet loss
+> 2%). The live stream adapts bitrate, but on lossy links a smaller
+frame helps.
 
-```
-CAMERA_WIDTH=2560
-CAMERA_HEIGHT=720
-CAMERA_CROP=1280
-CAMERA_FPS=30
-```
-
-YUYV bandwidth ≈ 110 MB/s. Output frame: 1280×720 BGR. Apply with
-`make restart`.
+YUYV bandwidth ≈ 110 MB/s. Output frame: 1280×720 BGR. The control
+socket reload closes the V4L2 device and reopens it; clients are
+disconnected automatically and reconnect with the new handshake.
 
 The recording-worker reads height from the handshake and auto-scales
 the encoder bitrate accordingly (12 Mbps at 1080p, 8 Mbps at 720p

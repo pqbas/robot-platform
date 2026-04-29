@@ -32,6 +32,27 @@ export function updateCameraConfig(
   })
 }
 
+// --- Camera resolution preset (Phase 11) ---
+
+export type CameraPreset = "1080p" | "720p"
+
+export type CameraResolution = {
+  preset: CameraPreset
+}
+
+export function getCameraResolution(): Promise<CameraResolution> {
+  return apiFetch("/api/config/camera/resolution")
+}
+
+export function setCameraResolution(
+  preset: CameraPreset,
+): Promise<CameraResolution> {
+  return apiFetch("/api/config/camera/resolution", {
+    method: "PUT",
+    body: JSON.stringify({ preset }),
+  })
+}
+
 // --- Counting ---
 
 export type CountingConfig = {

@@ -4,12 +4,21 @@ import { toast } from "sonner"
 import { Circle, MapPin, Settings, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import type { Camellon } from "@/types"
+import type { CameraPreset } from "@/api/config"
 import { getCamellones } from "@/api/camellones"
 import { useWebRTC } from "@/hooks/useWebRTC"
 import { useCounting } from "@/hooks/useCounting"
 import { useDeviceContext } from "@/hooks/useDeviceContext"
 import { useRecording } from "@/hooks/useRecording"
+import { useCameraResolution } from "@/hooks/useCameraResolution"
 import { useAppMode } from "@/context/AppModeContext"
 import VideoStream from "./components/VideoStream"
 import ObjectPicker from "./components/ObjectPicker"
@@ -32,6 +41,7 @@ export default function VisionPage() {
   const recording = useRecording()
   const { mode } = useAppMode()
   const { context: deviceContext } = useDeviceContext(mode === "robot")
+  const resolution = useCameraResolution(mode === "robot")
 
   const [step, setStep] = useState<"pick" | "operate">("pick")
   const [selectedClass, setSelectedClass] = useState("")
@@ -191,10 +201,35 @@ export default function VisionPage() {
         <span className="text-sm text-muted-foreground">
           Detectando: <span className="font-medium text-foreground capitalize">{selectedClass}</span>
         </span>
+        {mode === "robot" && resolution.preset && (
+          <div
+            className="ml-auto flex items-center gap-2"
+            title={
+              busy || isCounting || isRecording
+                ? "Desconecta la cámara y detén conteo/grabación antes de cambiar la resolución"
+                : "Cambiar resolución de captura"
+            }
+          >
+            <span className="text-xs text-muted-foreground">Resolución</span>
+            <Select
+              value={resolution.preset}
+              onValueChange={(v) => resolution.change(v as CameraPreset)}
+              disabled={busy || isCounting || isRecording || resolution.changing}
+            >
+              <SelectTrigger size="sm" className="w-[110px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1080p">1080p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <Button
           variant="ghost"
           size="icon"
-          className="ml-auto"
+          className={mode === "robot" && resolution.preset ? "" : "ml-auto"}
           onClick={() => setConfigOpen(true)}
           disabled={isCounting}
           title="Configuracion de conteo"

@@ -138,17 +138,29 @@
 
 ---
 
-## Phase 11: Nuevo método de conteo
+## Phase 11: Selector de resolución desde el frontend
 
-**Goal:** el conteo es más robusto y no depende exclusivamente del tracker de YOLO.
+**Goal:** el operador puede bajar la calidad del live cuando la red entre Jetson y operador está débil, sin entrar al robot ni reiniciar servicios.
 
-- [ ] El operador puede elegir entre el método de cruce de línea y el método por similitud entre frames
-- [ ] El método por similitud está integrado al pipeline del worker
-- [ ] Ambos métodos producen el mismo formato de resultado
+- [ ] El operador elige la resolución de captura (1080p / 720p) desde un control en la pantalla Vision
+- [ ] El cambio se aplica sin reiniciar servicios systemd; el live se renegocia automáticamente
+- [ ] La grabación toma siempre la misma resolución que el live (un solo modo activo por robot)
+- [ ] La elección persiste entre sesiones (sobrevive al reinicio del robot)
 
 ---
 
-## Phase 12: Deploy servidor + validación end-to-end
+## Phase 12: Inferencia YOLO con TensorRT
+
+**Goal:** la inferencia corre más rápido en Jetson para modelos seleccionados, dejando margen de cómputo para sostener live + recording + detección sin regresiones.
+
+- [ ] Cada modelo asignado al robot tiene un toggle TensorRT / PyTorch en el frontend
+- [ ] Al activar TensorRT en un modelo, el robot convierte el `.pt` a `.engine` localmente (la optimización es device-specific y debe ocurrir en el Jetson)
+- [ ] El inference-worker usa el `.engine` cuando el modelo está en modo TensorRT y el `.pt` cuando está en modo PyTorch
+- [ ] Documentado el tradeoff (tiempo de conversión, ganancia de FPS observada en Jetson) y cómo revertir un modelo a PyTorch
+
+---
+
+## Phase 13: Deploy servidor + validación end-to-end
 
 **Goal:** el flujo completo robot → servidor funciona en producción y el operador siempre sabe qué modelo está activo.
 
@@ -158,13 +170,23 @@
 
 ---
 
-## Phase 13: Integración de otros objetos
+## Phase 14: Integración de otros objetos
 
 **Goal:** el sistema soporta distintos tipos de fruta u objeto sin cambios de código.
 
 - [ ] El AI engineer registra un nuevo modelo con su class_mapping desde el servidor
 - [ ] El robot sincroniza las etiquetas disponibles del nuevo modelo automáticamente
 - [ ] El operador ve los nuevos objetos en la pantalla de selección sin ninguna intervención técnica
+
+---
+
+## Phase 15: Nuevo método de conteo
+
+**Goal:** el conteo es más robusto y no depende exclusivamente del tracker de YOLO.
+
+- [ ] El operador puede elegir entre el método de cruce de línea y el método por similitud entre frames
+- [ ] El método por similitud está integrado al pipeline del worker
+- [ ] Ambos métodos producen el mismo formato de resultado
 
 ---
 

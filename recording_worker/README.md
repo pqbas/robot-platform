@@ -65,9 +65,11 @@ auto-scales the bitrate. No env vars yet — Phase 7 will expose them
 | ≥ 1080       | 12 Mbps        | 9 Mbps         |
 | < 1080       | 8 Mbps         | 6 Mbps         |
 
-So toggling `camera_worker` between the 720p and 1080p modes (see
-`camera_worker/README.md`) flips the recording bitrate too — no
-recording-worker change needed.
+The operator switches between 720p and 1080p from the Vision screen
+(Phase 11). The selector writes `data/robot/camera_settings.json` and
+asks the camera-worker to reload; the recording-worker reconnects on
+its next `start` command and the new bitrate kicks in automatically —
+no recording-worker change needed.
 
 - **`nvv4l2h264enc` (Jetson, NVENC)**: CBR, profile=High (4),
   preset-level=Slow (4), keyframe every 60 frames. The HW encoder makes

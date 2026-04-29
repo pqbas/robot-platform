@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -8,19 +9,29 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from back.config import config
+from back.config import AppMode, config
 from back.database import get_db
-from back.models import DetectionModel
+from back.models import DetectionModel, Recording
 from back.schemas import (
     AvailableLabelItem,
     CameraConfigOut,
     CameraConfigUpdate,
     CameraDevice,
+    CameraResolutionOut,
+    CameraResolutionUpdate,
     CountingConfigOut,
     CountingConfigUpdate,
     SelectLabelRequest,
 )
+from back.services import camera_settings
+from back.services.camera_control_client import (
+    CameraControlClient,
+    CameraWorkerUnavailable,
+)
+from back.services.perception import counter
 from back.services.perception.inference_client import InferenceClient
+
+logger = logging.getLogger("config_routes")
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -98,6 +109,60 @@ async def update_camera_config(body: CameraConfigUpdate):
         frame_height=c.frame_height,
         crop_width=c.crop_width,
     )
+
+
+# --- Camera resolution preset (Phase 11) ---
+
+
+def _require_robot_mode() -> None:
+    if config.mode != AppMode.ROBOT:
+        raise HTTPException(404, "Resolution preset is robot-only")
+
+
+@router.get("/camera/resolution", response_model=CameraResolutionOut)
+async def get_camera_resolution():
+    _require_robot_mode()
+    return CameraResolutionOut(preset=camera_settings.read_preset())
+
+
+@router.put("/camera/resolution", response_model=CameraResolutionOut)
+async def update_camera_resolution(
+    body: CameraResolutionUpdate, db: AsyncSession = Depends(get_db)
+):
+    _require_robot_mode()
+
+    # Block while a counting session is in flight — changing the camera mid
+    # session would lose tracker state and corrupt the count.
+    if counter.is_session_active():
+        raise HTTPException(
+            409, "Detén el conteo antes de cambiar la resolución"
+        )
+
+    # Block while a recording is in flight — closing the camera socket would
+    # truncate the MP4 in a half-finalised state.
+    in_flight = await db.execute(
+        select(Recording).where(Recording.ended_at.is_(None))
+    )
+    if in_flight.scalar_one_or_none() is not None:
+        raise HTTPException(
+            409, "Detén la grabación antes de cambiar la resolución"
+        )
+
+    camera_settings.write_preset(body.preset)
+
+    client = CameraControlClient(config.camera.control_socket_path)
+    try:
+        resp = client.reload()
+    except CameraWorkerUnavailable as exc:
+        logger.warning("Camera worker control socket unavailable: %s", exc)
+        raise HTTPException(
+            503, "Camera worker no responde; revisa el servicio."
+        )
+    if not resp.get("ok"):
+        logger.warning("Camera worker reload returned error: %s", resp)
+        raise HTTPException(503, f"Camera worker reload failed: {resp.get('error')}")
+
+    return CameraResolutionOut(preset=body.preset)
 
 
 # --- Counting ---

@@ -20,6 +20,9 @@ class CameraConfig:
     frame_height: int = 720
     crop_width: int = 1280       # 0 = no crop (webcam), >0 = stereo crop (ZED)
     socket_path: str = field(default_factory=lambda: os.getenv("CAMERA_SOCKET", "/tmp/camera.sock"))
+    control_socket_path: str = field(
+        default_factory=lambda: os.getenv("CAMERA_CONTROL_SOCKET", "/tmp/camera-control.sock")
+    )
 
 
 @dataclass
@@ -38,6 +41,9 @@ class StorageConfig:
         "DEVICE_CONTEXT_PATH", "data/robot/device_context.json"
     )
     recordings_dir: str = os.getenv("RECORDINGS_DIR", "data/robot/recordings")
+    camera_settings_path: str = os.getenv(
+        "CAMERA_SETTINGS_PATH", "data/robot/camera_settings.json"
+    )
 
 
 @dataclass

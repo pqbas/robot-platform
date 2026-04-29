@@ -7,11 +7,13 @@ After=network.target
 Type=simple
 User=DEPLOY_USER
 WorkingDirectory=DEPLOY_DIR
-ExecStartPre=/bin/rm -f /tmp/camera.sock
+ExecStartPre=/bin/rm -f /tmp/camera.sock /tmp/camera-control.sock
 ExecStart=/opt/robot-platform/camera_worker/.venv/bin/camera-worker
 Restart=on-failure
 RestartSec=3
 Environment=CAMERA_SOCKET=/tmp/camera.sock
+Environment=CAMERA_CONTROL_SOCKET=/tmp/camera-control.sock
+Environment=CAMERA_SETTINGS_PATH=/opt/robot-platform/data/robot/camera_settings.json
 
 [Install]
 WantedBy=multi-user.target
