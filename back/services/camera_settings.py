@@ -18,7 +18,18 @@ from back.config import config
 logger = logging.getLogger("camera_settings")
 
 VALID_PRESETS: Final[tuple[str, ...]] = ("1080p", "720p")
-DEFAULT_PRESET: Final[str] = "1080p"
+DEFAULT_PRESET: Final[str] = "720p"
+
+# Output frame dimensions after the stereo crop (left eye only). Used by the
+# counter to translate the normalized threshold (0..1) to pixels.
+PRESET_OUTPUT_DIMS: Final[dict[str, tuple[int, int]]] = {
+    "1080p": (1920, 1080),
+    "720p": (1280, 720),
+}
+
+
+def output_dims_for_active_preset() -> tuple[int, int]:
+    return PRESET_OUTPUT_DIMS[read_preset()]
 
 
 def _path() -> str:

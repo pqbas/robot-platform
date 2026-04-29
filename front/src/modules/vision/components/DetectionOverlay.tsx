@@ -7,9 +7,16 @@ type DetectionOverlayProps = {
   visible: boolean
 }
 
-const BOX_COLOR = "#00FF00"
+const FALLBACK_COLOR = "#00FF00"
 const FONT = "12px Arial"
 const LINE_WIDTH = 2
+
+// Golden-angle hue stepping keeps adjacent track IDs visually distinct.
+function colorForTrackId(id: number | null): string {
+  if (id == null) return FALLBACK_COLOR
+  const hue = (id * 137.508) % 360
+  return `hsl(${hue}, 80%, 55%)`
+}
 
 export default function DetectionOverlay({
   videoRef,
@@ -67,7 +74,6 @@ export default function DetectionOverlay({
       const sx = canvas.width / vw
       const sy = canvas.height / vh
 
-      ctx.strokeStyle = BOX_COLOR
       ctx.lineWidth = LINE_WIDTH
       ctx.font = FONT
 
@@ -78,6 +84,8 @@ export default function DetectionOverlay({
         const dw = (x2 - x1) * sx
         const dh = (y2 - y1) * sy
 
+        const color = colorForTrackId(det.track_id)
+        ctx.strokeStyle = color
         ctx.strokeRect(dx, dy, dw, dh)
 
         const label = det.track_id != null
@@ -87,7 +95,7 @@ export default function DetectionOverlay({
         const textWidth = ctx.measureText(label).width
         ctx.fillStyle = "rgba(0,0,0,0.6)"
         ctx.fillRect(dx, dy - 16, textWidth + 6, 16)
-        ctx.fillStyle = BOX_COLOR
+        ctx.fillStyle = color
         ctx.fillText(label, dx + 3, dy - 4)
       }
 

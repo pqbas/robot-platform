@@ -31,7 +31,7 @@ import {
 import { useCameraResolution } from "@/hooks/useCameraResolution"
 import { useAppMode } from "@/context/AppModeContext"
 
-const SELECTED_LABEL_KEY = "vision.selectedLabel"
+const SELECTED_LABEL_KEY = "vision.selectedLabel.v2"
 
 const directionsByMode: Record<string, { value: string; label: string }[]> = {
   vertical: [
@@ -55,6 +55,7 @@ function CountingTab() {
   const [draftLabel, setDraftLabel] = useState<string>(
     () => localStorage.getItem(SELECTED_LABEL_KEY) ?? "",
   )
+  const PREFERRED_DEFAULT_LABEL = "blueberry"
   const [draftResolution, setDraftResolution] = useState<CameraPreset | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -64,7 +65,19 @@ function CountingTab() {
       .catch(() => toast.error("Error al cargar configuración"))
     listCameras().then(setCameras).catch(() => {})
     getCameraConfig().then(setCameraConfig).catch(() => {})
-    getAvailableLabels().then(setLabels).catch(() => {})
+    getAvailableLabels()
+      .then((items) => {
+        setLabels(items)
+        if (!draftLabel && items.length > 0) {
+          const preferred =
+            items.find((l) => l.label === PREFERRED_DEFAULT_LABEL) ?? items[0]
+          setDraftLabel(preferred.label)
+        }
+      })
+      .catch(() => {})
+    // draftLabel intentionally omitted: we only want to seed the default once
+    // on mount, not re-seed every time the user picks something else.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -205,17 +218,22 @@ function CountingTab() {
 
       <div className="space-y-2">
         <Label htmlFor="threshold">
-          Threshold ({config.count_mode === "vertical" ? "Y" : "X"} en px)
+          Línea de cruce ({config.count_mode === "vertical" ? "Y" : "X"} normalizada, 0–1)
         </Label>
         <Input
           id="threshold"
           type="number"
           min={0}
+          max={1}
+          step={0.05}
           value={config.threshold}
           onChange={(e) =>
             setConfig({ ...config, threshold: Number(e.target.value) })
           }
         />
+        <p className="text-xs text-muted-foreground">
+          Posición relativa de la línea sobre el frame (0 = borde inicial, 1 = borde opuesto). Independiente de la resolución.
+        </p>
       </div>
 
       <div className="space-y-2">

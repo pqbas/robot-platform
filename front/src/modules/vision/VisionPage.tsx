@@ -20,9 +20,11 @@ import {
   selectLabel,
   type AvailableLabelItem,
 } from "@/api/vision"
+import { getCountingConfig, type CountingConfig } from "@/api/config"
 import { apiFetch } from "@/api/client"
 
-const SELECTED_LABEL_KEY = "vision.selectedLabel"
+const SELECTED_LABEL_KEY = "vision.selectedLabel.v2"
+const PREFERRED_DEFAULT_LABEL = "blueberry"
 
 function formatDuration(start: Date | null): string {
   if (!start) return "0s"
@@ -46,6 +48,7 @@ export default function VisionPage() {
   const [syncing, setSyncing] = useState(false)
   const [durationStr, setDurationStr] = useState("0s")
   const [camellones, setCamellones] = useState<Camellon[]>([])
+  const [countingConfig, setCountingConfig] = useState<CountingConfig | null>(null)
 
   const loadCamellones = () => {
     getCamellones().then(setCamellones).catch(console.error)
@@ -65,7 +68,10 @@ export default function VisionPage() {
         setLabelsLoading(false)
         if (items.length === 0) return
         const stored = localStorage.getItem(SELECTED_LABEL_KEY) ?? ""
-        const initial = items.find((i) => i.label === stored) ?? items[0]
+        const initial =
+          items.find((i) => i.label === stored) ??
+          items.find((i) => i.label === PREFERRED_DEFAULT_LABEL) ??
+          items[0]
         setSelectedClass(initial.label)
         selectLabel(initial.label, initial.model_filename).catch(console.error)
       })
@@ -187,6 +193,8 @@ export default function VisionPage() {
 
   const handleStart = async () => {
     try {
+      const cfg = await getCountingConfig()
+      setCountingConfig(cfg)
       await counting.startCounting(selectedClass)
     } catch (e) {
       toast.error("Error al iniciar conteo: " + (e instanceof Error ? e.message : "desconocido"))
@@ -243,6 +251,14 @@ export default function VisionPage() {
         connected={connected}
         detections={frameData?.detections}
         showDetections={isCounting && !!frameData}
+        countingLine={
+          isCounting && countingConfig
+            ? {
+                mode: countingConfig.count_mode,
+                threshold: countingConfig.threshold,
+              }
+            : null
+        }
       >
         {isCounting && frameData && (
           <CountOverlay

@@ -47,10 +47,6 @@ def stop_counting() -> tuple[int, str]:
 
     total = _object_counter.get_count()
 
-    # Add pending objects from the last frame (like VideoProcessor does)
-    if _last_results is not None:
-        total += _object_counter.get_pending_count(_last_results)
-
     target_class = _active.target_class
     logger.info("Counting stopped (target=%s, count=%d)", target_class, total)
     _active = None
