@@ -58,6 +58,12 @@ export default function VisionPage() {
     loadCamellones()
   }, [])
 
+  // Fetch counting config once on mount so the line + arrow can render before
+  // pressing "Contar". `handleStart` also refreshes it to catch /settings edits.
+  useEffect(() => {
+    getCountingConfig().then(setCountingConfig).catch(console.error)
+  }, [])
+
   // Fetch labels, restore last selection from localStorage
   useEffect(() => {
     let cancelled = false
@@ -252,10 +258,11 @@ export default function VisionPage() {
         detections={frameData?.detections}
         showDetections={isCounting && !!frameData}
         countingLine={
-          isCounting && countingConfig
+          connected && countingConfig
             ? {
                 mode: countingConfig.count_mode,
                 threshold: countingConfig.threshold,
+                direction: countingConfig.direction,
               }
             : null
         }
