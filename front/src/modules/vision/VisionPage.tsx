@@ -266,6 +266,7 @@ export default function VisionPage() {
               }
             : null
         }
+        showRoi={countingConfig?.roi_mode === "square"}
       >
         {isCounting && frameData && (
           <CountOverlay

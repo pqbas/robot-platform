@@ -60,7 +60,10 @@ async def handle_client(reader, writer, detector: Detector) -> None:
 
             target_class = header.get("target_class")
             conf = header.get("confidence", 0.5)
-            result = detector.detect(frame, target_class=target_class, conf=conf)
+            roi_mode = header.get("roi_mode", "square")
+            result = detector.detect(
+                frame, target_class=target_class, conf=conf, roi_mode=roi_mode,
+            )
             await write_response(writer, result)
     except ConnectionResetError:
         pass

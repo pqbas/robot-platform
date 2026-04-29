@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react"
 import type { Detection } from "@/types"
 import DetectionOverlay from "./DetectionOverlay"
 import CountingLineOverlay from "./CountingLineOverlay"
+import RoiOverlay from "./RoiOverlay"
 
 type VideoStreamProps = {
   videoRef: React.RefObject<HTMLVideoElement | null>
@@ -10,6 +11,7 @@ type VideoStreamProps = {
   detections?: Detection[]
   showDetections?: boolean
   countingLine?: { mode: string; threshold: number; direction: string } | null
+  showRoi?: boolean
   children?: ReactNode
 }
 
@@ -19,6 +21,7 @@ export default function VideoStream({
   detections = [],
   showDetections = false,
   countingLine = null,
+  showRoi = true,
   children,
 }: VideoStreamProps) {
   return (
@@ -29,6 +32,7 @@ export default function VideoStream({
         playsInline
         className="max-h-full max-w-full"
       />
+      <RoiOverlay videoRef={videoRef} visible={connected && showRoi} />
       <DetectionOverlay
         videoRef={videoRef}
         detections={detections}

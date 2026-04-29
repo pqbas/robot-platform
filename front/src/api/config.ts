@@ -55,11 +55,14 @@ export function setCameraResolution(
 
 // --- Counting ---
 
+export type RoiMode = "square" | "full"
+
 export type CountingConfig = {
   count_mode: string
   threshold: number
   direction: string
   confidence_threshold: number
+  roi_mode: RoiMode
 }
 
 export type CountingConfigUpdate = Partial<CountingConfig>

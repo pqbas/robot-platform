@@ -63,6 +63,7 @@ class CountingConfig:
     threshold: float = 0.5              # normalized line position in [0, 1]
     direction: str = "left2right"       # "top2down" | "down2top" | "left2right" | "right2left"
     confidence_threshold: float = 0.25
+    roi_mode: str = "square"            # "square" (centered, side=height) | "full" (whole frame)
 
 
 @dataclass

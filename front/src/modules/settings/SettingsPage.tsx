@@ -258,6 +258,29 @@ function CountingTab() {
       <Separator />
 
       <div className="space-y-2">
+        <Label htmlFor="roi-mode">Área de detección</Label>
+        <Select
+          value={config.roi_mode}
+          onValueChange={(v) =>
+            setConfig({ ...config, roi_mode: v as "square" | "full" })
+          }
+        >
+          <SelectTrigger id="roi-mode" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="square">Cuadrado central (recomendado)</SelectItem>
+            <SelectItem value="full">Frame completo</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Cuadrado central: YOLO ve un cuadrado de lado = altura del frame, sin letterbox. Frame completo: usa toda la imagen (con padding interno).
+        </p>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-2">
         <Label htmlFor="confidence">Umbral de confianza</Label>
         <Input
           id="confidence"

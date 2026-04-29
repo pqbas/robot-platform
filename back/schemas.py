@@ -154,6 +154,7 @@ class CountingConfigOut(BaseModel):
     threshold: float = Field(ge=0.0, le=1.0)
     direction: str
     confidence_threshold: float = Field(ge=0.0, le=1.0)
+    roi_mode: Literal["square", "full"] = "square"
 
 
 class CountingConfigUpdate(BaseModel):
@@ -161,6 +162,7 @@ class CountingConfigUpdate(BaseModel):
     threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     direction: str | None = None
     confidence_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    roi_mode: Literal["square", "full"] | None = None
 
 
 # --- Location ---

@@ -86,7 +86,12 @@ class _InferenceWorker:
             try:
                 target_class = session.target_class
                 conf = config.counting.confidence_threshold
-                response = self._client.detect(frame, target_class, conf)
+                response = self._client.detect(
+                    frame,
+                    target_class,
+                    conf,
+                    roi_mode=config.counting.roi_mode,
+                )
 
                 if response is None:
                     continue
