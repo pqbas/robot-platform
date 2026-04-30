@@ -29,6 +29,7 @@ from back.services.camera_control_client import (
     CameraWorkerUnavailable,
 )
 from back.services.perception import counter
+from back.services.perception.engine_paths import engine_path_for, engine_exists
 from back.services.perception.inference_client import InferenceClient
 
 logger = logging.getLogger("config_routes")
@@ -239,7 +240,20 @@ async def select_label(body: SelectLabelRequest, db: AsyncSession = Depends(get_
     if model and model.source == "library":
         worker_path = body.model_filename
     else:
-        worker_path = str(Path(config.storage.models_dir) / body.model_filename)
+        pt_path = str(Path(config.storage.models_dir) / body.model_filename)
+        # If the operator has TensorRT enabled and the engine is built,
+        # hand the .engine to the inference-worker instead of the .pt.
+        # Ultralytics' YOLO() loader accepts both transparently.
+        if (
+            model
+            and model.tensorrt_enabled
+            and model.engine_status == "ready"
+            and model.file_hash
+            and engine_exists(pt_path, model.file_hash)
+        ):
+            worker_path = engine_path_for(pt_path, model.file_hash)
+        else:
+            worker_path = pt_path
 
     client = InferenceClient(config.perception.socket_path)
     reload_result = client.reload_model(worker_path)
