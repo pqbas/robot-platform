@@ -37,7 +37,7 @@ def upgrade() -> None:
                     "tensorrt_enabled",
                     sa.Boolean(),
                     nullable=False,
-                    server_default=sa.text("0"),
+                    server_default=sa.text("false"),
                 )
             )
         if "engine_status" not in cols:
