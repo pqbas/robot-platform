@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 
 from sqlalchemy import select
@@ -31,7 +32,7 @@ from back.services.perception.conversion_client import (
     ConversionClient,
     ConversionWorkerUnavailable,
 )
-from back.services.perception.engine_paths import engine_path_for
+from back.services.perception.engine_paths import engine_cache_path_for
 from back.services.perception.inference_client import InferenceClient
 
 logger = logging.getLogger("conversion_poller")
@@ -41,7 +42,12 @@ POLL_INTERVAL_SECONDS = 5.0
 
 async def reconcile_orphaned_conversions() -> None:
     """At backend startup, any 'converting' row is stale — the worker is
-    a separate process and was idle when the backend just booted."""
+    a separate process and was idle when the backend just booted.
+
+    If the engine file already exists on disk, the previous build actually
+    succeeded and only the DB transition was lost (e.g. backend killed
+    between worker finish and poller tick). Promote those to ``ready``
+    instead of marking them as errors."""
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(DetectionModel).where(
@@ -52,17 +58,27 @@ async def reconcile_orphaned_conversions() -> None:
         if not stuck:
             return
         for m in stuck:
-            m.engine_status = "error"
-            m.engine_error = "Backend reiniciado durante conversión"
-            logger.warning("Reconciled stale converting row: %s", m.filename)
+            engine_path = _engine_path_for_model(m)
+            if engine_path and os.path.exists(engine_path):
+                m.engine_status = "ready"
+                m.engine_error = None
+                logger.info(
+                    "Reconciled converting row to ready (engine on disk): %s",
+                    m.filename,
+                )
+            else:
+                m.engine_status = "error"
+                m.engine_error = "Backend reiniciado durante conversión"
+                logger.warning("Reconciled stale converting row: %s", m.filename)
         await session.commit()
 
 
 def _engine_path_for_model(model: DetectionModel) -> str | None:
     if not model.file_hash:
         return None
-    pt_path = str(Path(config.storage.models_dir) / model.filename)
-    return engine_path_for(pt_path, model.file_hash)
+    return engine_cache_path_for(
+        model.filename, model.file_hash, config.storage.models_dir
+    )
 
 
 async def _maybe_reload_active_model(engine_path: str) -> None:
@@ -112,9 +128,10 @@ async def _process_worker_result(
         # Find the row whose computed engine path matches the worker's
         # target — the operator may have toggled multiple models in
         # quick succession (refused) but exactly one is converting.
+        target_abs = os.path.abspath(target_engine)
         for m in candidates:
             expected = _engine_path_for_model(m)
-            if expected and expected == target_engine:
+            if expected and os.path.abspath(expected) == target_abs:
                 if last_result.get("ok"):
                     m.engine_status = "ready"
                     m.engine_error = None

@@ -24,3 +24,27 @@ def engine_path_for(pt_path: str, file_hash: str, precision: str = "fp16") -> st
 
 def engine_exists(pt_path: str, file_hash: str, precision: str = "fp16") -> bool:
     return os.path.exists(engine_path_for(pt_path, file_hash, precision))
+
+
+def actual_pt_path_for(filename: str, source: str | None, models_dir: str) -> str:
+    """On-disk path to the actual .pt file for a model.
+
+    Library models (``yolo11n.pt`` etc.) live at the backend's working
+    directory — that's where ultralytics downloads them by default — so
+    the path is the bare filename, resolved relative to cwd.
+
+    Uploaded models live under ``MODELS_DIR``.
+    """
+    if source == "library":
+        return filename
+    return os.path.join(models_dir, filename)
+
+
+def engine_cache_path_for(
+    filename: str, file_hash: str, models_dir: str, precision: str = "fp16"
+) -> str:
+    """Engine cache path. Always under ``models_dir`` regardless of where
+    the .pt actually lives, so library and uploaded models share the same
+    cache layout."""
+    virtual_pt = os.path.join(models_dir, filename)
+    return engine_path_for(virtual_pt, file_hash, precision)

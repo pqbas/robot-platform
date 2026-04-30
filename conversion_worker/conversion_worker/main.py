@@ -37,8 +37,6 @@ from typing import Optional
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("conversion_worker")
 
-_shutdown = asyncio.Event()
-
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -212,9 +210,10 @@ async def handle_control(
 
 async def serve(args) -> None:
     loop = asyncio.get_event_loop()
+    shutdown = asyncio.Event()
 
     def _stop():
-        _shutdown.set()
+        shutdown.set()
 
     loop.add_signal_handler(signal.SIGTERM, _stop)
     loop.add_signal_handler(signal.SIGINT, _stop)
@@ -227,7 +226,7 @@ async def serve(args) -> None:
     server = await asyncio.start_unix_server(client_handler, path=args.control_socket)
     logger.info("Listening on %s", args.control_socket)
 
-    await _shutdown.wait()
+    await shutdown.wait()
     server.close()
     await server.wait_closed()
     logger.info("Conversion worker stopped")

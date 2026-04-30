@@ -29,7 +29,10 @@ from back.services.camera_control_client import (
     CameraWorkerUnavailable,
 )
 from back.services.perception import counter
-from back.services.perception.engine_paths import engine_path_for, engine_exists
+from back.services.perception.engine_paths import (
+    actual_pt_path_for,
+    engine_cache_path_for,
+)
 from back.services.perception.inference_client import InferenceClient
 
 logger = logging.getLogger("config_routes")
@@ -230,33 +233,52 @@ async def get_available_labels(db: AsyncSession = Depends(get_db)):
 
 @router.post("/select-label")
 async def select_label(body: SelectLabelRequest, db: AsyncSession = Depends(get_db)):
-    # Determine if this filename refers to a library model (managed by ultralytics)
-    # or an uploaded model (file in storage). Library models receive the bare
-    # filename; uploaded models receive the absolute path.
     result = await db.execute(
         select(DetectionModel).where(DetectionModel.filename == body.model_filename)
     )
     model = result.scalar_one_or_none()
-    if model and model.source == "library":
+
+    # Default fallback (no DB row): ultralytics resolves the bare filename.
+    if model is None:
         worker_path = body.model_filename
     else:
-        pt_path = str(Path(config.storage.models_dir) / body.model_filename)
-        # If the operator has TensorRT enabled and the engine is built,
-        # hand the .engine to the inference-worker instead of the .pt.
-        # Ultralytics' YOLO() loader accepts both transparently.
+        # If TensorRT is on and the engine is built, hand the .engine to
+        # the inference-worker — applies to both library and uploaded
+        # models, since the engine cache lives in MODELS_DIR either way.
         if (
-            model
-            and model.tensorrt_enabled
+            model.tensorrt_enabled
             and model.engine_status == "ready"
             and model.file_hash
-            and engine_exists(pt_path, model.file_hash)
         ):
-            worker_path = engine_path_for(pt_path, model.file_hash)
+            engine_path = engine_cache_path_for(
+                model.filename, model.file_hash, config.storage.models_dir
+            )
+            if os.path.exists(engine_path):
+                worker_path = engine_path
+            else:
+                worker_path = actual_pt_path_for(
+                    model.filename, model.source, config.storage.models_dir
+                )
         else:
-            worker_path = pt_path
+            worker_path = actual_pt_path_for(
+                model.filename, model.source, config.storage.models_dir
+            )
+
+    # Absolutise non-bare paths — the inference worker's cwd
+    # (/opt/robot-platform/inference) differs from the backend's
+    # (/opt/robot-platform), so a relative ``data/...`` would resolve
+    # against the wrong root. Bare filenames (library .pt) are left alone
+    # so ultralytics can do its own cache lookup / auto-download.
+    if os.sep in worker_path or worker_path.startswith("."):
+        worker_path = os.path.abspath(worker_path)
 
     client = InferenceClient(config.perception.socket_path)
     reload_result = client.reload_model(worker_path)
     if reload_result is None:
         raise HTTPException(status_code=503, detail="Inference worker not available")
-    return {"ok": True, "model": body.model_filename}
+    if not reload_result.get("ok"):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Inference worker rejected reload: {reload_result.get('error')}",
+        )
+    return {"ok": True, "model": body.model_filename, "loaded": worker_path}

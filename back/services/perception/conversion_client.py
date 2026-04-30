@@ -7,6 +7,7 @@ poll for completion every few seconds.
 
 import json
 import logging
+import os
 import socket
 import struct
 
@@ -64,8 +65,8 @@ class ConversionClient:
         return self._send(
             {
                 "cmd": "convert",
-                "pt_path": pt_path,
-                "engine_path": engine_path,
+                "pt_path": os.path.abspath(pt_path),
+                "engine_path": os.path.abspath(engine_path),
                 "precision": precision,
             }
         )
