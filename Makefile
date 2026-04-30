@@ -71,6 +71,9 @@ logs:
 logs-inference:
 	sudo journalctl -u inference-worker -f
 
+bench-inference:
+	@cd inference && uv run python -c "import socket, json, struct, sys; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.connect('/tmp/inference.sock'); h=json.dumps({'command':'timing'}).encode(); s.sendall(struct.pack('>II',len(h),0)+h); ln=struct.unpack('>I',s.recv(4))[0]; print(json.dumps(json.loads(s.recv(ln).decode()), indent=2))"
+
 status:
 	@sudo systemctl status robot-platform --no-pager
 	@echo "---"

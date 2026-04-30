@@ -7,11 +7,26 @@ import os
 import signal
 import sys
 
-import cv2
-import numpy as np
+# JetPack ships TensorRT 8.5 whose tensorrt/__init__.py uses ``np.bool``.
+# That alias was removed in numpy>=1.24; ultralytics' AutoUpdate sometimes
+# pulls in a newer numpy at runtime, leaving the worker calling into trt
+# code that AttributeErrors on ``np.bool``. Patch defensively before any
+# other module imports numpy.
+import numpy as np  # noqa: E402
 
-from inference_worker.detector import Detector
-from inference_worker.protocol import read_request, write_response
+if not hasattr(np, "bool"):
+    np.bool = bool  # type: ignore[attr-defined]
+if not hasattr(np, "float"):
+    np.float = float  # type: ignore[attr-defined]
+if not hasattr(np, "int"):
+    np.int = int  # type: ignore[attr-defined]
+if not hasattr(np, "object"):
+    np.object = object  # type: ignore[attr-defined]
+
+import cv2  # noqa: E402
+
+from inference_worker.detector import Detector  # noqa: E402
+from inference_worker.protocol import read_request, write_response  # noqa: E402
 
 logger = logging.getLogger("inference_worker")
 
@@ -30,6 +45,8 @@ def handle_command(header: dict, detector: Detector) -> dict:
             return {"ok": False, "error": str(exc)}
     elif cmd == "status":
         return {"ok": True, "model_path": detector.model_path}
+    elif cmd == "timing":
+        return {"ok": True, "model_path": detector.model_path, **detector.timing_stats()}
     return {"ok": False, "error": f"unknown command: {cmd}"}
 
 
