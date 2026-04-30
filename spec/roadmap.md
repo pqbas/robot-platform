@@ -142,10 +142,11 @@
 
 **Goal:** la inferencia corre más rápido en Jetson para modelos seleccionados, dejando margen de cómputo para sostener live + recording + detección sin regresiones.
 
-- [ ] Cada modelo asignado al robot tiene un toggle TensorRT / PyTorch en el frontend
-- [ ] Al activar TensorRT en un modelo, el robot convierte el `.pt` a `.engine` localmente (la optimización es device-specific y debe ocurrir en el Jetson)
-- [ ] El inference-worker usa el `.engine` cuando el modelo está en modo TensorRT y el `.pt` cuando está en modo PyTorch
-- [ ] Documentado el tradeoff (tiempo de conversión, ganancia de FPS observada en Jetson) y cómo revertir un modelo a PyTorch
+- [x] Cada modelo asignado al robot tiene un toggle TensorRT / PyTorch en el frontend
+- [x] Al activar TensorRT en un modelo, el robot convierte el `.pt` a `.engine` localmente (la optimización es device-specific y debe ocurrir en el Jetson)
+- [x] El inference-worker usa el `.engine` cuando el modelo está en modo TensorRT y el `.pt` cuando está en modo PyTorch
+- [x] Modelos library (e.g. `yolo11n.pt`) también pueden convertirse — el toggle aplica a cualquier modelo asignado, no solo a los uploaded
+- [ ] Documentado el tradeoff (tiempo de conversión, ganancia de FPS observada en Jetson) y cómo revertir un modelo a PyTorch — primera medición en Phase 16 muestra speedup más bajo del esperado, ver `spec/29-04-26-inference-perf/`
 
 ---
 
@@ -187,6 +188,21 @@
 - [ ] El operador puede elegir entre el método de cruce de línea y el método por similitud entre frames
 - [ ] El método por similitud está integrado al pipeline del worker
 - [ ] Ambos métodos producen el mismo formato de resultado
+
+---
+
+## Phase 16: Optimización de latencia de inferencia
+
+**Goal:** la inferencia (modelo + tracker + framework) corre lo suficientemente rápido para que el conteo no pierda detecciones a la velocidad real del robot, y para que TensorRT entregue el speedup esperado sobre PyTorch (no solo 1.3× como muestra la primera medición).
+
+**Contexto:** Phase 11 entrega el path TensorRT funcional, pero medir la latencia mostró un problema no anticipado: la inferencia total en `model.track()` es ~52 ms (TRT) y ~75 ms (PT), con solo 1.3× de speedup end-to-end. La inferencia del modelo en sí es más rápida con TRT (16 ms vs 28 ms, 1.75×), pero ~50% del tiempo total es overhead del wrapper de ultralytics. Detalle completo en `spec/29-04-26-inference-perf/current-state.md`.
+
+- [x] Instrumentar el `inference-worker` con timings por etapa (preprocess / inference / postprocess) y un agregador rolling con `make bench-inference` para snapshots on-demand
+- [ ] Pinear clocks de Jetson al máximo en boot (systemd unit `jetson-clocks.service`); hoy se aplica manualmente con `sudo jetson_clocks` y se pierde en reboot
+- [ ] Identificar cuál es el overhead de ~27 ms dentro de `model.track()` que no aparece en las stages de ultralytics (Predictor setup per-call, ByteTrack association, Result construction)
+- [ ] Reemplazar `model.track()` por un path más bajo (`model.predict(stream=True)` + ByteTrack persistente, o llamar directo al `predictor.inference()`)
+- [ ] Validar que la inferencia pura del engine baja a ~6–8 ms (lo esperado para YOLO11n FP16 en Xavier AGX) y no los 16 ms actuales
+- [ ] Documentar el tradeoff y la metodología en un writeup que incluya tabla PT vs TRT FP16 (latency p50/p99, FPS, mAP), trace de profiling, y los pasos aplicados — entregable que también sirve de portafolio de inference engineering
 
 ---
 

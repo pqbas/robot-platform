@@ -12,6 +12,9 @@
 - Protocolo: length-prefixed sobre Unix socket (header_len + jpeg_len + header JSON + JPEG bytes)
 - En Jetson: Python 3.10 con PyTorch NVIDIA (CUDA). En laptop: Python 3.13 con PyTorch de PyPI
 - Iniciar worker: `make run-inference` o `cd inference && uv run inference-worker --model ../yolo11n.pt`
+- numpy pinned `<1.24` y `np.bool/np.float/np.int/np.object` se monkey-patchean al inicio de `main.py`: el TensorRT 8.5 de JetPack referencia `np.bool` que NumPy 1.24+ removió; ver Phase 11.
+- Per-frame timing: el worker mantiene un rolling window (600 frames) y loguea p50/p90/p99/mean cada 150 frames con breakdown por etapa (`pre`/`infer`/`post`). Snapshot on-demand: `make bench-inference`.
+- Optimizar latencia es Phase 16 (`spec/29-04-26-inference-perf/`); el baseline actual es ~52 ms / 19 fps con `model.track()` en TRT FP16 a pesar de que la inferencia pura del modelo corre a 16 ms — el resto es overhead del wrapper de ultralytics. Pinear clocks (`sudo jetson_clocks`) es prerequisito antes de medir.
 
 ## Puertos
 - Robot: `PORT=8080` (`.env.robot`)
