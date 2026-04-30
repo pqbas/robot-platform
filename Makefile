@@ -1,4 +1,4 @@
-.PHONY: start run-robot run-server run-front run-inference db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update
+.PHONY: start run-robot run-server run-front run-inference run-conversion logs-conversion db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update
 
 start:
 	uv run uvicorn back.main:app --host 0.0.0.0 --port 8080 --reload
@@ -28,6 +28,12 @@ run-recording:
 logs-recording:
 	sudo journalctl -u recording-worker -f
 
+run-conversion:
+	cd conversion_worker && uv run conversion-worker --control-socket /tmp/conversion.sock
+
+logs-conversion:
+	sudo journalctl -u conversion-worker -f
+
 db-up:
 	docker compose -f docker-compose.server.yml up -d
 
@@ -56,6 +62,7 @@ restart:
 	-sudo systemctl restart inference-worker
 	-sudo systemctl restart camera-worker
 	-sudo systemctl restart recording-worker
+	-sudo systemctl restart conversion-worker
 	sudo systemctl restart robot-platform
 
 logs:
@@ -83,4 +90,5 @@ update:
 	-sudo systemctl restart inference-worker
 	-sudo systemctl restart camera-worker
 	-sudo systemctl restart recording-worker
+	-sudo systemctl restart conversion-worker
 	sudo systemctl restart robot-platform

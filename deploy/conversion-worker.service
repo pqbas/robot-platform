@@ -1,0 +1,17 @@
+[Unit]
+Description=Conversion Worker (TensorRT engine builder via Unix socket)
+Before=robot-platform.service
+After=network.target
+
+[Service]
+Type=simple
+User=DEPLOY_USER
+WorkingDirectory=DEPLOY_DIR
+ExecStartPre=/bin/rm -f /tmp/conversion.sock
+ExecStart=/opt/robot-platform/conversion_worker/.venv/bin/conversion-worker
+Restart=on-failure
+RestartSec=2
+Environment=CONVERSION_SOCKET=/tmp/conversion.sock
+
+[Install]
+WantedBy=multi-user.target

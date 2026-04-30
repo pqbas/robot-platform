@@ -136,6 +136,24 @@ if [[ "$MODE" == "robot" ]]; then
         fi
     fi
 
+    info "Installing Python dependencies (conversion worker)..."
+    cd "$INSTALL_DIR/conversion_worker"
+    if [[ "$(uname -m)" == "aarch64" ]]; then
+        # Jetson: use system Python 3.10 + JetPack's tensorrt bindings
+        # via --system-site-packages. The JetPack package
+        # 'python3-libnvinfer' provides 'tensorrt' for system python only,
+        # which is why we cannot reuse the backend's uv-managed Python 3.13.
+        info "Jetson detected (aarch64): installing conversion worker against system Python (TensorRT)"
+        sudo apt-get install -y -qq python3-libnvinfer python3-libnvinfer-dev || \
+            warn "python3-libnvinfer apt install failed — TensorRT conversions will not work until JetPack provides it"
+        uv venv --clear --system-site-packages --python /usr/bin/python3
+        uv pip install --no-deps ultralytics numpy hatchling
+        uv pip install -e . --no-deps
+    else
+        uv sync
+    fi
+    cd "$INSTALL_DIR"
+
     info "Creating recordings directory..."
     mkdir -p "$INSTALL_DIR/data/robot/recordings"
 fi
@@ -234,6 +252,11 @@ if [[ "$MODE" == "robot" ]]; then
         -e "s|DEPLOY_DIR|${INSTALL_DIR}/recording_worker|g" \
         "$INSTALL_DIR/deploy/recording-worker.service" \
         | sudo tee /etc/systemd/system/recording-worker.service > /dev/null
+
+    sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
+        -e "s|DEPLOY_DIR|${INSTALL_DIR}/conversion_worker|g" \
+        "$INSTALL_DIR/deploy/conversion-worker.service" \
+        | sudo tee /etc/systemd/system/conversion-worker.service > /dev/null
 fi
 
 sudo systemctl daemon-reload
@@ -250,6 +273,10 @@ if [[ "$MODE" == "robot" ]]; then
     sudo systemctl enable recording-worker
     sudo systemctl restart recording-worker
     info "Recording worker service enabled and started"
+
+    sudo systemctl enable conversion-worker
+    sudo systemctl restart conversion-worker
+    info "Conversion worker service enabled and started"
 fi
 
 sudo systemctl enable robot-platform
