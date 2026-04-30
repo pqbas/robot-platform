@@ -138,18 +138,7 @@
 
 ---
 
-## Phase 11: Configurabilidad del recording-worker (calidad/CPU/disco)
-
-**Goal:** los parámetros de encoding son ajustables por env sin tocar código, para que dev en laptop (libx264, CPU caro) pueda bajar carga y producción en Jetson (NVENC, ~no-CPU) mantenga calidad alta.
-
-- [ ] El bitrate del recording-worker se controla por env var (`RECORDING_BITRATE_BPS`); default 8 Mbps NVENC / 6 Mbps libx264
-- [ ] El preset de libx264 (laptop dev) se controla por env (`RECORDING_X264_PRESET`); default `medium`, sin afectar el path NVENC de Jetson
-- [x] El framerate efectivo se respeta del handshake del camera-worker en vez del 30 hardcodeado actual
-- [ ] Documentado en `recording_worker/README.md` qué env vars existen y cuál es el default por backend
-
----
-
-## Phase 12: Inferencia YOLO con TensorRT
+## Phase 11: Inferencia YOLO con TensorRT
 
 **Goal:** la inferencia corre más rápido en Jetson para modelos seleccionados, dejando margen de cómputo para sostener live + recording + detección sin regresiones.
 
@@ -157,6 +146,17 @@
 - [ ] Al activar TensorRT en un modelo, el robot convierte el `.pt` a `.engine` localmente (la optimización es device-specific y debe ocurrir en el Jetson)
 - [ ] El inference-worker usa el `.engine` cuando el modelo está en modo TensorRT y el `.pt` cuando está en modo PyTorch
 - [ ] Documentado el tradeoff (tiempo de conversión, ganancia de FPS observada en Jetson) y cómo revertir un modelo a PyTorch
+
+---
+
+## Phase 12: Configurabilidad del recording-worker (calidad/CPU/disco)
+
+**Goal:** los parámetros de encoding son ajustables por env sin tocar código, para que dev en laptop (libx264, CPU caro) pueda bajar carga y producción en Jetson (NVENC, ~no-CPU) mantenga calidad alta.
+
+- [ ] El bitrate del recording-worker se controla por env var (`RECORDING_BITRATE_BPS`); cuando la env var no está definida, mantener el auto-scale actual (12 Mbps NVENC ≥1080p, 8 Mbps a 720p; 9/6 Mbps libx264) para no degradar la calidad del robot en producción
+- [ ] El preset de libx264 (laptop dev) se controla por env (`RECORDING_X264_PRESET`); default `medium`, sin afectar el path NVENC de Jetson
+- [x] El framerate efectivo se respeta del handshake del camera-worker en vez del 30 hardcodeado actual
+- [ ] Documentado en `recording_worker/README.md` qué env vars existen y cuál es el default por backend
 
 ---
 
