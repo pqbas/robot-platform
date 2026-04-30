@@ -38,10 +38,19 @@
 - Probar backend detectado: `cd recording_worker && uv run python -c "from recording_worker.encoder import detect_backend; print(detect_backend())"`.
 - Bitrate auto-escalado por altura del frame (Phase 7 lo expondrá como env var): NVENC 12 Mbps a 1080p, 8 Mbps a 720p; libx264 9/6 Mbps respectivamente. Profile=High preset=Slow (NVENC); preset=medium crf=20 (libx264). El FPS se toma del handshake del camera-worker, no se hardcodea.
 
+## Conversion Worker
+- Proyecto uv separado en `conversion_worker/`. Construye TensorRT engines (`.pt` → FP16 `.engine`) bajo demanda. Idle = 0 CPU, 0 GPU.
+- En Jetson el venv se crea con `uv venv --system-site-packages --python /usr/bin/python3` para heredar `tensorrt` de JetPack (`python3-libnvinfer`); el backend usa Python 3.13, así que el worker corre por separado.
+- El backend habla via Unix socket `/tmp/conversion.sock` (JSON length-prefixed: `convert`, `status`); cliente en `back/services/perception/conversion_client.py`.
+- Cache en `data/robot/models/<stem>.<file_hash>.fp16.engine` — el sha del `.pt` baked en el nombre invalida automáticamente cuando el AI engineer re-sube el modelo.
+- El operador activa/desactiva TensorRT por modelo desde `/settings` (card "Modelos asignados", visible solo en modo robot). Una conversión a la vez (segunda → 409).
+- Iniciar worker: `make run-conversion` o `cd conversion_worker && uv run conversion-worker`.
+
 ## Comandos
 - Camera worker: `make run-camera`
 - Inference worker: `make run-inference`
 - Recording worker: `make run-recording`
+- Conversion worker: `make run-conversion`
 - Backend robot: `make run-robot` (o `ENV_FILE=.env.robot uv run python -m back.main`)
 - Backend server: `make run-server` (levanta PostgreSQL + uvicorn)
 - Frontend: `make run-front`
@@ -49,7 +58,7 @@
 ## Deploy (producción)
 - Instalar robot: `make deploy-robot` (nginx + systemd, SQLite, port 8080)
 - Instalar server: `make deploy-server` (nginx + systemd + PostgreSQL, port 9090)
-- Logs backend: `make logs` | Logs inference: `make logs-inference` | Logs camera: `make logs-camera` | Logs recording: `make logs-recording`
+- Logs backend: `make logs` | Logs inference: `make logs-inference` | Logs camera: `make logs-camera` | Logs recording: `make logs-recording` | Logs conversion: `make logs-conversion`
 - Status: `make status` | Restart: `make restart`
 - Nginx sirve `front/dist/` y hace proxy a uvicorn en 127.0.0.1
 - Systemd ejecuta uvicorn directo (sin tmux), `Restart=on-failure`
