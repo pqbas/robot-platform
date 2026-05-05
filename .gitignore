@@ -34,7 +34,6 @@ data/
 # docs/ se versiona, salvo dependencias y archivos legacy pesados.
 docs/**/node_modules/
 docs/INFORME_*.docx
-docs/assets/
 plans/
 reference/
 
