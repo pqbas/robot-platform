@@ -1,0 +1,142 @@
+direction: down
+
+robot: "Robot Móvil (Jetson Xavier)" {
+  style.fill: "#E8F4FD"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+
+  direction: down
+
+  camera_dev: "Cámara ZED 2i\n(USB 3.0)" {
+    style.fill: "#D5E8F0"
+    style.stroke: "#1F4E79"
+  }
+
+  camera_worker: "camera-worker\nV4L2 + OpenCV\nfan-out 1080p/720p" {
+    style.fill: "#FFE0B2"
+    style.stroke: "#E65100"
+    style.stroke-width: 2
+  }
+
+  inference_worker: "inference-worker\nYOLO v11 + BotSort\nPyTorch / TensorRT FP16" {
+    style.fill: "#FFE0B2"
+    style.stroke: "#E65100"
+    style.stroke-width: 2
+  }
+
+  recording_worker: "recording-worker\nNVENC (H.264)\nidle = 0 CPU" {
+    style.fill: "#FFE0B2"
+    style.stroke: "#E65100"
+    style.stroke-width: 2
+  }
+
+  conversion_worker: "conversion-worker\nbuild .pt → .engine FP16\non demand" {
+    style.fill: "#FFE0B2"
+    style.stroke: "#E65100"
+    style.stroke-width: 2
+  }
+
+  backend: "Backend\nFastAPI · Python 3.13\nWebRTC · API REST" {
+    style.fill: "#D5E8F0"
+    style.stroke: "#1F4E79"
+    style.stroke-width: 2
+  }
+
+  sqlite: "SQLite" {
+    style.fill: "#F5F5F5"
+    style.stroke: "#999999"
+    shape: cylinder
+  }
+
+  camera_dev -> camera_worker: "V4L2" {
+    style.stroke: "#1F4E79"
+    style.stroke-width: 2
+  }
+
+  camera_worker -> backend: "/tmp/camera.sock\nframes BGR" {
+    style.stroke: "#E65100"
+    style.stroke-width: 2
+    style.stroke-dash: 5
+  }
+
+  camera_worker -> recording_worker: "/tmp/camera.sock\n(consumidor 2)" {
+    style.stroke: "#E65100"
+    style.stroke-width: 2
+    style.stroke-dash: 5
+  }
+
+  backend -> inference_worker: "/tmp/inference.sock\nJPEG + JSON" {
+    style.stroke: "#E65100"
+    style.stroke-width: 2
+    style.stroke-dash: 5
+  }
+
+  inference_worker -> backend: "detecciones + track_id" {
+    style.stroke: "#E65100"
+    style.stroke-width: 2
+    style.stroke-dash: 5
+  }
+
+  backend -> recording_worker: "/tmp/recording.sock\nstart · stop" {
+    style.stroke: "#E65100"
+    style.stroke-width: 2
+    style.stroke-dash: 5
+  }
+
+  backend -> conversion_worker: "/tmp/conversion.sock\nconvert · status" {
+    style.stroke: "#E65100"
+    style.stroke-width: 2
+    style.stroke-dash: 5
+  }
+
+  conversion_worker -> inference_worker: "reload_model\n(.engine listo)" {
+    style.stroke: "#1F4E79"
+    style.stroke-width: 2
+    style.stroke-dash: 3
+  }
+
+  recording_worker -> sqlite: "MP4 + metadata" {
+    style.stroke: "#999999"
+  }
+
+  backend -> sqlite {
+    style.stroke: "#999999"
+  }
+}
+
+cliente: "Cliente (Navegador Web)\nReact 19 + TypeScript" {
+  style.fill: "#FFFFFF"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}
+
+servidor: "Servidor Central (PC Laboratorio)\nFastAPI · PostgreSQL · JWT" {
+  style.fill: "#F3E5F5"
+  style.stroke: "#6A1B9A"
+  style.stroke-width: 2
+}
+
+nginx: "nginx\n:8080" {
+  style.fill: "#E8F5E9"
+  style.stroke: "#2E7D32"
+}
+
+cliente -> nginx: "HTTP" {
+  style.stroke: "#2E7D32"
+  style.stroke-width: 2
+}
+
+nginx -> robot.backend: "proxy" {
+  style.stroke: "#2E7D32"
+}
+
+robot.backend -> cliente: "WebRTC\n(video H.264 + detecciones)" {
+  style.stroke: "#2E7D32"
+  style.stroke-width: 3
+}
+
+robot.backend -> servidor: "HTTP Sync\n(push datos · pull modelos)" {
+  style.stroke: "#6A1B9A"
+  style.stroke-width: 2
+  style.stroke-dash: 5
+}
