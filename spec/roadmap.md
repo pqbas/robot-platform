@@ -208,6 +208,17 @@ Shipped en PR #TBD.
 
 ---
 
+## Phase 17: Informe técnico unificado #4 a PROCIENCIA
+
+**Goal:** consolidar los entregables previos a PROCIENCIA (#2 IA, #3 Plataforma) y el avance interno actual en un único informe formal #4 que cubra plataforma + IA en un solo documento.
+
+- [ ] Reestructurar `26_05_05_informe_4_unificado.md` con el formato PROCIENCIA (portada institucional, Resumen, I. Introducción, II. Objetivo general, III. Metodología, IV. Materiales, V. Resultados, VI. Conclusiones, VII. Referencias)
+- [ ] Insertar capítulo de IA en versión resumen: modelos evaluados (YoloV9/V10/V11), métricas obtenidas por modelo (mAP, F1, precisión, recall) y elección final, sin la teoría de arquitecturas del informe #2
+- [ ] Conservar el contenido vigente de plataforma del avance v2 (workers, TensorRT, fan-out, despliegue) integrado al nuevo TOC
+- [ ] Compilar a `.docx` con `node docs/informes/generate.js 26_05_05_informe_4_unificado.md`
+
+---
+
 ## Pendiente (sin fecha)
 
 - Clasificación offline de frutos (crops por track_id + modelo de calidad/madurez)
