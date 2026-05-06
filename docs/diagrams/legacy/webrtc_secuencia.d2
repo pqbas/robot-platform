@@ -1,0 +1,31 @@
+shape: sequence_diagram
+
+cliente: "Cliente (Web / Móvil)" {
+  style.fill: "#E8F4FD"
+  style.stroke: "#1F4E79"
+}
+backend: "          Backend (FastAPI)          " {
+  style.fill: "#D5E8F0"
+  style.stroke: "#1F4E79"
+}
+camera: "Cámara ZED 2i" {
+  style.fill: "#E8F4FD"
+  style.stroke: "#1F4E79"
+}
+
+cliente -> backend: "POST /offer (SDP offer)"
+backend -> camera: "Abrir cámara OpenCV"
+camera -> backend: "OK"
+backend -> backend: "Crear RTCPeerConnection\n+ CameraStreamTrack\n+ DataChannel"
+backend -> cliente: "SDP answer (JSON)"
+cliente -> backend: "Negociación ICE"
+backend -> cliente: "ICE candidates"
+cliente -> backend: "Conexión establecida"
+backend -> cliente: "Video H.264 (RTP)" {
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}
+backend -> cliente: "Metadatos detección (JSON)" {
+  style.stroke: "#999999"
+  style.stroke-dash: 3
+}

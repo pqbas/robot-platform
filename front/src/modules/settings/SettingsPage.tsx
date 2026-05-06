@@ -30,6 +30,7 @@ import {
 } from "@/api/vision"
 import { useCameraResolution } from "@/hooks/useCameraResolution"
 import { useAppMode } from "@/context/AppModeContext"
+import AssignedModelsCard from "./components/AssignedModelsCard"
 
 const SELECTED_LABEL_KEY = "vision.selectedLabel.v2"
 
@@ -306,6 +307,13 @@ function CountingTab() {
           {saving ? "Guardando..." : "Guardar"}
         </Button>
       </div>
+
+      {mode === "robot" && (
+        <>
+          <Separator />
+          <AssignedModelsCard />
+        </>
+      )}
     </div>
   )
 }

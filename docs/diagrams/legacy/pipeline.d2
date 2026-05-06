@@ -1,0 +1,95 @@
+grid-rows: 2
+grid-columns: 6
+grid-gap: 16
+
+camera: "Cámara\nZED 2i" {
+  style.fill: "#E8F4FD"
+  style.stroke: "#1F4E79"
+}
+
+jetson: "Jetson Xavier" {
+  style.fill: "#EAF0F6"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+
+  backend: "Backend (FastAPI)" {
+    style.fill: "#F0F6FB"
+    style.stroke: "#1F4E79"
+    style.stroke-dash: 3
+
+    direction: down
+
+    pipeline: "POST /offer" {
+      style.fill: "#F8FBFD"
+      style.stroke: "#1F4E79"
+      style.stroke-width: 2
+
+      grid-rows: 2
+      grid-columns: 3
+      grid-gap: 16
+
+      capture: "Captura\nOpenCV" {
+        style.fill: "#D5E8F0"
+        style.stroke: "#1F4E79"
+      }
+
+      crop: "Recorte\n1280×720" {
+        style.fill: "#D5E8F0"
+        style.stroke: "#1F4E79"
+      }
+
+      yolo: "Detección\nYOLO" {
+        style.fill: "#B8D4E8"
+        style.stroke: "#1F4E79"
+      }
+
+      botsort: "Seguimiento\nBotSort" {
+        style.fill: "#B8D4E8"
+        style.stroke: "#1F4E79"
+      }
+
+      counter: "Conteo por\nCruce de Línea" {
+        style.fill: "#B8D4E8"
+        style.stroke: "#1F4E79"
+      }
+
+      encoder: "Codificación\nH.264" {
+        style.fill: "#D5E8F0"
+        style.stroke: "#1F4E79"
+      }
+
+      capture -> crop
+      crop -> yolo
+      yolo -> botsort
+      botsort -> counter
+      counter -> encoder
+    }
+
+    otros: "API REST (sesiones, camellones, ubicaciones, configuración ...)" {
+      style.fill: "#F5F5F5"
+      style.stroke: "#999999"
+      style.font-color: "#999999"
+    }
+
+    pipeline -> otros: "" {
+      style.opacity: 0
+    }
+  }
+}
+
+webrtc: "WebRTC" {
+  style.fill: "#E8F4FD"
+  style.stroke: "#1F4E79"
+}
+
+cliente: "Cliente\nWeb / Móvil" {
+  style.fill: "#FFFFFF"
+  style.stroke: "#1F4E79"
+}
+
+camera -> jetson.backend.pipeline.capture: "USB 3.0" {
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}
+jetson.backend.pipeline.encoder -> webrtc
+webrtc -> cliente

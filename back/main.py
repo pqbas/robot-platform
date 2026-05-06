@@ -43,10 +43,23 @@ async def lifespan(app: FastAPI):
 
         sync_task = asyncio.create_task(start_sync_loop())
 
+    # TensorRT conversion reconciler + poller (robot only)
+    poller_task = None
+    if app_config.mode == AppMode.ROBOT:
+        from back.services.perception.conversion_poller import (
+            reconcile_orphaned_conversions,
+            run_poller,
+        )
+
+        await reconcile_orphaned_conversions()
+        poller_task = asyncio.create_task(run_poller())
+
     yield
 
     if sync_task:
         sync_task.cancel()
+    if poller_task:
+        poller_task.cancel()
     await close_all_connections()
     await close_db()
 
@@ -74,7 +87,10 @@ app.include_router(auth_router)
 
 # Robot-only routes
 if app_config.mode == AppMode.ROBOT:
+    from back.routes.models_local import router as models_local_router
+
     app.include_router(device_context_router)
+    app.include_router(models_local_router)
 
 # Admin CRUD routes — server mode only
 if app_config.mode == AppMode.SERVER:

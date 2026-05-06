@@ -31,7 +31,8 @@ data/
 .claude/
 
 # Docs and plans
-docs/
+# docs/ se versiona, salvo dependencias.
+docs/**/node_modules/
 plans/
 reference/
 

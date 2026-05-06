@@ -72,6 +72,11 @@ class RecordingConfig:
 
 
 @dataclass
+class ConversionConfig:
+    control_socket_path: str = os.getenv("CONVERSION_SOCKET", "/tmp/conversion.sock")
+
+
+@dataclass
 class EncoderConfig:
     bitrate: int = 1_000_000        # target bitrate in bps (1 Mbps)
     preset: str = "low-latency"     # "low-latency" | "high-quality"
@@ -102,6 +107,7 @@ class Config:
     server: ServerConfig = field(default_factory=ServerConfig)
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     recording: RecordingConfig = field(default_factory=RecordingConfig)
+    conversion: ConversionConfig = field(default_factory=ConversionConfig)
     sync: SyncConfig = field(default_factory=SyncConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
 

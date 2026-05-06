@@ -1,22 +1,41 @@
 from __future__ import annotations
 
+import collections
 import logging
+import time
 
 import numpy as np
 from ultralytics import YOLO
 
 logger = logging.getLogger("inference_worker.detector")
 
+# Rolling per-frame inference times. Keep ~20s worth at 30 fps.
+_TIMING_WINDOW = 600
+# Log a summary every N frames so logs aren't spammed.
+_TIMING_LOG_EVERY = 150
+
 
 class Detector:
     def __init__(self, model_path: str):
-        self._model = YOLO(model_path)
+        self._model = YOLO(model_path, task="detect")
         self._model_path = model_path
+        self._times_ms: collections.deque[float] = collections.deque(
+            maxlen=_TIMING_WINDOW
+        )
+        self._pre_ms: collections.deque[float] = collections.deque(maxlen=_TIMING_WINDOW)
+        self._inf_ms: collections.deque[float] = collections.deque(maxlen=_TIMING_WINDOW)
+        self._post_ms: collections.deque[float] = collections.deque(maxlen=_TIMING_WINDOW)
+        self._frame_count = 0
         logger.info("Model loaded: %s", model_path)
 
     def reload_model(self, model_path: str) -> None:
-        self._model = YOLO(model_path)
+        self._model = YOLO(model_path, task="detect")
         self._model_path = model_path
+        self._times_ms.clear()
+        self._pre_ms.clear()
+        self._inf_ms.clear()
+        self._post_ms.clear()
+        self._frame_count = 0
         logger.info("Model reloaded: %s", model_path)
 
     @property
@@ -25,6 +44,48 @@ class Detector:
 
     def get_class_names(self) -> list[str]:
         return list(self._model.names.values())
+
+    def _log_timing_summary(self) -> None:
+        if not self._times_ms:
+            return
+        sorted_times = sorted(self._times_ms)
+        n = len(sorted_times)
+        p50 = sorted_times[n // 2]
+        p90 = sorted_times[min(int(n * 0.90), n - 1)]
+        p99 = sorted_times[min(int(n * 0.99), n - 1)]
+        mean = sum(sorted_times) / n
+        fps = 1000.0 / mean if mean > 0 else 0.0
+        backend = "engine" if self._model_path.endswith(".engine") else "pt"
+        pre_mean = sum(self._pre_ms) / len(self._pre_ms) if self._pre_ms else 0.0
+        inf_mean = sum(self._inf_ms) / len(self._inf_ms) if self._inf_ms else 0.0
+        post_mean = sum(self._post_ms) / len(self._post_ms) if self._post_ms else 0.0
+        logger.info(
+            "perf [%s] frames=%d  p50=%.1fms p90=%.1fms p99=%.1fms mean=%.1fms  ~%.1f fps  "
+            "stages mean: pre=%.1f infer=%.1f post=%.1f",
+            backend, n, p50, p90, p99, mean, fps, pre_mean, inf_mean, post_mean,
+        )
+
+    def timing_stats(self) -> dict:
+        """Snapshot of the rolling timing window. Empty when no frames yet."""
+        if not self._times_ms:
+            return {"frames": 0}
+        sorted_times = sorted(self._times_ms)
+        n = len(sorted_times)
+        mean = sum(sorted_times) / n
+        return {
+            "frames": n,
+            "p50_ms": round(sorted_times[n // 2], 2),
+            "p90_ms": round(sorted_times[min(int(n * 0.90), n - 1)], 2),
+            "p99_ms": round(sorted_times[min(int(n * 0.99), n - 1)], 2),
+            "mean_ms": round(mean, 2),
+            "fps": round(1000.0 / mean, 1) if mean > 0 else 0.0,
+            "backend": "engine" if self._model_path.endswith(".engine") else "pt",
+            "stage_mean_ms": {
+                "preprocess": round(sum(self._pre_ms) / len(self._pre_ms), 2) if self._pre_ms else 0.0,
+                "inference": round(sum(self._inf_ms) / len(self._inf_ms), 2) if self._inf_ms else 0.0,
+                "postprocess": round(sum(self._post_ms) / len(self._post_ms), 2) if self._post_ms else 0.0,
+            },
+        }
 
     def detect(
         self,
@@ -54,7 +115,20 @@ class Detector:
             sq = w
             roi = frame
 
+        t0 = time.perf_counter()
         results = self._model.track(roi, conf=conf, persist=True, verbose=False)
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        self._times_ms.append(elapsed_ms)
+        # Capture ultralytics' own per-stage breakdown (preprocess/
+        # inference/postprocess in ms). Helps identify which stage
+        # dominates when total time looks slow.
+        speed = getattr(results[0], "speed", None) or {}
+        self._pre_ms.append(float(speed.get("preprocess", 0.0)))
+        self._inf_ms.append(float(speed.get("inference", 0.0)))
+        self._post_ms.append(float(speed.get("postprocess", 0.0)))
+        self._frame_count += 1
+        if self._frame_count % _TIMING_LOG_EVERY == 0:
+            self._log_timing_summary()
         result = results[0]
 
         detections: list[dict] = []

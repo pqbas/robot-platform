@@ -58,6 +58,13 @@ class DetectionModel(Base):
     uploaded_by: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[str] = mapped_column(Text, default=_now_iso)
+    tensorrt_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    engine_status: Mapped[str] = mapped_column(
+        Text, nullable=False, default="pytorch"
+    )
+    engine_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Fundo(Base):
