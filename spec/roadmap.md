@@ -138,7 +138,7 @@
 
 ---
 
-## Phase 11: Inferencia YOLO con TensorRT
+## Phase 11: Inferencia YOLO con TensorRT (Complete)
 
 **Goal:** la inferencia corre más rápido en Jetson para modelos seleccionados, dejando margen de cómputo para sostener live + recording + detección sin regresiones.
 
@@ -146,7 +146,9 @@
 - [x] Al activar TensorRT en un modelo, el robot convierte el `.pt` a `.engine` localmente (la optimización es device-specific y debe ocurrir en el Jetson)
 - [x] El inference-worker usa el `.engine` cuando el modelo está en modo TensorRT y el `.pt` cuando está en modo PyTorch
 - [x] Modelos library (e.g. `yolo11n.pt`) también pueden convertirse — el toggle aplica a cualquier modelo asignado, no solo a los uploaded
-- [ ] Documentado el tradeoff (tiempo de conversión, ganancia de FPS observada en Jetson) y cómo revertir un modelo a PyTorch — primera medición en Phase 16 muestra speedup más bajo del esperado, ver `spec/29-04-26-inference-perf/`
+- [ ] Documentado el tradeoff (tiempo de conversión, ganancia de FPS observada en Jetson) y cómo revertir un modelo a PyTorch — diferido a Phase 16 (`spec/29-04-26-inference-perf/`)
+
+Shipped en PR #TBD.
 
 ---
 
