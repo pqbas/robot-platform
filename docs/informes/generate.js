@@ -26,8 +26,16 @@ const {
 // ----------------------- assets -----------------------
 const REPO = "/home/pqbas/labinm/robot-platform";
 const HERE = __dirname;
-const MD_PATH = path.join(HERE, "documentacion_tecnica_avance.md");
-const OUTPUT = path.join(HERE, "documentacion_tecnica_avance.docx");
+
+const inputArg = process.argv[2];
+if (!inputArg) {
+  console.error("Usage: node generate.js <input.md> [output.docx]");
+  process.exit(1);
+}
+const MD_PATH = path.resolve(process.cwd(), inputArg);
+const OUTPUT = process.argv[3]
+  ? path.resolve(process.cwd(), process.argv[3])
+  : MD_PATH.replace(/\.md$/i, ".docx");
 
 const BANNER_PATH = "/home/pqbas/labinm/.assets/banner_upao.jpg";
 const LOGO_PATH = "/home/pqbas/labinm/.assets/logo_upao.jpg";
