@@ -1,0 +1,42 @@
+direction: right
+
+robot: "Robot Móvil (Jetson Xavier)" {
+  style.fill: "#E8F4FD"
+  style.stroke: "#1F4E79"
+
+  camera: "Cámara\nZED 2i"
+  backend: "Backend\nFastAPI + Python" {
+    style.fill: "#D5E8F0"
+    style.stroke: "#1F4E79"
+  }
+
+  camera -> backend: "video"
+}
+
+web: "Navegador Web\nReact 19" {
+  style.fill: "#FFFFFF"
+  style.stroke: "#1F4E79"
+}
+
+android: "Android\nReact Native" {
+  style.fill: "#FFFFFF"
+  style.stroke: "#1F4E79"
+}
+
+ios: "iOS\nReact Native" {
+  style.fill: "#FFFFFF"
+  style.stroke: "#1F4E79"
+}
+
+robot.backend -> web: "WebRTC + HTTP" {
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}
+robot.backend -> android: "WebRTC + HTTP" {
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}
+robot.backend -> ios: "WebRTC + HTTP" {
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}

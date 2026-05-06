@@ -31,9 +31,8 @@ data/
 .claude/
 
 # Docs and plans
-# docs/ se versiona, salvo dependencias y archivos legacy pesados.
+# docs/ se versiona, salvo dependencias.
 docs/**/node_modules/
-docs/INFORME_*.docx
 plans/
 reference/
 

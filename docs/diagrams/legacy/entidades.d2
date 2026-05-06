@@ -1,0 +1,69 @@
+direction: down
+
+camellones: "camellones" {
+  style.fill: "#D5E8F0"
+  style.stroke: "#1F4E79"
+
+  grid-rows: 2
+  grid-columns: 2
+
+  id: "id (PK)"
+  nombre: "nombre (UNIQUE)"
+  lat: "lat"
+  lng: "lng"
+}
+
+locations: "locations" {
+  style.fill: "#E8F4FD"
+  style.stroke: "#1F4E79"
+
+  grid-rows: 3
+  grid-columns: 2
+
+  id: "id (PK)"
+  lbl: "label"
+  lat: "lat"
+  lng: "lng"
+  zoom: "zoom"
+  polygon: "polygon (JSON)"
+}
+
+sessions: "sessions" {
+  style.fill: "#D5E8F0"
+  style.stroke: "#1F4E79"
+
+  grid-rows: 3
+  grid-columns: 2
+
+  id: "id (PK)"
+  camellon_id: "camellon_id (FK)"
+  start_time: "start_time"
+  end_time: "end_time"
+  target_class: "target_class"
+  total_count: "total_count"
+}
+
+events: "events" {
+  style.fill: "#D5E8F0"
+  style.stroke: "#1F4E79"
+
+  grid-rows: 3
+  grid-columns: 2
+
+  id: "id (PK)"
+  session_id: "session_id (FK)"
+  timestamp: "timestamp"
+  object_class: "object_class"
+  track_id: "track_id"
+  spacer: "" { style.opacity: 0 }
+}
+
+camellones -> sessions: "1 : N" {
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}
+
+sessions -> events: "1 : N" {
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}

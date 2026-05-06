@@ -1,0 +1,33 @@
+direction: right
+
+idle: "IDLE" {
+  style.fill: "#E8F4FD"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}
+
+counting: "COUNTING" {
+  style.fill: "#B8D4E8"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}
+
+saving: "SAVING" {
+  style.fill: "#D5E8F0"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}
+
+idle -> counting: "Iniciar conteo\n(selecciona clase)" {
+  style.stroke: "#1F4E79"
+}
+counting -> saving: "Detener conteo" {
+  style.stroke: "#1F4E79"
+}
+saving -> idle: "Guardar sesión\n(asocia camellón)" {
+  style.stroke: "#1F4E79"
+}
+saving -> idle: "Descartar" {
+  style.stroke: "#999999"
+  style.stroke-dash: 3
+}
