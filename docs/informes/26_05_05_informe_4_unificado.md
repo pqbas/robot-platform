@@ -22,7 +22,7 @@ Compilar: node docs/informes/generate.js docs/informes/26_05_05_informe_4_unific
 
 El proyecto PE5010-86701-2024-PROCIENCIA desarrolla un robot móvil multifuncional para fundos agrícolas de la Región La Libertad. La plataforma de software, denominada Robot Platform, se ejecuta sobre la computadora embebida NVIDIA Jetson Xavier y permite al operador detectar, contar y clasificar frutos en tiempo real desde un celular o tablet conectado a la red WiFi del vehículo.
 
-El desarrollo avanza en dos frentes complementarios. El primero cubre la plataforma de software, que incluye arquitectura, workers, comunicación entre procesos, despliegue y aceleración de inferencia con TensorRT sobre el hardware embebido. El segundo cubre la evaluación de modelos de inteligencia artificial para la detección de frutos, con el entrenamiento y comparación de tres familias de modelos (YoloV9, YoloV10 y YoloV11) sobre un dataset de 800 imágenes de arándanos provenientes del fundo Danper.
+El desarrollo avanza en dos frentes complementarios. El primero cubre la plataforma de software, que incluye arquitectura, workers, comunicación entre procesos, despliegue y aceleración de inferencia con TensorRT sobre el hardware embebido. El segundo cubre la evaluación de modelos de inteligencia artificial para la detección de frutos, con el entrenamiento y comparación de tres familias de modelos (YoloV9, YoloV10 y YoloV11) sobre un dataset propio de 800 imágenes de arándanos recolectadas en los campos del fundo Danper.
 
 El informe técnico previo de enero 2025 reportó la evaluación cuantitativa de los tres modelos sobre el dataset de arándanos y alcanzó un mAP@0,5 máximo de 0,8407 con YoloV9 en su variante Compact a 200 épocas (Cubas, 2025). El informe técnico de abril 2026 reportó la versión inicial de la plataforma, con un único proceso monolítico para captura, inferencia y grabación; esa integración reveló problemas de aislamiento de fallos, acumulación de frames por desacoplamiento de tasas y conflictos de versiones de Python entre los componentes (Cubas, 2026).
 
@@ -240,7 +240,7 @@ Como funcionalidades planificadas aún no liberadas a producción quedan las sig
 
 # IV. EVALUACIÓN DE MODELOS DE IA
 
-Esta sección resume la evaluación cuantitativa de tres familias de modelos de detección de objetos sobre el dataset de arándanos del fundo Danper. La evaluación detallada de arquitecturas, curvas de entrenamiento y análisis de errores se presenta en el informe técnico #2 (Cubas, 2025). Aquí se reportan los algoritmos evaluados, las métricas empleadas, los resultados por modelo y el estado actual de la integración del modelo de producción.
+Esta sección resume la evaluación cuantitativa de tres familias de modelos de detección de objetos sobre el dataset propio de arándanos recolectado en los campos del fundo Danper. La evaluación detallada de arquitecturas, curvas de entrenamiento y análisis de errores se presenta en el informe técnico #2 (Cubas, 2025). Aquí se reportan los algoritmos evaluados, las métricas empleadas, los resultados por modelo y el estado actual de la integración del modelo de producción.
 
 
 ## 4.1 Algoritmo de conteo por cruce de línea
@@ -288,7 +288,7 @@ Las evaluaciones reportadas en esta sección corresponden al entrenamiento está
 | YoloV11 | Ultralytics (2024) | Introduce el bloque C3k2 en el backbone y el bloque C2PSA con atención posicional, manteniendo compatibilidad con el ecosistema Ultralytics. |
 ^TABLA 9. Algoritmos de detección evaluados.
 
-El dataset de entrenamiento consta de 800 imágenes no públicas de arándanos del fundo Danper, etiquetadas manualmente con cuadros delimitadores, sobre el cual cada modelo se entrenó variando dos hiperparámetros: backbone (Tiny/Small/Medium/Large/Compact según corresponda al modelo) y número de épocas (50, 100, 150, 200), produciendo entre 16 y 20 configuraciones por familia.
+El dataset de entrenamiento consta de 800 imágenes no públicas de arándanos, recolectadas por el equipo en los campos del fundo Danper y etiquetadas manualmente con cuadros delimitadores, sobre el cual cada modelo se entrenó variando dos hiperparámetros: backbone (Tiny/Small/Medium/Large/Compact según corresponda al modelo) y número de épocas (50, 100, 150, 200), produciendo entre 16 y 20 configuraciones por familia.
 
 ## 4.3 Métricas de evaluación
 
@@ -327,7 +327,7 @@ Las Tablas 11, 12 y 13 reportan los resultados de entrenamiento de YoloV9, YoloV
 | Compact | 100 | 25,53 | 0,8299 | 0,4886 | 0,7685 | 0,7721 | 0,765 | 0,4653 | 0,3238 |
 | Compact | 150 | 25,53 | 0,8327 | 0,4926 | 0,77 | 0,7775 | 0,7626 | 0,4186 | 0,3118 |
 | Compact | 200 | 25,53 | 0,8407 | 0,4939 | 0,7703 | 0,7679 | 0,7727 | 0,5723 | 0,4350 |
-^TABLA 11. Resultados del entrenamiento del modelo YoloV9 con 800 imágenes de arándanos del fundo Danper.
+^TABLA 11. Resultados del entrenamiento del modelo YoloV9 con 800 imágenes de arándanos recolectadas en los campos del fundo Danper.
 
 YoloV9 alcanza el mAP@0.5 más alto del estudio con la variante Compact a 200 épocas (0,8407). En las variantes Tiny, Small y Medium se observa una tendencia al sobreajuste a partir de 100 épocas, donde el mAP@0.5:0.95 se estabiliza o decrece pese al incremento de épocas.
 
@@ -350,7 +350,7 @@ YoloV9 alcanza el mAP@0.5 más alto del estudio con la variante Compact a 200 é
 | Large | 100 | 25,767 | 0,8231 | 0,489 | 0,7591 | 0,7614 | 0,7569 | 0,5225 | 0,419 |
 | Large | 150 | 25,767 | 0,8116 | 0,4791 | 0,753 | 0,7424 | 0,7638 | 0,3991 | 0,2923 |
 | Large | 200 | 25,767 | 0,8097 | 0,486 | 0,7591 | 0,7543 | 0,7607 | 0,4472 | 0,3743 |
-^TABLA 12. Resultados del entrenamiento del modelo YoloV10 con 800 imágenes de arándanos del fundo Danper.
+^TABLA 12. Resultados del entrenamiento del modelo YoloV10 con 800 imágenes de arándanos recolectadas en los campos del fundo Danper.
 
 YoloV10 sigue un patrón similar a YoloV9 en backbones grandes: las variantes Medium y Large muestran caída de mAP@0.5 entre 100 y 200 épocas, indicador de sobreajuste con el tamaño del dataset. El máximo se obtiene con Medium a 100 épocas (0,8309).
 
@@ -373,26 +373,26 @@ YoloV10 sigue un patrón similar a YoloV9 en backbones grandes: las variantes Me
 | Large | 100 | 25,311 | 0,8335 | 0,4951 | 0,7693 | 0,7748 | 0,7639 | 0,4114 | 0,3035 |
 | Large | 150 | 25,311 | 0,8274 | 0,4921 | 0,7625 | 0,7552 | 0,7699 | 0,4219 | 0,3027 |
 | Large | 200 | 25,311 | 0,8278 | 0,4929 | 0,7657 | 0,7607 | 0,7708 | 0,4412 | 0,347 |
-^TABLA 13. Resultados del entrenamiento del modelo YoloV11 con 800 imágenes de arándanos del fundo Danper.
+^TABLA 13. Resultados del entrenamiento del modelo YoloV11 con 800 imágenes de arándanos recolectadas en los campos del fundo Danper.
 
 YoloV11 no muestra el comportamiento decreciente observado en YoloV9 y YoloV10 al aumentar las épocas. Los valores de mAP@0.5 se mantienen en una banda de 0,8091 a 0,8338 (rango 0,0247) frente a 0,0274 en YoloV9 y 0,0415 en YoloV10 sobre el mismo barrido de configuraciones. El máximo se obtiene con Small a 150 épocas (0,8338) y Large a 100 épocas (0,8335), con variantes Medium muy próximas.
 
 ## 4.5 Modelo de producción y estado de la integración
 
-La Tabla 14 reporta el mAP@0.5 máximo de cada familia y la configuración correspondiente sobre el dataset Danper.
+La Tabla 14 reporta el mAP@0.5 máximo de cada familia y la configuración correspondiente sobre el dataset propio recolectado en Danper.
 
 | Modelo | Backbone | Épocas | mAP@0.5 | mAP@0.5:0.95 |
 | --- | --- | --- | --- | --- |
 | YoloV9 | Compact | 200 | 0,8407 | 0,4939 |
 | YoloV10 | Medium | 100 | 0,8309 | 0,4905 |
 | YoloV11 | Small | 150 | 0,8338 | 0,4925 |
-^TABLA 14. Mejor configuración por familia de modelos sobre el dataset Danper.
+^TABLA 14. Mejor configuración por familia de modelos sobre el dataset propio recolectado en Danper.
 
 YoloV9-Compact-200 obtiene el mAP@0.5 más alto del estudio en la tarea de detección por frame y se selecciona como modelo candidato de producción. Queda por verificar si esta ventaja en detección se traduce en mejor desempeño en la tarea de conteo, dado que un mejor mAP no garantiza menor error de conteo cuando el algoritmo depende también del seguimiento entre frames y de la estabilidad del `track_id`. La integración del modelo en la plataforma está en curso y aún no se ha completado.
 
 Las tareas pendientes para integrar el modelo de producción YoloV9 son:
 
-1. Empaquetar el checkpoint YoloV9-Compact-200 entrenado sobre el dataset Danper en el formato que el inference-worker carga.
+1. Empaquetar el checkpoint YoloV9-Compact-200 entrenado sobre el dataset propio recolectado en Danper en el formato que el inference-worker carga.
 2. Componer el detector YoloV9 con el algoritmo de seguimiento BoT-SORT, ya que el repositorio de los autores no expone el equivalente a `model.track()` de Ultralytics y requiere un envoltorio.
 3. Habilitar la conversión a TensorRT FP16 desde el conversion-worker, lo cual requiere para YoloV9 un paso intermedio por ONNX y la verificación de capas soportadas por la versión de TensorRT incluida en JetPack 5.1.
 4. Validar la métrica mAP@0.5 sobre frutos reales en sesión de campo, una vez integrado el modelo en el flujo de producción del robot.
@@ -401,7 +401,7 @@ Las tareas pendientes para integrar el modelo de producción YoloV9 son:
 
 1. La arquitectura por procesos independientes resuelve los problemas de aislamiento de fallos, desacoplamiento de tasas de frame y conflictos de versiones de Python que presentaba el sistema monolítico anterior. Captura, inferencia y grabación operan en simultáneo a 1080p y 30 FPS sin acumulación de buffers ni regresión en el módulo de visión.
 2. La aceleración con TensorRT FP16 sobre los Tensor Cores de la Jetson Xavier reduce la latencia de inferencia aislada de 75 ms a 50,9 ms en el percentil 50 y eleva el FPS efectivo medido de extremo a extremo de 9 a 14, manteniendo el modelo intacto sin alterar la métrica de detección.
-3. Los tres modelos evaluados alcanzan mAP@0.5 superiores a 0,83 sobre el dataset Danper. YoloV9-Compact-200 obtiene el máximo (0,8407) y queda seleccionado como el modelo de producción para la detección de frutos. Su integración en la plataforma está en curso e implica empaquetar el checkpoint, componer un wrapper con BoT-SORT y habilitar la conversión a TensorRT FP16 desde el conversion-worker.
+3. Los tres modelos evaluados alcanzan mAP@0.5 superiores a 0,83 sobre el dataset propio recolectado en Danper. YoloV9-Compact-200 obtiene el máximo (0,8407) y queda seleccionado como el modelo de producción para la detección de frutos. Su integración en la plataforma está en curso e implica empaquetar el checkpoint, componer un wrapper con BoT-SORT y habilitar la conversión a TensorRT FP16 desde el conversion-worker.
 4. Mientras se completa esa integración, la plataforma carga YoloV11 preentrenado de Ultralytics como modelo de validación de extremo a extremo, lo que permite verificar sobre el robot real la detección, el algoritmo de conteo por cruce de línea, el pipeline TensorRT y la sincronización de modelos sin depender de la disponibilidad estacional de arándanos en campo.
 5. Los próximos pasos cubren la integración del modelo de producción YoloV9, la reducción del overhead del wrapper de Ultralytics en el flujo de inferencia (donde el modelo puro corre a 16 ms y `model.track()` añade ~35 ms de envoltura), el despliegue del servidor central en la PC del laboratorio y el pipeline de clasificación offline de frutos por madurez y calidad.
 
