@@ -28,7 +28,7 @@ El informe técnico previo de enero 2025 reportó la evaluación cuantitativa de
 
 El presente informe consolida los avances posteriores a esos dos entregables. La plataforma se rediseñó hacia una arquitectura por procesos independientes que se comunican por sockets Unix, se incorporó la aceleración con TensorRT FP16 sobre los Tensor Cores de la Jetson, y se cargó YoloV11 como modelo de validación integral de la plataforma. La integración del modelo de producción (YoloV9-Compact-200, seleccionado por su mAP@0,5 máximo en la evaluación cuantitativa) se encuentra en curso y se aborda en el capítulo IV.
 
-La finalidad del informe es documentar el estado actual del sistema, presentar la evaluación cuantitativa de los modelos de detección y fundamentar las decisiones técnicas adoptadas.
+La finalidad del informe es documentar el estado actual del sistema, presentar la evaluación cuantitativa de los modelos de detección y fundamentar las decisiones técnicas adoptadas. El código fuente de la plataforma está disponible en el repositorio público https://github.com/pqbas/robot-platform.
 
 # II. OBJETIVO GENERAL
 
