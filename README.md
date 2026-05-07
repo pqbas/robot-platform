@@ -1,6 +1,8 @@
-# Robot Platform
+<h1 align="center">Robot Platform</h1>
 
-![Robot Platform en operación](assets/2026-05-06-20-56-02.png)
+<p align="center">
+  <img src="assets/2026-05-06-20-56-02.png" alt="Robot Platform en operación">
+</p>
 
 Plataforma de software para un robot móvil agrícola que detecta, cuenta y clasifica frutos en tiempo real. Se ejecuta sobre una NVIDIA Jetson Xavier embebida en el robot y se opera desde cualquier dispositivo conectado a su red WiFi.
 
