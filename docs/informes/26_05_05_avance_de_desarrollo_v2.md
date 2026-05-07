@@ -56,7 +56,7 @@ detalla cada proceso. La arquitectura del sistema consiste en 5 procesos que se
 comunican mediante sockets Unix. El cliente accede por nginx y recibe video por WebRTC;
 la sincronización con el servidor central se realiza por HTTP.
 
-::figure /home/pqbas/labinm/robot-platform/docs/diagrams/arquitectura_actual.png
+::figure docs/diagrams/arquitectura_actual.png
 ^FIGURA 1. Arquitectura del sistema en modo robot. El backend (azul) coordina cuatro workers independientes: camera-worker (captura), inference-worker (YOLO/TensorRT), recording-worker (NVENC) y conversion-worker (build de engines TensorRT bajo demanda). .
 
 <!-- widths: 2200,1400,5760 -->
@@ -144,7 +144,7 @@ concretos identificados durante la integración.
   propio journal es posible debugearlo sin interrumpir o afectar otro componente.
 
 
-![FIGURA 2. Módulo de visión operando sobre el robot móvil. La detección (bounding box verde) y la línea de conteo se renderizan sobre el video transmitido por WebRTC. El stream sostiene 1080p a 30 FPS y la inferencia con Pytorch alcanza 12 FPS sobre la Jetson Xavier.](/home/pqbas/Downloads/WhatsApp%20Image%202026-05-05%20at%2011.26.06%20AM.jpeg)
+![FIGURA 2. Módulo de visión operando sobre el robot móvil. La detección (bounding box verde) y la línea de conteo se renderizan sobre el video transmitido por WebRTC. El stream sostiene 1080p a 30 FPS y la inferencia con Pytorch alcanza 12 FPS sobre la Jetson Xavier.](assets/2026-05-06-20-56-02.png)
 
 
 # III. DESCRIPCIÓN DE COMPONENTES

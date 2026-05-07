@@ -10,7 +10,7 @@ location: Trujillo - Perú
 month: MAYO - 2026
 project_quote: ""Desarrollo e implementación de un robot móvil multifuncional reconfigurable mecánicamente para adaptarse a fundos agrícolas con diferentes camellones y entre surcos variables de la Región La Libertad-Perú""
 project_code: PE5010-86701-2024-PROCIENCIA
-assets_root: /home/pqbas/labinm/robot-platform
+assets_root: .
 ---
 
 <!--
@@ -52,7 +52,7 @@ Ambos modos comparten el mismo codebase del backend; la diferencia de comportami
 
 La Figura 1 presenta el diagrama de arquitectura del sistema en modo robot y la Tabla 1 detalla cada proceso. La arquitectura consta de cinco procesos que se comunican por sockets Unix. El cliente accede mediante nginx y recibe video por WebRTC; la sincronización con el servidor central se realiza por HTTP.
 
-::figure /home/pqbas/labinm/robot-platform/docs/diagrams/arquitectura_actual.png
+::figure docs/diagrams/arquitectura_actual.png
 ^FIGURA 1. Arquitectura del sistema en modo robot. El backend (azul) coordina cuatro workers independientes: camera-worker (captura), inference-worker (YOLO/TensorRT), recording-worker (NVENC) y conversion-worker (build de engines TensorRT bajo demanda).
 
 <!-- widths: 2200,1400,5760 -->
@@ -141,7 +141,7 @@ Cada engine se cachea con el sha256 del .pt incrustado en el nombre del archivo,
 En la Jetson, el venv del worker se crea con `uv venv --system-site-packages` para heredar los bindings de tensorrt que provee JetPack vía el paquete python3-libnvinfer.
 
 
-![FIGURA 3. Tarjeta «Modelos asignados» en /settings, donde el operador activa la aceleración TensorRT FP16 por modelo.](/home/pqbas/labinm/robot-platform/assets/2026-05-06-21-38-45.png)
+![FIGURA 3. Tarjeta «Modelos asignados» en /settings, donde el operador activa la aceleración TensorRT FP16 por modelo.](assets/2026-05-06-21-38-45.png)
 
 
 ## 3.4 Aceleración con TensorRT FP16
@@ -195,14 +195,14 @@ En modo servidor, la interfaz incluye autenticación con JWT y páginas de admin
 
 
 
-![FIGURA 4. Interfaz del modo robot mostrando el módulo de visión con el video en tiempo real recibido por WebRTC.](/home/pqbas/labinm/robot-platform/assets/2026-05-06-21-34-01.png)
+![FIGURA 4. Interfaz del modo robot mostrando el módulo de visión con el video en tiempo real recibido por WebRTC.](assets/2026-05-06-21-34-01.png)
 
 
 
-![FIGURA 5. Página /settings del modo robot con la tarjeta de configuración de modelos asignados al dispositivo.](/home/pqbas/labinm/robot-platform/assets/2026-05-06-21-37-07.png)
+![FIGURA 5. Página /settings del modo robot con la tarjeta de configuración de modelos asignados al dispositivo.](assets/2026-05-06-21-37-07.png)
 
 
-![FIGURA 6. Interfaz del modo servidor con páginas de administración de usuarios, empresas, fundos, modelos y dispositivos.](/home/pqbas/labinm/robot-platform/assets/2026-05-06-21-36-04.png)
+![FIGURA 6. Interfaz del modo servidor con páginas de administración de usuarios, empresas, fundos, modelos y dispositivos.](assets/2026-05-06-21-36-04.png)
 
 ## 3.7 Despliegue
 
@@ -253,7 +253,7 @@ El operador configura tres parámetros: el modo (`vertical` u `horizontal`), la 
 
 
 
-![FIGURA 7. Configuración de los parámetros del algoritmo de conteo por cruce de línea (modo, dirección y posición) desde el módulo de visión.](/home/pqbas/labinm/robot-platform/assets/2026-05-06-21-37-48.png)
+![FIGURA 7. Configuración de los parámetros del algoritmo de conteo por cruce de línea (modo, dirección y posición) desde el módulo de visión.](assets/2026-05-06-21-37-48.png)
 
 Para validar el cruce, el contador mantiene dos conjuntos de `track_id`. LIST_0 acumula los `track_id` de los objetos seguidos que en algún frame anterior fueron observados en el lado "antes" de la línea y actúa como precondición. LIST_1 contiene los `track_id` ya contados, es decir, aquellos que pasaron al lado "después" habiendo estado antes en LIST_0; el cardinal de LIST_1 es el conteo total reportado en la sesión.
 
