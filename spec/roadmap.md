@@ -238,6 +238,18 @@ Shipped en PR #53.
 
 ---
 
+## Phase 19: Frontend público vía server mode
+
+**Goal:** la URL pública del server entrega el frontend React además de la API, sin necesidad de nginx, completando el flujo end-to-end de Phase 18.
+
+- [ ] El usuario abre `https://<host>.ts.net/` desde cualquier red y ve la pantalla de login del frontend
+- [ ] El SPA routing funciona desde el navegador externo (rutas client-side como `/login`, `/dashboard` no devuelven 404 al recargar)
+- [ ] El proceso de levantar el server en modo `SERVER` compila el frontend automáticamente o falla con mensaje claro si falta el build
+- [ ] El operador puede hacer login desde el navegador externo y el dashboard carga datos reales
+- [ ] La separación robot/server no se rompe: en modo `ROBOT` el frontend sigue sirviéndose por Vite dev server o nginx existente, sin cambios de UX para el operador del robot
+
+---
+
 ## Pendiente (sin fecha)
 
 - Clasificación offline de frutos (crops por track_id + modelo de calidad/madurez)
