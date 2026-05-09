@@ -12,6 +12,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from back.config import AppMode, config as app_config
+from back.middleware.security_headers import SecurityHeadersMiddleware
 from back.services.rate_limit import limiter
 from back.database import close_db, init_db
 from back.routes.camellones import router as camellones_router
@@ -84,13 +85,27 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# Compute allowed origins for CORS
+if app_config.mode == AppMode.SERVER:
+    if app_config.public_url:
+        _cors_origins = [app_config.public_url]
+    else:
+        logging.warning(
+            "SERVER_PUBLIC_URL vacío; CORS abierto en *. "
+            "Configurarlo para producción."
+        )
+        _cors_origins = ["*"]
+else:
+    _cors_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(stream_router)
 app.include_router(counting_router)
