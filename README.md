@@ -106,6 +106,17 @@ make build-front
 
 Sin este paso el server arranca igual, pero `https://<host>.ts.net/` devuelve 503 hasta que `front/dist/` exista.
 
+### Configurar la URL pública (CORS)
+
+Antes de levantar el server, exportar la URL pública en `.env.server` para que CORS solo acepte peticiones de ese origen:
+
+```bash
+# en .env.server
+SERVER_PUBLIC_URL=https://<host>.<tailnet>.ts.net
+```
+
+Si esta variable no está definida, el server arranca con CORS abierto (`*`) y lo indica en el log de arranque como advertencia.
+
 ### Activar el acceso público
 
 Con el backend corriendo (`make run-server` o `make deploy-server`):
