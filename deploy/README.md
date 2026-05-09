@@ -38,6 +38,16 @@ SECRET_KEY=<clave-aleatoria-larga>
 ...
 ```
 
+### Compilar el frontend (desarrollo)
+
+Si se usa `make run-server` en lugar del instalador, compilar el frontend antes:
+
+```bash
+make build-front
+```
+
+Sin este paso el server arranca pero `https://<host>.ts.net/` devuelve 503 hasta que `front/dist/` exista.
+
 ### Instalación
 
 ```bash
