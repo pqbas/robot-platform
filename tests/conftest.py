@@ -12,15 +12,10 @@ os.environ.setdefault("ROBOT_MODE", "server")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-for-pytest-only")
 
-import asyncio
-from typing import AsyncGenerator
-
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
 
-from back.database import AsyncSessionLocal, engine, init_db
+from back.database import AsyncSessionLocal, engine
 from back.models import Base, Device, User
 from back.services.auth import create_access_token, hash_api_key, hash_password, generate_api_key
 
