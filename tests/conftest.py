@@ -6,6 +6,8 @@ module is imported (config.py reads them at module level).
 """
 
 import os
+import shutil
+from pathlib import Path
 
 # Set env vars before any back.* import
 os.environ.setdefault("ROBOT_MODE", "server")
@@ -18,6 +20,32 @@ from httpx import ASGITransport, AsyncClient
 from back.database import AsyncSessionLocal, engine
 from back.models import Base, Device, User
 from back.services.auth import create_access_token, hash_api_key, hash_password, generate_api_key
+
+
+_FRONT_DIST = Path(__file__).resolve().parent.parent / "front" / "dist"
+_FRONT_DIST_CREATED_BY_FIXTURE = False
+
+
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def ensure_front_dist():
+    """Crea un front/dist mínimo para tests en CI donde no existe el build real."""
+    global _FRONT_DIST_CREATED_BY_FIXTURE
+    index_html = _FRONT_DIST / "index.html"
+    assets_dir = _FRONT_DIST / "assets"
+
+    created = not index_html.exists()
+    if created:
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        index_html.write_text(
+            '<!doctype html><html><body><div id="root"></div></body></html>',
+            encoding="utf-8",
+        )
+        _FRONT_DIST_CREATED_BY_FIXTURE = True
+
+    yield
+
+    if _FRONT_DIST_CREATED_BY_FIXTURE:
+        shutil.rmtree(_FRONT_DIST)
 
 
 @pytest_asyncio.fixture(scope="session")
