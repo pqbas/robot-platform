@@ -43,3 +43,25 @@ async def test_api_health_regression(client):
 async def test_assets_nonexistent_returns_404(client):
     resp = await client.get("/assets/non-existent-chunk-abc123.js")
     assert resp.status_code == 404, f"Expected 404, got {resp.status_code}"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/.env",
+        "/.git/config",
+        "/.git/HEAD",
+        "/.aws/credentials",
+        "/config.env",
+        "/backend/.env",
+        "/wp-login.php",
+        "/.DS_Store",
+    ],
+)
+@pytest.mark.asyncio
+async def test_dotfiles_and_secrets_return_404(client, path):
+    """Los scanners no deben recibir 200 con index.html en paths sensibles."""
+    resp = await client.get(path)
+    assert resp.status_code == 404, (
+        f"{path} devolvió {resp.status_code}; debe ser 404 para que los bots no piensen que existen"
+    )

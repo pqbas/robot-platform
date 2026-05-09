@@ -133,6 +133,15 @@ if app_config.mode == AppMode.SERVER:
             candidate = FRONT_DIST / full_path
             if full_path and candidate.is_file():
                 return FileResponse(candidate)
+            # 404 para dotfiles/dotdirs (.env, .git/config, .aws/credentials)
+            # y para cualquier path con extensión que no matchee archivo real
+            # (.php, .bak, etc.). SPA routes son /login, /dashboard, /vision —
+            # sin extensión y sin segmentos ocultos.
+            segments = full_path.split("/")
+            if any(s.startswith(".") for s in segments):
+                raise HTTPException(status_code=404)
+            if "." in segments[-1]:
+                raise HTTPException(status_code=404)
             return FileResponse(FRONT_DIST / "index.html")
 
 
