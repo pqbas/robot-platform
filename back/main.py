@@ -1,10 +1,13 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from back.config import AppMode, config as app_config
 from back.database import close_db, init_db
@@ -64,7 +67,16 @@ async def lifespan(app: FastAPI):
     await close_db()
 
 
-app = FastAPI(lifespan=lifespan)
+# En modo SERVER el server queda expuesto a internet (Phase 18).
+# Deshabilitar /docs, /redoc, /openapi.json para no leakear el API surface
+# a los scanners. En modo ROBOT siguen disponibles para debug local.
+_docs_enabled = app_config.mode != AppMode.SERVER
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -106,6 +118,56 @@ if app_config.mode == AppMode.SERVER:
     app.include_router(fundos_router)
     app.include_router(admin_models_router)
     app.include_router(devices_router)
+
+# Serve React frontend in server mode
+if app_config.mode == AppMode.SERVER:
+    FRONT_DIST = Path(__file__).resolve().parent.parent / "front" / "dist"
+
+    if not (FRONT_DIST / "index.html").exists():
+        logging.warning(
+            "front/dist no encontrado; correr 'make build-front'. "
+            "La UI devolverá 503 hasta que exista."
+        )
+    else:
+        app.mount(
+            "/assets",
+            StaticFiles(directory=FRONT_DIST / "assets"),
+            name="assets",
+        )
+
+        # Whitelist de rutas SPA del frontend (front/src/main.tsx).
+        # Cualquier path no listado y no encontrado en front/dist devuelve 404
+        # para que los scanners no reciban index.html con HTTP 200.
+        SPA_ROUTES = frozenset(
+            {
+                "login",
+                "setup",
+                "vision",
+                "mapa",
+                "dashboard",
+                "recordings",
+                "settings",
+                "admin/users",
+                "admin/empresas",
+                "admin/fundos",
+                "admin/devices",
+                "admin/models",
+            }
+        )
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def spa_fallback(full_path: str):
+            if not full_path:
+                return FileResponse(FRONT_DIST / "index.html")
+            if full_path.startswith("api/"):
+                raise HTTPException(status_code=404)
+            candidate = FRONT_DIST / full_path
+            if candidate.is_file():
+                return FileResponse(candidate)
+            if full_path in SPA_ROUTES:
+                return FileResponse(FRONT_DIST / "index.html")
+            raise HTTPException(status_code=404)
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=app_config.server.port)

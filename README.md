@@ -96,6 +96,16 @@ Verificar el hostname asignado:
 tailscale status --json | python3 -c "import json,sys; print(json.load(sys.stdin)['Self']['DNSName'])"
 ```
 
+### Compilar el frontend
+
+Antes de levantar el server, compilar el frontend para que la UI quede disponible:
+
+```bash
+make build-front
+```
+
+Sin este paso el server arranca igual, pero `https://<host>.ts.net/` devuelve 503 hasta que `front/dist/` exista.
+
 ### Activar el acceso público
 
 Con el backend corriendo (`make run-server` o `make deploy-server`):
