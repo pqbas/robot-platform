@@ -107,6 +107,8 @@ class User(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[str] = mapped_column(Text, default=_now_iso)
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[str | None] = mapped_column(Text, nullable=True)
     empresa: Mapped["Empresa | None"] = relationship()
 
 
