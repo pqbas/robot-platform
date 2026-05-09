@@ -254,14 +254,16 @@ Shipped en PR #54.
 
 ---
 
-## Phase 20: Hardening del server público
+## Phase 20: Hardening del server público (Complete)
 
 **Goal:** el server público resiste ataques realistas (brute force de login, abuso CORS, MITM, embedding malicioso) más allá del filtrado pasivo de scanners ya implementado en Phase 18/19.
 
-- [ ] `/api/auth/login` aplica rate limiting por IP (devuelve 429 al exceder el límite definido en la fase)
-- [ ] La cuenta de un usuario se bloquea temporalmente tras varios logins fallidos consecutivos, mostrando mensaje claro al operador
-- [ ] CORS en modo SERVER restringe `allow_origins` a la URL pública del frontend en lugar de `["*"]`
-- [ ] El server emite security headers (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy) en todas las respuestas
+- [x] `/api/auth/login` aplica rate limiting por IP (devuelve 429 al exceder el límite definido en la fase)
+- [x] La cuenta de un usuario se bloquea temporalmente tras varios logins fallidos consecutivos, mostrando mensaje claro al operador
+- [x] CORS en modo SERVER restringe `allow_origins` a la URL pública del frontend en lugar de `["*"]`
+- [x] El server emite security headers (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy) en todas las respuestas
+
+Spec en `spec/09-05-26-server-hardening/`. Shipped en PR #TBD.
 
 ---
 
