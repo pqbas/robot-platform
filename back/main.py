@@ -67,7 +67,16 @@ async def lifespan(app: FastAPI):
     await close_db()
 
 
-app = FastAPI(lifespan=lifespan)
+# En modo SERVER el server queda expuesto a internet (Phase 18).
+# Deshabilitar /docs, /redoc, /openapi.json para no leakear el API surface
+# a los scanners. En modo ROBOT siguen disponibles para debug local.
+_docs_enabled = app_config.mode != AppMode.SERVER
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -126,23 +135,38 @@ if app_config.mode == AppMode.SERVER:
             name="assets",
         )
 
+        # Whitelist de rutas SPA del frontend (front/src/main.tsx).
+        # Cualquier path no listado y no encontrado en front/dist devuelve 404
+        # para que los scanners no reciban index.html con HTTP 200.
+        SPA_ROUTES = frozenset(
+            {
+                "login",
+                "setup",
+                "vision",
+                "mapa",
+                "dashboard",
+                "recordings",
+                "settings",
+                "admin/users",
+                "admin/empresas",
+                "admin/fundos",
+                "admin/devices",
+                "admin/models",
+            }
+        )
+
         @app.get("/{full_path:path}", include_in_schema=False)
         async def spa_fallback(full_path: str):
+            if not full_path:
+                return FileResponse(FRONT_DIST / "index.html")
             if full_path.startswith("api/"):
                 raise HTTPException(status_code=404)
             candidate = FRONT_DIST / full_path
-            if full_path and candidate.is_file():
+            if candidate.is_file():
                 return FileResponse(candidate)
-            # 404 para dotfiles/dotdirs (.env, .git/config, .aws/credentials)
-            # y para cualquier path con extensión que no matchee archivo real
-            # (.php, .bak, etc.). SPA routes son /login, /dashboard, /vision —
-            # sin extensión y sin segmentos ocultos.
-            segments = full_path.split("/")
-            if any(s.startswith(".") for s in segments):
-                raise HTTPException(status_code=404)
-            if "." in segments[-1]:
-                raise HTTPException(status_code=404)
-            return FileResponse(FRONT_DIST / "index.html")
+            if full_path in SPA_ROUTES:
+                return FileResponse(FRONT_DIST / "index.html")
+            raise HTTPException(status_code=404)
 
 
 if __name__ == "__main__":
