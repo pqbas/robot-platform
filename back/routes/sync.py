@@ -45,7 +45,7 @@ async def health():
     return {"status": "ok", "mode": config.mode.value}
 
 
-@router.post("/pull")
+@router.post("/pull", dependencies=_device_dep)
 async def force_pull():
     """Trigger an immediate model sync pull (robot mode only)."""
     if config.mode != AppMode.ROBOT:
@@ -57,7 +57,7 @@ async def force_pull():
     return {"ok": True}
 
 
-@router.post("/push")
+@router.post("/push", dependencies=_device_dep)
 async def force_push(db: AsyncSession = Depends(get_db)):
     """Trigger an immediate sync push of unsynced records (robot mode only)."""
     if config.mode != AppMode.ROBOT:

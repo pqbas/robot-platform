@@ -1,4 +1,4 @@
-.PHONY: start run-robot run-server run-front run-inference run-conversion logs-conversion db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update
+.PHONY: start run-robot run-server run-front run-inference run-conversion logs-conversion db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update create-admin
 
 start:
 	uv run uvicorn back.main:app --host 0.0.0.0 --port 8080 --reload
@@ -33,6 +33,9 @@ run-conversion:
 
 logs-conversion:
 	sudo journalctl -u conversion-worker -f
+
+create-admin:
+	ENV_FILE=.env.server uv run python -m back.scripts.create_admin
 
 db-up:
 	docker compose -f docker-compose.server.yml up -d

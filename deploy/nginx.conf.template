@@ -2,9 +2,26 @@ upstream backend {
     server 127.0.0.1:${BACKEND_PORT};
 }
 
+# Redirect HTTP to HTTPS (server mode with Tailscale Funnel)
 server {
     listen 80;
     server_name ${SERVER_NAME};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name ${SERVER_NAME};
+
+    # Tailscale Funnel injects managed TLS certificates at this path.
+    # On robot mode (SERVER_NAME=_) these lines are inert; nginx ignores
+    # ssl directives when no certificate exists and port 443 is not used
+    # (Tailscale Funnel is not enabled on robot).
+    ssl_certificate     /var/lib/tailscale/certs/${SERVER_NAME}.crt;
+    ssl_certificate_key /var/lib/tailscale/certs/${SERVER_NAME}.key;
+
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
 
     root /opt/robot-platform/front/dist;
     index index.html;

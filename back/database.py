@@ -61,19 +61,34 @@ async def init_db() -> None:
                     )
             await session.commit()
 
-    # Seed admin user in server mode if no users exist
+    # Seed admin user in server mode only when bootstrap env vars are set.
+    # The fallback insecure admin/admin user is intentionally removed.
+    # Set ADMIN_BOOTSTRAP_USERNAME + ADMIN_BOOTSTRAP_PASSWORD once (e.g. via
+    # `make create-admin` or the installer) to create the first admin account.
     if config.mode == AppMode.SERVER:
+        import os
+
+        bootstrap_user = os.environ.get("ADMIN_BOOTSTRAP_USERNAME", "").strip()
+        bootstrap_pass = os.environ.get("ADMIN_BOOTSTRAP_PASSWORD", "").strip()
+
         async with AsyncSessionLocal() as session:
-            result = await session.execute(select(User))
-            if not result.scalar_one_or_none():
-                admin = User(
-                    username="admin",
-                    password_hash=hash_password("admin"),
-                    role="admin",
-                )
-                session.add(admin)
-                await session.commit()
-                logger.info("Seeded admin user (username=admin, password=admin)")
+            result = await session.execute(select(User).limit(1))
+            existing = result.scalars().first()
+
+            if not existing:
+                if bootstrap_user and bootstrap_pass:
+                    admin = User(
+                        username=bootstrap_user,
+                        password_hash=hash_password(bootstrap_pass),
+                        role="admin",
+                    )
+                    session.add(admin)
+                    await session.commit()
+                    logger.info("Seeded admin user from bootstrap env vars (username=%s)", bootstrap_user)
+                else:
+                    logger.warning(
+                        "server arrancando sin usuarios; correr `make create-admin` para crear el primero"
+                    )
 
 
 async def close_db() -> None:

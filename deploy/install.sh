@@ -209,7 +209,27 @@ else
 fi
 
 export BACKEND_PORT
-export SERVER_NAME="_"
+
+# In server mode, derive the server name from Tailscale so nginx and the TLS
+# certificate paths match. Falls back to "_" if Tailscale is not available
+# (e.g. first run before `tailscale up`).
+if [[ "$MODE" == "server" ]]; then
+    if command -v tailscale &>/dev/null; then
+        TS_HOSTNAME="$(tailscale status --json 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['Self']['DNSName'].rstrip('.'))" 2>/dev/null || echo "")"
+    else
+        TS_HOSTNAME=""
+    fi
+
+    if [[ -n "$TS_HOSTNAME" ]]; then
+        export SERVER_NAME="$TS_HOSTNAME"
+        info "Tailscale hostname detectado: $TS_HOSTNAME"
+    else
+        export SERVER_NAME="_"
+        warn "No se pudo obtener el hostname de Tailscale. Usar 'make deploy-server' de nuevo después de 'tailscale up'."
+    fi
+else
+    export SERVER_NAME="_"
+fi
 
 envsubst '${BACKEND_PORT} ${SERVER_NAME}' \
     < "$INSTALL_DIR/deploy/nginx.conf.template" \
@@ -223,9 +243,20 @@ if [[ -f /etc/nginx/sites-enabled/default ]]; then
     info "Removed default nginx site"
 fi
 
+# In server mode, enable Tailscale Funnel on port 443 so the app is reachable
+# from internet via https://<hostname>.ts.net
+if [[ "$MODE" == "server" ]]; then
+    if command -v tailscale &>/dev/null; then
+        info "Activando Tailscale Funnel en puerto 443..."
+        sudo tailscale funnel 443 on || warn "No se pudo activar Tailscale Funnel. Activar manualmente con: sudo tailscale funnel 443 on"
+    else
+        warn "Tailscale no está instalado. Instalar con: curl -fsSL https://tailscale.com/install.sh | sh"
+    fi
+fi
+
 sudo nginx -t
 sudo systemctl reload nginx
-info "Nginx configured and reloaded"
+info "Nginx configurado y recargado"
 
 # --- 8. Systemd ---
 info "Configuring systemd service..."
@@ -291,6 +322,33 @@ if [[ "$MODE" == "server" ]]; then
 
     info "Running database migrations..."
     ENV_FILE=.env.server uv run alembic -c back/alembic.ini upgrade head
+
+    # Create initial admin user interactively (only if users table is empty)
+    USERS_COUNT=$(ENV_FILE=.env.server uv run python -c "
+import asyncio, sys
+from back.database import AsyncSessionLocal
+from sqlalchemy import select, func
+from back.models import User
+
+async def count():
+    async with AsyncSessionLocal() as s:
+        r = await s.execute(select(func.count()).select_from(User))
+        return r.scalar()
+
+print(asyncio.run(count()))
+" 2>/dev/null || echo "error")
+
+    if [[ "$USERS_COUNT" == "0" ]]; then
+        if [[ -t 0 ]]; then
+            info "No hay usuarios en la base de datos. Creando admin inicial..."
+            ENV_FILE=.env.server uv run python -m back.scripts.create_admin
+        else
+            warn "Instalación no-interactiva: no se creó ningún usuario admin."
+            warn "Ejecutar 'make create-admin' manualmente para crear el primer admin."
+        fi
+    else
+        info "Ya existen usuarios en la base de datos; omitiendo creación de admin."
+    fi
 fi
 
 # --- 10. Create data directories ---

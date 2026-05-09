@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.database import get_db
+from back.models import User
 from back.schemas import DashboardStatsOut
 from back.services import storage
+from back.services.auth import get_current_user
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -17,6 +19,7 @@ async def dashboard_stats(
     date_to: date | None = Query(None, alias="to"),
     target_class: str | None = Query(None),
     camellon_id: int | None = Query(None),
+    _: User = Depends(get_current_user),
 ):
     return await storage.get_dashboard_stats(
         db,
