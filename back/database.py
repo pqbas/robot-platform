@@ -72,8 +72,8 @@ async def init_db() -> None:
         bootstrap_pass = os.environ.get("ADMIN_BOOTSTRAP_PASSWORD", "").strip()
 
         async with AsyncSessionLocal() as session:
-            result = await session.execute(select(User))
-            existing = result.scalar_one_or_none()
+            result = await session.execute(select(User).limit(1))
+            existing = result.scalars().first()
 
             if not existing:
                 if bootstrap_user and bootstrap_pass:
