@@ -267,6 +267,17 @@ Spec en `spec/09-05-26-server-hardening/`. Shipped en PR #TBD.
 
 ---
 
+## Phase 22: Cobertura de auth en server mode
+
+**Goal:** ninguna ruta `/api/*` en server mode queda accesible desde internet sin autenticación, cerrando el gap descubierto durante Phase 20 (rutas como `/api/locations`, `/api/sessions`, `/api/recordings/` están abiertas hoy).
+
+- [ ] Toda ruta `/api/*` en modo SERVER requiere JWT válido excepto la whitelist explícita (`/api/auth/login`, `/api/sync/health`, sync con device API key)
+- [ ] Auditoría completa de rutas con tabla de cobertura
+- [ ] Modo ROBOT no se rompe (las rutas siguen abiertas en red local)
+- [ ] El frontend público sigue funcionando end-to-end con login
+
+---
+
 ## Phase 21: Conectar robot al server público
 
 **Goal:** el robot móvil sincroniza datos al server público vía la URL de Tailscale Funnel, validando el flow end-to-end de Phase 18/19.
