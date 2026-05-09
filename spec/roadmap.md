@@ -221,18 +221,20 @@ Shipped en PR #51 (merge `2a5e664`).
 
 ---
 
-## Phase 18: Acceso público al server con auth
+## Phase 18: Acceso público al server con auth (Complete)
 
 **Goal:** el server del laboratorio queda accesible desde internet con una URL estable, pero solo entrega datos sensibles a usuarios con JWT válido.
 
-- [ ] El server expone una URL pública estable (`https://<host>.ts.net` vía Tailscale Funnel) que sobrevive reinicios
-- [ ] Todas las rutas server-mode requieren auth excepto `POST /api/auth/login` y `/health` de sync
-- [ ] `/api/dashboard/stats` queda protegido con `Depends(get_current_user)`
-- [ ] Eliminado el seed `admin/admin`; el primer admin se crea con `make create-admin` (interactivo, password por stdin)
-- [ ] Si no hay credenciales de bootstrap, el server arranca sin usuarios y loguea warning (no fallback inseguro)
+- [x] El server expone una URL pública estable (`https://<host>.ts.net` vía Tailscale Funnel) que sobrevive reinicios
+- [x] Todas las rutas server-mode requieren auth excepto `POST /api/auth/login` y `/health` de sync
+- [x] `/api/dashboard/stats` queda protegido con `Depends(get_current_user)`
+- [x] Eliminado el seed `admin/admin`; el primer admin se crea con `make create-admin` (interactivo, password por stdin)
+- [x] Si no hay credenciales de bootstrap, el server arranca sin usuarios y loguea warning (no fallback inseguro)
 - [ ] Validado desde red externa (4G): la URL carga login, sin token devuelve 401, con login válido el dashboard carga
 
-Spec en `spec/06-05-26-acceso-publico-server-auth/`.
+Spec en `spec/06-05-26-acceso-publico-server-auth/`. Validación end-to-end: `/api/sync/health` 200 y `/api/dashboard/stats` 401 confirmados desde la URL pública. La validación con frontend (login en navegador) queda diferida a la fase de exponer el frontend, ya que esta fase entregó solo backend + nginx-template.
+
+Shipped en PR #53.
 
 ---
 
