@@ -8,8 +8,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from back.config import AppMode, config as app_config
+from back.services.rate_limit import limiter
 from back.database import close_db, init_db
 from back.routes.camellones import router as camellones_router
 from back.routes.config_routes import router as config_router
@@ -77,6 +80,9 @@ app = FastAPI(
     redoc_url="/redoc" if _docs_enabled else None,
     openapi_url="/openapi.json" if _docs_enabled else None,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
