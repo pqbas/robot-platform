@@ -35,8 +35,11 @@ ROBOT_MODE=server
 PORT=9090
 DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/robotdb
 SECRET_KEY=<clave-aleatoria-larga>
+SERVER_PUBLIC_URL=https://<host>.<tailnet>.ts.net
 ...
 ```
+
+`SERVER_PUBLIC_URL` restringe CORS a ese origen. Si no está definida, el server arranca con CORS abierto (`*`) y lo indica en el log de arranque como advertencia.
 
 ### Compilar el frontend (desarrollo)
 

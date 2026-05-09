@@ -110,6 +110,7 @@ class Config:
     conversion: ConversionConfig = field(default_factory=ConversionConfig)
     sync: SyncConfig = field(default_factory=SyncConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
+    public_url: str = field(default_factory=lambda: os.getenv("SERVER_PUBLIC_URL", ""))
 
 
 config = Config()
