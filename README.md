@@ -73,6 +73,59 @@ make restart         # reiniciar servicios
 make update          # git pull + rebuild + restart
 ```
 
+## Exponer el server a internet (Tailscale Funnel)
+
+El backend en modo `server` corre por defecto en `127.0.0.1:9090`. Para que sea alcanzable desde fuera de la red del laboratorio sin comprar dominio ni configurar firewall, se usa Tailscale Funnel.
+
+### Requisitos previos (una vez por máquina)
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+```
+
+El segundo comando imprime una URL de autenticación. Abrirla en el navegador y autenticar con la cuenta del laboratorio.
+
+En el panel https://login.tailscale.com/admin/dns activar:
+- **MagicDNS**
+- **HTTPS Certificates**
+
+Verificar el hostname asignado:
+
+```bash
+tailscale status --json | python3 -c "import json,sys; print(json.load(sys.stdin)['Self']['DNSName'])"
+```
+
+### Activar el acceso público
+
+Con el backend corriendo (`make run-server` o `make deploy-server`):
+
+```bash
+sudo tailscale funnel --bg 9090
+```
+
+`tailscale funnel status` muestra la URL pública (formato `https://<host>.<tailnet>.ts.net`).
+
+`make deploy-server` automatiza este paso: detecta el hostname, renderiza nginx con TLS sobre los certificados de Tailscale, y activa el funnel.
+
+### Crear el primer admin
+
+El server arranca sin usuarios por defecto. Crear el primer admin con:
+
+```bash
+make create-admin
+```
+
+El script pide username y password por stdin (no se persisten en `.env` ni en logs).
+
+### Apagar el acceso público
+
+```bash
+sudo tailscale funnel --https=443 off
+```
+
+Más detalles y troubleshooting en [`deploy/README.md`](deploy/README.md).
+
 ## Agradecimientos
 
 Este trabajo es financiado por el Programa Nacional de Investigación Científica y Estudios Avanzados (**PROCIENCIA**) en el marco del proyecto **PE5010-86701-2024-PROCIENCIA**: *"Desarrollo e implementación de un robot móvil multifuncional reconfigurable mecánicamente para adaptarse a fundos agrícolas con diferentes camellones y entre surcos variables de la Región La Libertad-Perú"*.
