@@ -291,6 +291,33 @@ if [[ "$MODE" == "server" ]]; then
 
     info "Running database migrations..."
     ENV_FILE=.env.server uv run alembic -c back/alembic.ini upgrade head
+
+    # Create initial admin user interactively (only if users table is empty)
+    USERS_COUNT=$(ENV_FILE=.env.server uv run python -c "
+import asyncio, sys
+from back.database import AsyncSessionLocal
+from sqlalchemy import select, func
+from back.models import User
+
+async def count():
+    async with AsyncSessionLocal() as s:
+        r = await s.execute(select(func.count()).select_from(User))
+        return r.scalar()
+
+print(asyncio.run(count()))
+" 2>/dev/null || echo "error")
+
+    if [[ "$USERS_COUNT" == "0" ]]; then
+        if [[ -t 0 ]]; then
+            info "No hay usuarios en la base de datos. Creando admin inicial..."
+            ENV_FILE=.env.server uv run python -m back.scripts.create_admin
+        else
+            warn "Instalación no-interactiva: no se creó ningún usuario admin."
+            warn "Ejecutar 'make create-admin' manualmente para crear el primer admin."
+        fi
+    else
+        info "Ya existen usuarios en la base de datos; omitiendo creación de admin."
+    fi
 fi
 
 # --- 10. Create data directories ---
