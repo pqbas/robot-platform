@@ -254,6 +254,29 @@ Shipped en PR #54.
 
 ---
 
+## Phase 20: Hardening del server público
+
+**Goal:** el server público resiste ataques realistas (brute force de login, abuso CORS, MITM, embedding malicioso) más allá del filtrado pasivo de scanners ya implementado en Phase 18/19.
+
+- [ ] `/api/auth/login` aplica rate limiting por IP (devuelve 429 al exceder el límite definido en la fase)
+- [ ] La cuenta de un usuario se bloquea temporalmente tras varios logins fallidos consecutivos, mostrando mensaje claro al operador
+- [ ] CORS en modo SERVER restringe `allow_origins` a la URL pública del frontend en lugar de `["*"]`
+- [ ] El server emite security headers (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy) en todas las respuestas
+
+---
+
+## Phase 21: Conectar robot al server público
+
+**Goal:** el robot móvil sincroniza datos al server público vía la URL de Tailscale Funnel, validando el flow end-to-end de Phase 18/19.
+
+- [ ] El admin crea un device desde `/admin/devices` y obtiene una API key visible una sola vez
+- [ ] El operador configura el robot apuntando al server público desde la pantalla `/setup` (sin SSH al Jetson)
+- [ ] El robot pushea sessions, counting events, recordings y locations al server y recibe confirmación
+- [ ] El admin ve los datos del robot en el dashboard del server desde fuera del laboratorio
+- [ ] Procedimiento documentado para que un operador nuevo pueda configurar un robot de cero sin ayuda
+
+---
+
 ## Pendiente (sin fecha)
 
 - Clasificación offline de frutos (crops por track_id + modelo de calidad/madurez)
