@@ -102,7 +102,7 @@ class _InferenceWorker:
                 count = response.get("count", 0)
 
                 counter.update(tracking_data)
-                logger.info("Inference: %d detections, count=%d", len(detections), count)
+                logger.debug("Inference: %d detections, count=%d", len(detections), count)
 
                 payload = FrameDetectionPayload(
                     count=count,
