@@ -280,6 +280,20 @@ Shipped en PR #TBD.
 
 ---
 
+## Phase 23: Hardening adicional del server público
+
+**Goal:** cerrar gaps remanentes de seguridad detectados después de Phase 22 — superficie de auth aún más chica, defensa en profundidad y trazabilidad de accesos.
+
+- [ ] Auditoría persistente de logins (tabla `login_attempts` con timestamp, IP, username, success/fail) y endpoint admin para listarlos
+- [ ] Rate limit persistente (Redis o tabla en DB) para que el contador sobreviva reinicios del proceso
+- [ ] Verificar permisos `600` de `.env.server` y documentar rotación del `JWT_SECRET` en `deploy/README.md`
+- [ ] Quitar `/api/sync/health` de la whitelist si no lo consume monitoring externo (o autenticarlo con device API key)
+- [ ] Hardcodear `mode: "server"` en builds de frontend server-mode para eliminar el round-trip a `/api/config/setup-status` y poder quitarlo de la whitelist
+- [ ] Forzar contraseña fuerte al crear/editar usuarios en `/admin/users` (validador en backend, no solo frontend)
+- [ ] Revisión periódica documentada del prefijo `/api/sync/*` para asegurar que toda ruta nueva ahí lleva `_device_dep`
+
+---
+
 ## Phase 21: Conectar robot al server público
 
 **Goal:** el robot móvil sincroniza datos al server público vía la URL de Tailscale Funnel, validando el flow end-to-end de Phase 18/19.
