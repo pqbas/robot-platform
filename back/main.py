@@ -107,6 +107,14 @@ app.add_middleware(
 )
 app.add_middleware(SecurityHeadersMiddleware)
 
+# Global auth guard — server mode only.
+# Must be added AFTER SecurityHeadersMiddleware so it runs closer to the route
+# (Starlette executes middleware in LIFO order relative to add_middleware calls).
+if app_config.mode == AppMode.SERVER:
+    from back.middleware.server_auth import ServerAuthMiddleware
+
+    app.add_middleware(ServerAuthMiddleware)
+
 app.include_router(stream_router)
 app.include_router(counting_router)
 app.include_router(camellones_router)

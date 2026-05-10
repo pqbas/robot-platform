@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import re
-from pathlib import Path
 
 import cv2
 from fastapi import APIRouter, Depends, HTTPException

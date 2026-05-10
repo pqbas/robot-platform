@@ -96,7 +96,7 @@ async def device_with_key(setup_db):
     async with AsyncSessionLocal() as session:
         device = Device(
             id="test-device-001",
-            name="Test Robot",
+            label="Test Robot",
             api_key_hash=hash_api_key(raw_key),
             is_active=True,
         )
