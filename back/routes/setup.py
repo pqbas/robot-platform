@@ -16,7 +16,14 @@ _DEFAULT_VALUES = {"", "http://localhost:9090", "dev-sync-key"}
 
 @router.get("/setup-status")
 async def setup_status():
-    """Check if the robot is configured (has real server URL and API key)."""
+    """Check if the robot is configured (has real server URL and API key).
+
+    En server mode el endpoint es publico (frontend lo consume pre-login),
+    asi que solo devolvemos `mode` para minimizar info disclosure. El campo
+    `configured` solo aplica en modo robot (sync hacia un server externo).
+    """
+    if config.mode == AppMode.SERVER:
+        return {"mode": "server"}
     url = config.sync.server_url.strip()
     key = config.sync.api_key.strip()
     configured = url not in _DEFAULT_VALUES and key not in _DEFAULT_VALUES
