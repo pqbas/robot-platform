@@ -28,11 +28,11 @@ def wait_for_socket(path: str, timeout: float) -> None:
     attempt = 0
     while True:
         attempt += 1
+        sock: socket.socket | None = None
         try:
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             sock.settimeout(1.0)
             sock.connect(path)
-            sock.close()
             logger.info(
                 "wait_for_socket: camera socket ready after %d probe(s)", attempt
             )
@@ -42,10 +42,11 @@ def wait_for_socket(path: str, timeout: float) -> None:
         except OSError:
             pass
         finally:
-            try:
-                sock.close()
-            except Exception:
-                pass
+            if sock is not None:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
 
         remaining = deadline - time.monotonic()
         if remaining <= 0:
