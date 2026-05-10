@@ -4,10 +4,52 @@ import json
 import logging
 import socket
 import struct
+import time
 
 import numpy as np
 
 logger = logging.getLogger("camera_client")
+
+# How long wait_for_socket probes between attempts (seconds)
+_SOCKET_PROBE_INTERVAL = 0.25
+
+
+def wait_for_socket(path: str, timeout: float) -> None:
+    """Block until the Unix socket at *path* accepts a connection or raise TimeoutError.
+
+    Checks both that the path exists AND that a real connect succeeds, because
+    the camera-worker may have created the socket file before it called
+    accept().  Retries every _SOCKET_PROBE_INTERVAL seconds up to *timeout*.
+    """
+    deadline = time.monotonic() + timeout
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.settimeout(1.0)
+            sock.connect(path)
+            sock.close()
+            logger.info(
+                "wait_for_socket: camera socket ready after %d probe(s)", attempt
+            )
+            return
+        except (FileNotFoundError, ConnectionRefusedError):
+            pass
+        except OSError:
+            pass
+        finally:
+            try:
+                sock.close()
+            except Exception:
+                pass
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(
+                f"Camera socket {path!r} not available after {timeout:.1f}s"
+            )
+        time.sleep(min(_SOCKET_PROBE_INTERVAL, remaining))
 
 
 class CameraClient:
