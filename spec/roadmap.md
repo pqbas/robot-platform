@@ -294,6 +294,19 @@ Shipped en PR #TBD.
 
 ---
 
+## Phase 24: Resiliencia del streaming WebRTC
+
+**Goal:** el operador en el celular ve el stream durante una sesión completa sin tener que ir a `/settings → guardar` para reanimar el video. Recovery automático ante hipos de WiFi, freezes con data channel vivo, y arranque tardío del camera-worker.
+
+- [ ] Frontend detecta freeze mid-sesión (`framesDecoded` plano por 3s aunque el peer siga `connected`) y dispara nuevo offer con backoff
+- [ ] Frontend detecta `connectionState === "failed"` / `iceConnectionState` disconnected sostenido y reconecta con el mismo backoff
+- [ ] Backend espera a que `/tmp/camera.sock` esté listo antes de aceptar el offer (responde 503 si no lo está)
+- [ ] `CameraClient.read_frame` reintenta con backoff hasta 5 s antes de matar la track (en vez del retry de un disparo actual)
+- [ ] Investigar y forzar keyframes a intervalo razonable o responder PLI/FIR para sobrevivir packet loss en WiFi
+- [ ] UI muestra estado "Reconectando…" durante backoff y "Stream caído, reintentar" después de agotar 4 intentos
+
+---
+
 ## Phase 21: Conectar robot al server público (Complete)
 
 **Goal:** el robot móvil sincroniza datos al server público vía la URL de Tailscale Funnel, validando el flow end-to-end de Phase 18/19.
