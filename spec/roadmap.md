@@ -294,15 +294,17 @@ Shipped en PR #TBD.
 
 ---
 
-## Phase 21: Conectar robot al server público
+## Phase 21: Conectar robot al server público (Complete)
 
 **Goal:** el robot móvil sincroniza datos al server público vía la URL de Tailscale Funnel, validando el flow end-to-end de Phase 18/19.
 
-- [ ] El admin crea un device desde `/admin/devices` y obtiene una API key visible una sola vez
-- [ ] El operador configura el robot apuntando al server público desde la pantalla `/setup` (sin SSH al Jetson)
-- [ ] El robot pushea sessions, counting events, recordings y locations al server y recibe confirmación
-- [ ] El admin ve los datos del robot en el dashboard del server desde fuera del laboratorio
-- [ ] Procedimiento documentado para que un operador nuevo pueda configurar un robot de cero sin ayuda
+- [x] El admin crea un device desde `/admin/devices` y obtiene una API key visible una sola vez
+- [x] El operador configura el robot apuntando al server público desde la pantalla `/setup` (sin SSH al Jetson)
+- [x] El robot pushea sessions, counting events, recordings y locations al server y recibe confirmación
+- [x] El admin ve los datos del robot en el dashboard del server desde fuera del laboratorio
+- [x] Procedimiento documentado para que un operador nuevo pueda configurar un robot de cero sin ayuda
+
+Shipped en PR #TBD.
 
 ---
 

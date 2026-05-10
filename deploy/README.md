@@ -8,6 +8,8 @@
 
 Instala el backend con SQLite en puerto 8080, workers de inferencia, cámara, grabación y conversión.
 
+Para conectar el robot al server público (crear device, configurar `/setup`, verificar sync end-to-end), ver [ROBOT_SETUP.md](./ROBOT_SETUP.md).
+
 ## Server (PC del laboratorio)
 
 ### Requisitos previos
