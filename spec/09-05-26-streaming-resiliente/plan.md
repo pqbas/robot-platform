@@ -61,6 +61,26 @@
 
 ---
 
+## Group 6: PLI/FIR handler (encoder real está en nvenc_codec, no aiortc)
+
+Hallazgo durante implementación: el proyecto usa `back/services/nvenc_codec.py` (GStreamer + nvv4l2h264enc en Jetson, h264_nvenc en desktop, libx264 en CPU) — NO el encoder VP8 default de aiortc. Por eso el `pict_type = I` puesto en `back/services/camera.py` (Group 4) no tenía efecto: el frame de PyAV se reencodea en el pipeline custom.
+
+aiortc YA recibe RTCP PLI/FIR del receiver (`rtcrtpsender.py:277-281` → `_send_keyframe()` → `__force_keyframe = True`) y lo pasa al encoder en cada `encode()`. `nvenc_codec.py` YA tiene el branch `if force_keyframe:` que emite `GstForceKeyUnit` event al pipeline. La cadena completa **ya está conectada**, solo faltan visibilidad y mitigación complementaria.
+
+17. Quitar el código muerto de keyframe periódico en `back/services/camera.py` (`_KEYFRAME_INTERVAL`, `_frame_count`, el bloque que setea `pict_type = I` en `recv()`). El pipeline real está en `nvenc_codec` y ese código NO afecta nada.
+
+18. En `back/services/nvenc_codec.py`, agregar log INFO cuando `force_keyframe=True` se honra:
+    - Branch PyAV NVENC (`PyAvNvencEncoder._encode_frame`): `logger.info("[stream] PLI/FIR received — forcing keyframe (PyAV NVENC)")`.
+    - Branch GStreamer (`GstNvencEncoder._encode_frame`): mismo log con el nombre del encoder element. Permite verificar en `make logs` cuándo el celular pide keyframe.
+
+19. Bajar `iframeinterval` de 60 a 30 (1s @ 30fps) en el pipeline `nvv4l2h264enc`. Si el PLI llega tarde o se pierde, el keyframe periódico cubre el gap. Costo: ~+10-15% bandwidth.
+
+20. Misma mitigación en el fallback `libx264`: `key-int-max=30`.
+
+21. (Optional, defensa en profundidad) Verificar con `chrome://webrtc-internals` en una sesión del celular que el SDP negociado incluye `nack pli` como feedback. aiortc lo incluye por default pero vale la pena confirmar visualmente. No requiere código si está OK.
+
+---
+
 ## Group 5: Roadmap + nota corta en CLAUDE.md (opcional)
 
 15. Agregar Phase 24 a `spec/roadmap.md` con los 4 bullets correspondientes a los Groups 1-4.

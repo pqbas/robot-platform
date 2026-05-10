@@ -3,7 +3,6 @@ import logging
 import threading
 
 import av
-import av.video.frame
 import numpy as np
 from aiortc import VideoStreamTrack
 
@@ -127,13 +126,6 @@ class _InferenceWorker:
                     self._result = error_payload
 
 
-# Force a keyframe every N frames to help receivers recover from packet loss.
-# VP8 / H264 encoders inside aiortc respect pict_type on the VideoFrame,
-# so setting PictureType.I produces an IDR/I-frame that unblocks decoders
-# stuck waiting for a keyframe after WiFi hiccup.
-_KEYFRAME_INTERVAL = 60  # ~2 s at 30 fps
-
-
 class CameraStreamTrack(VideoStreamTrack):
     kind = "video"
 
@@ -144,7 +136,6 @@ class CameraStreamTrack(VideoStreamTrack):
         self._data_channel = None
         self.stopped = asyncio.Event()
         self._first_frame = True
-        self._frame_count = 0
 
     def set_data_channel(self, dc):
         self._data_channel = dc
@@ -179,17 +170,9 @@ class CameraStreamTrack(VideoStreamTrack):
             except Exception:
                 logger.debug("Data channel send failed", exc_info=True)
 
-        self._frame_count += 1
         video_frame = av.VideoFrame.from_ndarray(frame, format="bgr24")
         video_frame.pts = pts
         video_frame.time_base = time_base
-
-        # Periodically force an I-frame so receivers can recover from
-        # packet loss without waiting for the next natural keyframe.
-        if self._frame_count % _KEYFRAME_INTERVAL == 1:
-            video_frame.pict_type = av.video.frame.PictureType.I
-            logger.debug("[stream] forcing keyframe (reason=periodic, frame=%d)", self._frame_count)
-
         return video_frame
 
     def stop(self):

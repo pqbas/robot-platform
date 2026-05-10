@@ -98,6 +98,7 @@ class PyAvNvencEncoder(H264Encoder):
             self.codec = None
 
         if force_keyframe:
+            logger.info("[stream] PLI/FIR received — forcing keyframe (PyAV NVENC)")
             frame.pict_type = av.video.frame.PictureType.I
         else:
             frame.pict_type = av.video.frame.PictureType.NONE
@@ -201,7 +202,7 @@ if HAS_GSTREAMER:
                     "! video/x-raw(memory:NVMM),format=NV12 "
                     f"! nvv4l2h264enc bitrate={self.target_bitrate} "
                     "preset-level=4 profile=4 control-rate=1 "
-                    "iframeinterval=60 maxperf-enable=true "
+                    "iframeinterval=30 maxperf-enable=true "
                     "! video/x-h264,stream-format=byte-stream,alignment=au "
                     "! appsink name=sink emit-signals=false sync=false"
                 )
@@ -221,7 +222,7 @@ if HAS_GSTREAMER:
                     "! videoconvert "
                     f"! x264enc bitrate={bitrate_kbps} "
                     "tune=zerolatency speed-preset=ultrafast "
-                    "key-int-max=60 "
+                    "key-int-max=30 "
                     "! video/x-h264,stream-format=byte-stream,alignment=au "
                     "! appsink name=sink emit-signals=false sync=false"
                 )
@@ -284,6 +285,10 @@ if HAS_GSTREAMER:
                 self._first_log = True
 
             if force_keyframe:
+                logger.info(
+                    "[stream] PLI/FIR received — forcing keyframe (GStreamer %s)",
+                    self._encoder_element,
+                )
                 event = Gst.Event.new_custom(
                     Gst.EventType.CUSTOM_DOWNSTREAM,
                     Gst.Structure.new_empty("GstForceKeyUnit"),
