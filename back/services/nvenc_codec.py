@@ -147,6 +147,7 @@ if HAS_GSTREAMER:
             self._pipeline: Optional["Gst.Pipeline"] = None
             self._src: Optional["Gst.Element"] = None
             self._sink: Optional["Gst.Element"] = None
+            self._enc: Optional["Gst.Element"] = None
             self._width = 0
             self._height = 0
             self._frame_count = 0
@@ -200,7 +201,7 @@ if HAS_GSTREAMER:
                     "! video/x-raw,format=BGRx "
                     "! nvvidconv "
                     "! video/x-raw(memory:NVMM),format=NV12 "
-                    f"! nvv4l2h264enc bitrate={self.target_bitrate} "
+                    f"! nvv4l2h264enc name=enc bitrate={self.target_bitrate} "
                     "preset-level=4 profile=4 control-rate=1 "
                     "iframeinterval=30 maxperf-enable=true "
                     "! video/x-h264,stream-format=byte-stream,alignment=au "
@@ -210,7 +211,7 @@ if HAS_GSTREAMER:
                 pipeline_str = (
                     f"{appsrc_caps} "
                     "! videoconvert "
-                    f"! nvh264enc bitrate={bitrate_kbps} "
+                    f"! nvh264enc name=enc bitrate={bitrate_kbps} "
                     "preset=low-latency-hq rc-mode=cbr "
                     "zerolatency=true "
                     "! video/x-h264,stream-format=byte-stream,alignment=au "
@@ -220,7 +221,7 @@ if HAS_GSTREAMER:
                 pipeline_str = (
                     f"{appsrc_caps} "
                     "! videoconvert "
-                    f"! x264enc bitrate={bitrate_kbps} "
+                    f"! x264enc name=enc bitrate={bitrate_kbps} "
                     "tune=zerolatency speed-preset=ultrafast "
                     "key-int-max=30 "
                     "! video/x-h264,stream-format=byte-stream,alignment=au "
@@ -230,6 +231,7 @@ if HAS_GSTREAMER:
             self._pipeline = Gst.parse_launch(pipeline_str)
             self._src = self._pipeline.get_by_name("src")
             self._sink = self._pipeline.get_by_name("sink")
+            self._enc = self._pipeline.get_by_name("enc")
             ret = self._pipeline.set_state(Gst.State.PLAYING)
             if ret == Gst.StateChangeReturn.FAILURE:
                 self._pipeline.set_state(Gst.State.NULL)
@@ -257,6 +259,35 @@ if HAS_GSTREAMER:
                 bitrate_kbps,
             )
 
+        def _adjust_bitrate_live(self) -> None:
+            """Update encoder bitrate without rebuilding the pipeline.
+
+            Rebuilding kills the RTP/SSRC continuity and triggers PLI storms
+            on the receiver. nvv4l2h264enc/x264enc/nvh264enc all accept a
+            runtime change of the `bitrate` property; we only re-set when
+            the target moved >10% from the applied value to avoid spamming.
+            """
+            if self._enc is None or self._applied_bitrate <= 0:
+                return
+            delta = abs(self.target_bitrate - self._applied_bitrate)
+            if delta / self._applied_bitrate <= 0.1:
+                return
+            # nvv4l2h264enc takes bps; nvh264enc and x264enc take kbps
+            if self._encoder_element == "nvv4l2h264enc":
+                value = self.target_bitrate
+            else:
+                value = self.target_bitrate // 1000
+            try:
+                self._enc.set_property("bitrate", value)
+            except Exception:
+                logger.debug("set_property bitrate failed", exc_info=True)
+                return
+            self._applied_bitrate = self.target_bitrate
+            logger.info(
+                "[stream] bitrate adjusted live to %d kbps (no pipeline rebuild)",
+                self.target_bitrate // 1000,
+            )
+
         def _encode_frame(
             self, frame: av.VideoFrame, force_keyframe: bool
         ) -> Iterator[bytes]:
@@ -264,15 +295,11 @@ if HAS_GSTREAMER:
                 self._pipeline is None
                 or frame.width != self._width
                 or frame.height != self._height
-                or (
-                    self._applied_bitrate > 0
-                    and abs(self.target_bitrate - self._applied_bitrate)
-                    / self._applied_bitrate
-                    > 0.1
-                )
             )
             if needs_rebuild:
                 self._build_pipeline(frame.width, frame.height)
+            else:
+                self._adjust_bitrate_live()
 
             if not self._first_log:
                 logger.info(
