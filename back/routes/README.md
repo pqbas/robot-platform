@@ -16,6 +16,7 @@ only when `app_config.mode == AppMode.SERVER`.
 |------|--------|
 | `POST /api/auth/login` | Login flow — must be reachable before a token exists |
 | `GET /api/sync/health` | Heartbeat used by monitoring infrastructure |
+| `GET /api/config/setup-status` | Frontend reads this pre-login to decide between login screen vs setup screen; only returns `{configured, mode}` |
 | `/api/sync/*` (prefix) | Sync routes carry their own device API key dependency (`_device_dep`); the guard delegates to that mechanism |
 
 ### How to add a new public path

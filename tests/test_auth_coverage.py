@@ -18,7 +18,6 @@ PRIVATE_ROUTES = [
     ("GET", "/api/locations"),
     ("GET", "/api/camellones"),
     ("GET", "/api/recordings/"),
-    ("GET", "/api/config/setup-status"),
     ("GET", "/api/config/counting"),
     ("GET", "/api/dashboard/stats"),
     ("GET", "/api/users/"),
@@ -29,6 +28,7 @@ PRIVATE_ROUTES = [
 PUBLIC_ROUTES = [
     ("POST", "/api/auth/login"),
     ("GET", "/api/sync/health"),
+    ("GET", "/api/config/setup-status"),
 ]
 
 
