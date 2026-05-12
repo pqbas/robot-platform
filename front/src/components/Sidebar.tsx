@@ -56,6 +56,7 @@ export default function Sidebar() {
         { label: "Mapa", path: "/mapa", icon: Map },
         { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
         { label: "Grabaciones", path: "/recordings", icon: Video },
+        { label: "Configuración", path: "/settings", icon: Settings },
       ]
       return robotItems
     }
@@ -91,14 +92,14 @@ export default function Sidebar() {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`flex flex-col items-center gap-0.5 px-2 py-1.5 text-[10px] font-medium transition-colors ${
                   active
                     ? "text-sidebar-accent-foreground"
                     : "text-sidebar-foreground/70"
                 }`}
               >
                 <item.icon className="size-5" />
-                <span>{item.label}</span>
+                <span className="truncate max-w-[56px]">{item.label}</span>
               </button>
             )
           })}
@@ -134,35 +135,21 @@ export default function Sidebar() {
 
         <div className="p-2 space-y-1">
           {mode === "robot" && (
-            <>
-              <button
-                onClick={() => navigate("/settings")}
-                title="Configuración"
-                className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  location.pathname.startsWith("/settings")
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                } ${collapsed ? "justify-center" : ""}`}
-              >
-                <Settings className="size-5 shrink-0" />
-                {!collapsed && <span className="whitespace-nowrap">Configuración</span>}
-              </button>
-              <button
-                onClick={handleSync}
-                disabled={syncing}
-                title={syncing ? "Sincronizando..." : "Sincronizar ahora"}
-                className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground disabled:opacity-50 ${
-                  collapsed ? "justify-center" : ""
-                }`}
-              >
-                <RefreshCw className={`size-5 shrink-0 ${syncing ? "animate-spin" : ""}`} />
-                {!collapsed && (
-                  <span className="whitespace-nowrap">
-                    {syncing ? "Sincronizando..." : "Sincronizar"}
-                  </span>
-                )}
-              </button>
-            </>
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              title={syncing ? "Sincronizando..." : "Sincronizar ahora"}
+              className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground disabled:opacity-50 ${
+                collapsed ? "justify-center" : ""
+              }`}
+            >
+              <RefreshCw className={`size-5 shrink-0 ${syncing ? "animate-spin" : ""}`} />
+              {!collapsed && (
+                <span className="whitespace-nowrap">
+                  {syncing ? "Sincronizando..." : "Sincronizar"}
+                </span>
+              )}
+            </button>
           )}
           {mode === "server" && user && <UserMenu collapsed={collapsed} />}
           <button
