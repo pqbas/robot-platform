@@ -321,6 +321,25 @@ Shipped en PR #TBD.
 
 ---
 
+## Phase 25: Streaming MJPEG + WebSocket (dual-mode con feature flag)
+
+**Goal:** ofrecer un transport de video alternativo a WebRTC, más simple y robusto en LAN/WiFi flaky, sin remover el path actual. WebRTC sigue siendo válido para uso futuro (NAT traversal, multi-viewer SFU, audio). El nuevo path es la opción default para el caso real actual (operador en localhost o LAN).
+
+**Contexto:** WebRTC arrastra estado de codec H264 + RTP secuenciado; en WiFi 5GHz débil con packet loss intermitente, una pérdida congela el video hasta el próximo keyframe (o reconexión completa). MJPEG sobre WebSocket es "latest-frame-wins": cada frame independiente, sin estado de codec que corromper, naturalmente multi-cliente con fan-out. Trade-off: ~2-5× más bitrate vs H264. Aceptable en LAN.
+
+- [ ] Backend: `back/services/stream_broadcaster.py` lee BGR del camera-socket, encodea JPEG una sola vez por frame, fan-out a N clientes WS con cola `drop-oldest` por cliente (mismo patrón que camera-worker)
+- [ ] Backend: `back/routes/stream_ws.py` expone `/ws/stream`, mensaje binario por frame con length-prefixed JSON header (`frame_id`, `detections`, `session_active`, `session_total`) + JPEG bytes
+- [ ] Backend: encoder JPEG software (`cv2.imencode`) como inicio; migrar a GStreamer `nvjpegenc` si la CPU del Jetson sufre a 1080p30
+- [ ] Frontend: `front/src/hooks/useMjpegStream.ts` parsea el WS, emite `frameBlob` + `detections` con la misma superficie que `useWebRTC` para no tocar `VisionPage.tsx`
+- [ ] Frontend: `front/src/hooks/useStream.ts` selecciona entre `useWebRTC` y `useMjpegStream` según `localStorage.stream.mode` (default `webrtc` para no romper nada)
+- [ ] Frontend: `VideoStream.tsx` soporta tanto `<video ref>` como `<canvas>` (canvas para MJPEG permite pintar boxes encima sin overlay DOM)
+- [ ] Validar en 5GHz WiFi flaky: MJPEG mantiene 25+ fps visible con pérdida del 5% donde WebRTC freeza
+- [ ] Validar multi-cliente: 2 navegadores conectados a `/ws/stream` simultáneo ven el mismo video y boxes, sin desconectarse entre sí (a diferencia de `/offer` actual que cierra previas)
+- [ ] Documentar el toggle en `CLAUDE.md` (sección Stream / WebRTC)
+- [ ] Después de uso real en campo: si MJPEG resulta más robusto, flippear default. WebRTC queda como fallback para futuros casos NAT traversal / SFU.
+
+---
+
 ## Pendiente (sin fecha)
 
 - Clasificación offline de frutos (crops por track_id + modelo de calidad/madurez)

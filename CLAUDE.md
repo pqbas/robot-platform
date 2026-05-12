@@ -1,71 +1,78 @@
 # Robot Platform
 
-## Arquitectura
-- **Backend:** FastAPI en `back/`, un solo codebase para robot y server
-- **Inference Worker:** proceso independiente en `inference/`, se comunica con el backend via Unix socket (`/tmp/inference.sock`)
-- **Frontend:** React + TypeScript + Vite en `front/`
-- **Modo:** controlado por `ROBOT_MODE` en `.env.robot` o `.env.server`
+## Topología
+- Backend FastAPI: `back/` (un solo codebase, modo robot/server por `ROBOT_MODE` en `.env.{robot,server}`).
+- Frontend React + Vite: `front/` (dev en `:5173`, proxy a `localhost:8080`).
+- Workers uv separados (Unix socket): `camera_worker/`, `inference/`, `recording_worker/`, `conversion_worker/`.
+- Puertos: robot `8080`, server `9090`.
 
-## Inference Worker
-- Proyecto uv separado en `inference/` con sus propias dependencias (ultralytics, torch)
-- El backend NO importa ultralytics/torch — envia JPEG frames al worker y recibe JSON con detecciones
-- Protocolo: length-prefixed sobre Unix socket (header_len + jpeg_len + header JSON + JPEG bytes)
-- En Jetson: Python 3.10 con PyTorch NVIDIA (CUDA). En laptop: Python 3.13 con PyTorch de PyPI
-- Iniciar worker: `make run-inference` o `cd inference && uv run inference-worker --model ../yolo11n.pt`
-- numpy pinned `<1.24` y `np.bool/np.float/np.int/np.object` se monkey-patchean al inicio de `main.py`: el TensorRT 8.5 de JetPack referencia `np.bool` que NumPy 1.24+ removió; ver Phase 11.
-- Per-frame timing: el worker mantiene un rolling window (600 frames) y loguea p50/p90/p99/mean cada 150 frames con breakdown por etapa (`pre`/`infer`/`post`). Snapshot on-demand: `make bench-inference`.
-- Optimizar latencia es Phase 16 (`spec/29-04-26-inference-perf/`); el baseline actual es ~52 ms / 19 fps con `model.track()` en TRT FP16 a pesar de que la inferencia pura del modelo corre a 16 ms — el resto es overhead del wrapper de ultralytics. Pinear clocks (`sudo jetson_clocks`) es prerequisito antes de medir.
+## Invariantes
+- Backend NO importa `ultralytics`, `torch`, `av`, `gi`, `cv2`. Esos viven en workers.
+- Inference worker: NumPy `<1.24` + monkey-patch de `np.bool/np.float/np.int/np.object` (TensorRT 8.5 los referencia). Ver `inference/inference_worker/main.py`.
+- Camera worker: una sola apertura V4L2, fan-out a todos los clientes (drop-oldest por cliente).
+- WebRTC: `RTCPeerConnection` sin ICE servers → solo host candidates (asume LAN/localhost).
 
-## Puertos
-- Robot: `PORT=8080` (`.env.robot`)
-- Server: `PORT=9090` (`.env.server`)
-- Frontend dev: `5173` (proxy apunta a `localhost:8080`)
+## Sockets Unix
+- `/tmp/camera.sock` — frames raw BGR. Control: `/tmp/camera-control.sock`.
+- `/tmp/inference.sock` — JPEG → JSON detecciones.
+- `/tmp/recording.sock` — control start/stop/status.
+- `/tmp/conversion.sock` — control convert/status.
 
-## Camera Worker
-- Proyecto uv separado en `camera_worker/` con opencv-python y numpy
-- El backend NO accede a V4L2 directamente — lee frames raw BGR del socket `/tmp/camera.sock`
-- Protocolo: handshake JSON (width, height, channels, fps) + stream de frames length-prefixed
-- **Fan-out**: el worker abre la cámara una sola vez y reparte cada frame a todos los clientes conectados (backend WebRTC + recording-worker simultáneos). Cola por cliente con drop-oldest si se atrasa.
-- Default: captura ZED 2i estéreo SBS a 3840×1080@30 YUYV, crop al ojo izquierdo → frame de salida 1920×1080 BGR. Live WebRTC y recording sostienen 1080p@30 (NVENC en Jetson).
-- Resolución activa: `data/robot/camera_settings.json` (`{"preset": "1080p" | "720p"}`). El operador la cambia desde el frontend (Vision); el backend pinguea `/tmp/camera-control.sock` (`{"cmd":"reload"}`) y el worker reabre V4L2. Si el JSON falta o es inválido, fallback a 1080p.
-- Troubleshooting: si la red entre Jetson y operador es débil, cambiar a 720p desde el selector en /vision (no requiere SSH al robot).
-- Iniciar worker: `make run-camera` o `cd camera_worker && uv run camera-worker`
+## Archivos clave
 
-## Recording Worker
-- Proyecto uv separado en `recording_worker/` con `av` (PyAV) y opcionalmente `PyGObject` (extra `[gstreamer]`).
-- El backend NO importa `av` ni `gi` — habla con el worker via Unix socket de control `/tmp/recording.sock` (JSON length-prefixed: `start`, `stop`, `status`).
-- El worker se conecta al socket de cámara solo al recibir `start` (idle = 0 CPU, 0 NVENC, 0 conexión).
-- Selección de backend automática: `nvv4l2h264enc` (Jetson, GStreamer) → `h264_nvenc` (desktop NVIDIA, PyAV) → `libx264` (CPU fallback).
-- En Jetson el plugin `nvv4l2h264enc` viene de `nvidia-l4t-gstreamer` (JetPack); PyGObject solo no es suficiente — el deploy verifica los plugins con `gst-inspect-1.0` antes de habilitar la unidad.
-- Iniciar worker: `make run-recording` o `cd recording_worker && uv run recording-worker`.
-- Probar backend detectado: `cd recording_worker && uv run python -c "from recording_worker.encoder import detect_backend; print(detect_backend())"`.
-- Bitrate auto-escalado por altura del frame (Phase 7 lo expondrá como env var): NVENC 12 Mbps a 1080p, 8 Mbps a 720p; libx264 9/6 Mbps respectivamente. Profile=High preset=Slow (NVENC); preset=medium crf=20 (libx264). El FPS se toma del handshake del camera-worker, no se hardcodea.
+### Backend
+- `back/main.py` — entry point, wiring, lifespan.
+- `back/config.py` — env loading.
+- `back/models.py` / `back/schemas.py` / `back/services/storage.py` — DB models, Pydantic, CRUD.
+- `back/alembic/versions/` — migraciones.
+- `back/routes/README.md` — contrato de auth (público vs privado).
+- `back/middleware/server_auth.py` + `back/services/auth_guard.py` + `back/services/auth.py` + `back/services/lockout.py` — auth.
+- `back/services/rate_limit.py` — rate limiting.
+- `back/services/sync_*.py` + `back/routes/sync.py` — sync robot ↔ server.
 
-## Conversion Worker
-- Proyecto uv separado en `conversion_worker/`. Construye TensorRT engines (`.pt` → FP16 `.engine`) bajo demanda. Idle = 0 CPU, 0 GPU.
-- En Jetson el venv se crea con `uv venv --system-site-packages --python /usr/bin/python3` para heredar `tensorrt` de JetPack (`python3-libnvinfer`); el backend usa Python 3.13, así que el worker corre por separado.
-- El backend habla via Unix socket `/tmp/conversion.sock` (JSON length-prefixed: `convert`, `status`); cliente en `back/services/perception/conversion_client.py`.
-- Cache en `data/robot/models/<stem>.<file_hash>.fp16.engine` — el sha del `.pt` baked en el nombre invalida automáticamente cuando el AI engineer re-sube el modelo.
-- El operador activa/desactiva TensorRT por modelo desde `/settings` (card "Modelos asignados", visible solo en modo robot). Una conversión a la vez (segunda → 409).
-- Iniciar worker: `make run-conversion` o `cd conversion_worker && uv run conversion-worker`.
+### Stream / WebRTC
+- `back/routes/stream.py` — endpoint `/offer`, peer connection.
+- `back/services/camera.py` + `back/services/camera_client.py` — track de cámara.
+- `back/services/nvenc_codec.py` — encoder H264 (PyAV NVENC / GStreamer / libx264) + bitrate live.
+- `front/src/hooks/useWebRTC.ts` — cliente, freeze detector, reconnect.
+- Bitrate real lo clampa `aiortc/codecs/h264.py` (REMB ajusta dinámicamente).
+- Spec resiliencia: `spec/09-05-26-streaming-resiliente/`.
+
+### Perception
+- `back/services/perception/counter.py` — estado global de sesión (in-memory).
+- `back/services/perception/object_counter.py` — line-crossing / ROI.
+- `back/services/perception/inference_client.py` — cliente al worker.
+- `back/services/perception/conversion_client.py` + `conversion_poller.py` + `engine_paths.py` — TensorRT.
+- `back/routes/counting.py` — endpoints `/api/counting/*` + `/api/sessions/*`.
+- `back/routes/config_routes.py` — config de counting (mode, threshold, direction).
+
+### Workers
+- `camera_worker/camera_worker/main.py` — V4L2, presets, handshake, fan-out.
+- `inference/inference_worker/main.py` + `detector.py` + `protocol.py` — inferencia + timing.
+- `recording_worker/recording_worker/encoder.py` — bitrate/preset/profile por backend.
+- `conversion_worker/conversion_worker/main.py` + `converter.py` — `.pt` → FP16 `.engine`.
+
+### Specs / planning
+- `spec/<fecha>-<feature>/{plan,requirements,validation}.md` — convención por feature.
+- `spec/29-04-26-inference-perf/` — perf baselines.
+- `spec/roadmap.md` — fases.
+
+## Persistencia
+- DB: SQLite (robot) / PostgreSQL (server).
+- Camera settings: `data/robot/camera_settings.json`.
+- TensorRT engines cache: `data/robot/models/`.
 
 ## Comandos
-- Camera worker: `make run-camera`
-- Inference worker: `make run-inference`
-- Recording worker: `make run-recording`
-- Conversion worker: `make run-conversion`
-- Backend robot: `make run-robot` (o `ENV_FILE=.env.robot uv run python -m back.main`)
-- Backend server: `make run-server` (levanta PostgreSQL + uvicorn)
-- Frontend: `make run-front`
+- Workers: `make run-{camera,inference,recording,conversion}`.
+- Backend: `make run-{robot,server}`. Frontend: `make run-front`.
+- Deploy: `make deploy-{robot,server}`. Update: `make update`.
+- Logs: `make logs[-{inference,camera,recording,conversion}]`. Status/restart: `make {status,restart}`.
+- Benchmarks: `make bench-inference`. Prereq Jetson: `sudo jetson_clocks`.
 
-## Deploy (producción)
-- Instalar robot: `make deploy-robot` (nginx + systemd, SQLite, port 8080)
-- Instalar server: `make deploy-server` (nginx + systemd + PostgreSQL, port 9090)
-- Logs backend: `make logs` | Logs inference: `make logs-inference` | Logs camera: `make logs-camera` | Logs recording: `make logs-recording` | Logs conversion: `make logs-conversion`
-- Status: `make status` | Restart: `make restart`
-- Nginx sirve `front/dist/` y hace proxy a uvicorn en 127.0.0.1
-- Systemd ejecuta uvicorn directo (sin tmux), `Restart=on-failure`
-- `.env.active` es symlink a `.env.robot` o `.env.server`
+## Deploy
+- Nginx sirve `front/dist/` + proxy a uvicorn `127.0.0.1`.
+- Systemd ejecuta uvicorn directo (`Restart=on-failure`).
+- `.env.active` symlink a `.env.{robot,server}`.
 
-## Credenciales dev
-- Server admin seed: `admin` / `admin`
+## Dev
+- Server admin seed: `admin` / `admin`.
