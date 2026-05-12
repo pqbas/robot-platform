@@ -294,6 +294,19 @@ Shipped en PR #TBD.
 
 ---
 
+## Phase 24: Resiliencia del streaming WebRTC
+
+**Goal:** el operador en el celular ve el stream durante una sesión completa sin tener que ir a `/settings → guardar` para reanimar el video. Recovery automático ante hipos de WiFi, freezes con data channel vivo, y arranque tardío del camera-worker.
+
+- [ ] Frontend detecta freeze mid-sesión (`framesDecoded` plano por 3s aunque el peer siga `connected`) y dispara nuevo offer con backoff
+- [ ] Frontend detecta `connectionState === "failed"` / `iceConnectionState` disconnected sostenido y reconecta con el mismo backoff
+- [ ] Backend espera a que `/tmp/camera.sock` esté listo antes de aceptar el offer (responde 503 si no lo está)
+- [ ] `CameraClient.read_frame` reintenta con backoff hasta 5 s antes de matar la track (en vez del retry de un disparo actual)
+- [ ] Investigar y forzar keyframes a intervalo razonable o responder PLI/FIR para sobrevivir packet loss en WiFi
+- [ ] UI muestra estado "Reconectando…" durante backoff y "Stream caído, reintentar" después de agotar 4 intentos
+
+---
+
 ## Phase 21: Conectar robot al server público (Complete)
 
 **Goal:** el robot móvil sincroniza datos al server público vía la URL de Tailscale Funnel, validando el flow end-to-end de Phase 18/19.
@@ -305,6 +318,25 @@ Shipped en PR #TBD.
 - [x] Procedimiento documentado para que un operador nuevo pueda configurar un robot de cero sin ayuda
 
 Shipped en PR #TBD.
+
+---
+
+## Phase 25: Streaming MJPEG + WebSocket (dual-mode con feature flag)
+
+**Goal:** ofrecer un transport de video alternativo a WebRTC, más simple y robusto en LAN/WiFi flaky, sin remover el path actual. WebRTC sigue siendo válido para uso futuro (NAT traversal, multi-viewer SFU, audio). El nuevo path es la opción default para el caso real actual (operador en localhost o LAN).
+
+**Contexto:** WebRTC arrastra estado de codec H264 + RTP secuenciado; en WiFi 5GHz débil con packet loss intermitente, una pérdida congela el video hasta el próximo keyframe (o reconexión completa). MJPEG sobre WebSocket es "latest-frame-wins": cada frame independiente, sin estado de codec que corromper, naturalmente multi-cliente con fan-out. Trade-off: ~2-5× más bitrate vs H264. Aceptable en LAN.
+
+- [ ] Backend: `back/services/stream_broadcaster.py` lee BGR del camera-socket, encodea JPEG una sola vez por frame, fan-out a N clientes WS con cola `drop-oldest` por cliente (mismo patrón que camera-worker)
+- [ ] Backend: `back/routes/stream_ws.py` expone `/ws/stream`, mensaje binario por frame con length-prefixed JSON header (`frame_id`, `detections`, `session_active`, `session_total`) + JPEG bytes
+- [ ] Backend: encoder JPEG software (`cv2.imencode`) como inicio; migrar a GStreamer `nvjpegenc` si la CPU del Jetson sufre a 1080p30
+- [ ] Frontend: `front/src/hooks/useMjpegStream.ts` parsea el WS, emite `frameBlob` + `detections` con la misma superficie que `useWebRTC` para no tocar `VisionPage.tsx`
+- [ ] Frontend: `front/src/hooks/useStream.ts` selecciona entre `useWebRTC` y `useMjpegStream` según `localStorage.stream.mode` (default `webrtc` para no romper nada)
+- [ ] Frontend: `VideoStream.tsx` soporta tanto `<video ref>` como `<canvas>` (canvas para MJPEG permite pintar boxes encima sin overlay DOM)
+- [ ] Validar en 5GHz WiFi flaky: MJPEG mantiene 25+ fps visible con pérdida del 5% donde WebRTC freeza
+- [ ] Validar multi-cliente: 2 navegadores conectados a `/ws/stream` simultáneo ven el mismo video y boxes, sin desconectarse entre sí (a diferencia de `/offer` actual que cierra previas)
+- [ ] Documentar el toggle en `CLAUDE.md` (sección Stream / WebRTC)
+- [ ] Después de uso real en campo: si MJPEG resulta más robusto, flippear default. WebRTC queda como fallback para futuros casos NAT traversal / SFU.
 
 ---
 

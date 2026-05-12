@@ -6,9 +6,14 @@ from fastapi import APIRouter
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse
 
+from back.config import config
 from back.services import camera
+from back.services.camera_client import wait_for_socket
 
 logger = logging.getLogger("webrtc")
+
+# Seconds to wait for the camera socket before returning 503
+STREAM_CAMERA_WAIT_S = 10
 
 router = APIRouter()
 
@@ -28,6 +33,18 @@ async def offer(request: Request):
 
     # Close any previous connections so the shared camera is free
     await camera.close_all_connections()
+
+    # Wait for the camera-worker socket before creating the track so the client
+    # gets a clear 503 instead of a dead track when the worker is not up yet.
+    try:
+        await asyncio.to_thread(
+            wait_for_socket, config.camera.socket_path, STREAM_CAMERA_WAIT_S
+        )
+    except TimeoutError as exc:
+        logger.warning("Camera worker not ready: %s", exc)
+        return JSONResponse(
+            {"error": "camera-worker not ready"}, status_code=503
+        )
 
     offer_desc = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
 
