@@ -340,6 +340,19 @@ Shipped en PR #TBD.
 
 ---
 
+## Phase 26: UX móvil — acceso a Configuración y auditoría de pantallas clave
+
+**Goal:** que el operador opere el robot desde su celular sin tener que ir a un escritorio para entrar a `/settings` o sincronizar.
+
+- [ ] Bottom-nav móvil del robot incluye Configuración como item visible (hoy vive solo en el footer del sidebar desktop)
+- [ ] "Sincronizar" accesible desde móvil vía card en `/settings` (no inflar el bottom-nav)
+- [ ] Auditoría visual de `/vision`, `/recordings`, `/settings`, `/dashboard`, `/mapa` en viewport ≤ 480px: arreglar layouts rotos (action bar de Vision, tabla de Recordings)
+- [ ] Cero regresión desktop: todos los cambios via media queries Tailwind
+
+Ver `spec/11-05-26-mobile-ux-acceso/`.
+
+---
+
 ## Pendiente (sin fecha)
 
 - Clasificación offline de frutos (crops por track_id + modelo de calidad/madurez)

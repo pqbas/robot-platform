@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { RefreshCw } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +31,7 @@ import {
 } from "@/api/vision"
 import { useCameraResolution } from "@/hooks/useCameraResolution"
 import { useAppMode } from "@/context/AppModeContext"
+import { forceSyncPull, forceSyncPush } from "@/api/sync"
 import AssignedModelsCard from "./components/AssignedModelsCard"
 
 const SELECTED_LABEL_KEY = "vision.selectedLabel.v2"
@@ -397,9 +399,44 @@ function ServerTab() {
 }
 
 export default function SettingsPage() {
+  const { mode } = useAppMode()
+  const [syncing, setSyncing] = useState(false)
+
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      await Promise.all([forceSyncPush(), forceSyncPull()])
+      toast.success("Sincronizado")
+    } catch {
+      toast.error("Error de sincronización — revisa la conexión al server")
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   return (
-    <div className="mx-auto w-full max-w-2xl p-4 md:p-6">
+    <div className="mx-auto h-full w-full max-w-2xl overflow-y-auto p-4 md:p-6">
       <h1 className="mb-4 text-xl font-semibold">Configuración</h1>
+
+      {mode === "robot" && (
+        <div className="mb-4 rounded-lg border p-4 space-y-2">
+          <p className="text-sm font-medium">Sincronización</p>
+          <p className="text-xs text-muted-foreground">
+            Fuerza una sincronización con el servidor ahora.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={syncing}
+            className="gap-2"
+          >
+            <RefreshCw className={`size-4 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Sincronizando..." : "Sincronizar ahora"}
+          </Button>
+        </div>
+      )}
+
       <Tabs defaultValue="conteo">
         <TabsList>
           <TabsTrigger value="conteo">Conteo</TabsTrigger>
