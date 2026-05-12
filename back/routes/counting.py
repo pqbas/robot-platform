@@ -31,8 +31,13 @@ router = APIRouter(prefix="/api", tags=["sessions"])
 async def start_counting(body: CountingStartRequest):
     if counter.is_session_active():
         raise HTTPException(409, "Counting is already active")
-    counter.start_counting(body.target_class)
-    return CountingStatusOut(active=True, target_class=body.target_class)
+    sess = counter.start_counting(body.target_class)
+    return CountingStatusOut(
+        active=True,
+        target_class=body.target_class,
+        start_time=sess.start_time,
+        total_count=0,
+    )
 
 
 @router.post("/counting/stop", response_model=CountingStopOut)
@@ -41,6 +46,19 @@ async def stop_counting():
         raise HTTPException(409, "No counting is active")
     total_count, target_class = counter.stop_counting()
     return CountingStopOut(total_count=total_count, target_class=target_class)
+
+
+@router.get("/counting/status", response_model=CountingStatusOut)
+async def counting_status():
+    sess = counter.get_active_session()
+    if sess is None:
+        return CountingStatusOut(active=False)
+    return CountingStatusOut(
+        active=True,
+        target_class=sess.target_class,
+        start_time=sess.start_time,
+        total_count=sess.last_frame_count,
+    )
 
 
 # --- Sessions (DB persistence) ---

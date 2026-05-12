@@ -77,6 +77,8 @@ class CountingStartRequest(BaseModel):
 class CountingStatusOut(BaseModel):
     active: bool
     target_class: str | None = None
+    start_time: str | None = None
+    total_count: int = 0
 
 
 class CountingStopOut(BaseModel):

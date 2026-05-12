@@ -1,7 +1,12 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { CountingState, FrameData } from "@/types"
 import { findOrCreateCamellon } from "@/api/camellones"
-import { startCounting as apiStart, stopCounting as apiStop, saveSession } from "@/api/sessions"
+import {
+  getCountingStatus,
+  startCounting as apiStart,
+  stopCounting as apiStop,
+  saveSession,
+} from "@/api/sessions"
 
 export type UseCountingReturn = {
   state: CountingState
@@ -25,6 +30,26 @@ export function useCounting(): UseCountingReturn {
 
   const targetClassRef = useRef<string | null>(null)
   const stopResultRef = useRef<{ total_count: number; target_class: string } | null>(null)
+
+  // Rehydrate from backend on mount: if another device left a session running,
+  // recover its state so the user can stop/save it from here.
+  useEffect(() => {
+    let cancelled = false
+    getCountingStatus()
+      .then((s) => {
+        if (cancelled || !s.active) return
+        targetClassRef.current = s.target_class
+        setTargetClass(s.target_class)
+        setStartTime(s.start_time ? new Date(s.start_time) : new Date())
+        setSessionTotal(s.total_count)
+        setLastFrameCount(s.total_count)
+        setState("COUNTING")
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const startCounting = useCallback(async (cls: string) => {
     await apiStart(cls)

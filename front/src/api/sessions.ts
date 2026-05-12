@@ -8,6 +8,13 @@ type CountingStopResult = {
   target_class: string
 }
 
+export type CountingStatus = {
+  active: boolean
+  target_class: string | null
+  start_time: string | null
+  total_count: number
+}
+
 export function startCounting(targetClass: string): Promise<{ active: boolean }> {
   return apiFetch("/api/counting/start", {
     method: "POST",
@@ -17,6 +24,10 @@ export function startCounting(targetClass: string): Promise<{ active: boolean }>
 
 export function stopCounting(): Promise<CountingStopResult> {
   return apiFetch("/api/counting/stop", { method: "POST" })
+}
+
+export function getCountingStatus(): Promise<CountingStatus> {
+  return apiFetch("/api/counting/status")
 }
 
 // --- Sessions (DB persistence) ---
