@@ -11,6 +11,7 @@ export type FpsStats = {
 const RECONNECT_DELAYS = [1000, 2000, 4000, 10000]
 const FREEZE_CYCLES_THRESHOLD = 3 // consecutive 1s cycles with 0 new frames
 const ICE_DISCONNECT_CYCLES = 2  // cycles before treating as failed
+const NO_FIRST_FRAME_CYCLES = 5  // cycles connected without ever decoding a frame
 
 export function useWebRTC() {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -29,6 +30,7 @@ export function useWebRTC() {
   const freezeCycleCount = useRef(0)
   const hasDecodedFrames = useRef(false)   // arms the freeze detector after first real frame
   const iceDisconnectCycles = useRef(0)
+  const noFirstFrameCycles = useRef(0)     // cycles connected with never-decoded video
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectAttemptRef = useRef(0)    // ref mirror so interval closure sees latest value
 
@@ -79,6 +81,7 @@ export function useWebRTC() {
     freezeCycleCount.current = 0
     hasDecodedFrames.current = false
     iceDisconnectCycles.current = 0
+    noFirstFrameCycles.current = 0
     lastStreamSample.current = null
     inferenceFrameCount.current = 0
 
@@ -184,9 +187,21 @@ export function useWebRTC() {
       }
 
       if (!hasDecodedFrames.current) {
-        // Stream hasn't started yet — don't count these cycles as freezes
+        // Connected but no frames ever decoded — backend says ready but the
+        // pipeline never primed (black-frame bug after navigating to /vision).
+        // Force a reconnect after NO_FIRST_FRAME_CYCLES seconds.
+        noFirstFrameCycles.current++
+        if (noFirstFrameCycles.current >= NO_FIRST_FRAME_CYCLES) {
+          console.warn(
+            `[WebRTC] Conectado pero sin frames después de ${NO_FIRST_FRAME_CYCLES}s, reconectando`,
+          )
+          clearFpsInterval()
+          pc.close()
+          scheduleReconnect()
+        }
         return
       }
+      noFirstFrameCycles.current = 0
 
       if (streamFps === 0) {
         freezeCycleCount.current++
@@ -262,6 +277,7 @@ export function useWebRTC() {
     freezeCycleCount.current = 0
     hasDecodedFrames.current = false
     iceDisconnectCycles.current = 0
+    noFirstFrameCycles.current = 0
     reconnectAttemptRef.current = 0
     setReconnectAttempt(0)
     setConnectionState("disconnected")

@@ -14,6 +14,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Video,
+  Menu,
+  X,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAppMode } from "@/context/AppModeContext"
@@ -21,6 +23,7 @@ import { useAuth } from "@/context/AuthContext"
 import { forceSyncPull, forceSyncPush } from "@/api/sync"
 import UserMenu from "./UserMenu"
 import { Separator } from "@/components/ui/separator"
+import { Button } from "@/components/ui/button"
 
 type NavItem = {
   label: string
@@ -31,6 +34,7 @@ type NavItem = {
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const { mode } = useAppMode()
@@ -80,30 +84,70 @@ export default function Sidebar() {
     return base
   }, [mode, user?.role])
 
+  const mobileItems = items.filter((item) => !item.separator)
+
   return (
     <>
-      {/* Mobile: fixed bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-14 items-center justify-around overflow-x-auto border-t bg-sidebar text-sidebar-foreground md:hidden">
-        {items
-          .filter((item) => !item.separator)
-          .map((item) => {
-            const active = location.pathname.startsWith(item.path)
-            return (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className={`flex flex-col items-center gap-0.5 px-2 py-1.5 text-[10px] font-medium transition-colors ${
-                  active
-                    ? "text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70"
-                }`}
-              >
-                <item.icon className="size-5" />
-                <span className="truncate max-w-[56px]">{item.label}</span>
-              </button>
-            )
-          })}
-      </nav>
+      {/* Mobile: floating button + anchored popup (same style/column as Vision action buttons) */}
+      <Button
+        onClick={() => setMobileOpen((v) => !v)}
+        aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
+        className="fixed bottom-4 left-2 z-50 size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-primary/85 backdrop-blur-sm hover:bg-primary md:hidden"
+      >
+        {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+        <span>{mobileOpen ? "Cerrar" : "Menú"}</span>
+      </Button>
+
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center p-4 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        >
+          {/* backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          {/* centered modal — compact 2-col grid */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-xs rounded-xl border border-sidebar-border bg-sidebar p-2 text-sidebar-foreground shadow-2xl"
+          >
+            <div className="grid grid-cols-2 gap-1.5">
+              {mobileItems.map((item) => {
+                const active = location.pathname.startsWith(item.path)
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => {
+                      navigate(item.path)
+                      setMobileOpen(false)
+                    }}
+                    className={`flex flex-col items-center justify-center gap-1 rounded-md px-2 py-2.5 text-[11px] font-medium leading-tight transition-colors ${
+                      active
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
+                    }`}
+                  >
+                    <item.icon className="size-5 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                )
+              })}
+              {mode === "robot" && (
+                <button
+                  onClick={() => {
+                    setMobileOpen(false)
+                    handleSync()
+                  }}
+                  disabled={syncing}
+                  className="flex flex-col items-center justify-center gap-1 rounded-md px-2 py-2.5 text-[11px] font-medium leading-tight text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/50 disabled:opacity-50"
+                >
+                  <RefreshCw className={`size-5 shrink-0 ${syncing ? "animate-spin" : ""}`} />
+                  <span>{syncing ? "Sincronizando" : "Sincronizar"}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Desktop: side bar */}
       <aside

@@ -415,7 +415,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl p-4 md:p-6">
+    <div className="mx-auto h-full w-full max-w-2xl overflow-y-auto p-4 md:p-6">
       <h1 className="mb-4 text-xl font-semibold">Configuración</h1>
 
       {mode === "robot" && (

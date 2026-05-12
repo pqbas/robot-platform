@@ -30,6 +30,7 @@ export default function VideoStream({
         ref={videoRef}
         autoPlay
         playsInline
+        muted
         className="max-h-full max-w-full"
       />
       <RoiOverlay videoRef={videoRef} visible={connected && showRoi} />

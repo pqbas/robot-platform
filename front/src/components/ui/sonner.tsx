@@ -28,8 +28,16 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
+          "--width": "320px",
         } as React.CSSProperties
       }
+      toastOptions={{
+        classNames: {
+          toast: "!py-2 !px-3 !gap-2 !min-h-0",
+          title: "!text-sm",
+          description: "!text-xs",
+        },
+      }}
       {...props}
     />
   )

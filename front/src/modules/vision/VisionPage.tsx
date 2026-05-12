@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useBlocker } from "react-router-dom"
 import { toast } from "sonner"
-import { Circle, MapPin, Monitor, ScanEye, Square } from "lucide-react"
+import { Circle, MapPin, Monitor, RefreshCw, ScanEye, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { Camellon } from "@/types"
@@ -228,7 +228,7 @@ export default function VisionPage() {
 
   if (labelsLoading) {
     return (
-      <div className="flex h-[calc(100dvh-3.5rem)] flex-1 items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-full flex-1 items-center justify-center text-sm text-muted-foreground">
         Cargando etiquetas
       </div>
     )
@@ -236,7 +236,7 @@ export default function VisionPage() {
 
   if (labels.length === 0) {
     return (
-      <div className="flex h-[calc(100dvh-3.5rem)] flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+      <div className="flex h-full flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
         <p>No hay modelos asignados a este robot.</p>
         <Button
           variant="outline"
@@ -251,7 +251,7 @@ export default function VisionPage() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col md:h-auto md:flex-1">
+    <div className="relative flex h-full flex-col md:h-auto md:flex-1">
       <VideoStream
         videoRef={videoRef}
         connected={connected}
@@ -340,63 +340,65 @@ export default function VisionPage() {
         )}
       </VideoStream>
 
-      {/* Action bar */}
-      <div className="flex flex-wrap shrink-0 items-center justify-center gap-2 px-4 py-3">
+      {/* Action bar — overlay on bottom-right, Contar/Detener as last (closest to bottom) */}
+      <div className="absolute bottom-4 right-2 z-10 flex flex-col gap-2">
         {connectionState === "failed" && (
-          <Button variant="outline" onClick={connect}>
-            Reintentar conexión
-          </Button>
-        )}
-
-        {connected && !isCounting && (
           <Button
-            size="lg"
-            className="min-w-[140px]"
-            onClick={handleStart}
-            disabled={counting.state !== "IDLE"}
+            variant="outline"
+            onClick={connect}
+            className="size-16 flex-col gap-1 p-1 text-[10px] leading-tight bg-background/80 backdrop-blur-sm"
+            title="Reintentar conexión"
           >
-            <ScanEye className="size-4 mr-2" />
-            Contar
-          </Button>
-        )}
-
-        {connected && isCounting && (
-          <Button
-            size="lg"
-            variant="destructive"
-            className="min-w-[140px]"
-            onClick={handleStop}
-          >
-            <Square className="size-4 mr-2 fill-current" />
-            Detener
+            <RefreshCw className="size-5" />
+            <span>Reintentar</span>
           </Button>
         )}
 
         {connected && (
           !isRecording ? (
             <Button
-              size="lg"
-              className="min-w-[140px]"
               onClick={handleStartRecording}
               disabled={recording.loading || counting.state === "SAVING"}
               title="Iniciar grabación"
+              className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-primary/85 backdrop-blur-sm hover:bg-primary"
             >
-              <Circle className="size-4 mr-2 fill-red-500 text-red-500" />
-              Grabar
+              <Circle className="size-5 fill-red-500 text-red-500" />
+              <span>Grabar</span>
             </Button>
           ) : (
             <Button
-              size="lg"
               variant="destructive"
-              className="min-w-[140px]"
               onClick={handleStopRecording}
               disabled={recording.loading || counting.state === "SAVING"}
               title="Detener grabación"
+              className="size-16 flex-col gap-1 p-1 text-[10px] leading-tight bg-destructive/85 backdrop-blur-sm hover:bg-destructive"
             >
-              <Square className="size-4 mr-2" />
-              Detener {recording.durationStr}
+              <Square className="size-5" />
+              <span>{recording.durationStr}</span>
             </Button>
           )
+        )}
+
+        {connected && !isCounting && (
+          <Button
+            onClick={handleStart}
+            disabled={counting.state !== "IDLE"}
+            className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-primary/85 backdrop-blur-sm hover:bg-primary"
+          >
+            <ScanEye className="size-5" />
+            <span>Contar</span>
+          </Button>
+        )}
+
+        {connected && isCounting && (
+          <Button
+            variant="destructive"
+            onClick={handleStop}
+            className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-destructive/85 backdrop-blur-sm hover:bg-destructive"
+          >
+            <Square className="size-5 fill-current" />
+            <span>Detener</span>
+          </Button>
         )}
       </div>
 

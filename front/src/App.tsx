@@ -6,10 +6,10 @@ function App() {
   return (
     <div className="flex h-dvh flex-col overflow-hidden md:flex-row">
       <Sidebar />
-      <main className="flex min-h-0 flex-1 flex-col overflow-hidden pb-14 md:pb-0">
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <Outlet />
       </main>
-      <Toaster />
+      <Toaster position="top-center" />
     </div>
   )
 }
