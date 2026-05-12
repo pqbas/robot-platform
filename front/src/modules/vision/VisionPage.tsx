@@ -341,7 +341,7 @@ export default function VisionPage() {
       </VideoStream>
 
       {/* Action bar */}
-      <div className="flex shrink-0 items-center justify-center gap-3 px-4 py-3">
+      <div className="flex flex-wrap shrink-0 items-center justify-center gap-2 px-4 py-3">
         {connectionState === "failed" && (
           <Button variant="outline" onClick={connect}>
             Reintentar conexión
@@ -351,7 +351,7 @@ export default function VisionPage() {
         {connected && !isCounting && (
           <Button
             size="lg"
-            className="min-w-[180px]"
+            className="min-w-[140px]"
             onClick={handleStart}
             disabled={counting.state !== "IDLE"}
           >
@@ -364,7 +364,7 @@ export default function VisionPage() {
           <Button
             size="lg"
             variant="destructive"
-            className="min-w-[180px]"
+            className="min-w-[140px]"
             onClick={handleStop}
           >
             <Square className="size-4 mr-2 fill-current" />
@@ -376,7 +376,7 @@ export default function VisionPage() {
           !isRecording ? (
             <Button
               size="lg"
-              className="min-w-[180px]"
+              className="min-w-[140px]"
               onClick={handleStartRecording}
               disabled={recording.loading || counting.state === "SAVING"}
               title="Iniciar grabación"
@@ -388,7 +388,7 @@ export default function VisionPage() {
             <Button
               size="lg"
               variant="destructive"
-              className="min-w-[180px]"
+              className="min-w-[140px]"
               onClick={handleStopRecording}
               disabled={recording.loading || counting.state === "SAVING"}
               title="Detener grabación"
