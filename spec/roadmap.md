@@ -397,6 +397,26 @@ Ver `spec/12-05-26-webcodecs-websocket/`. Fase 27 (MJPEG perf) sigue siendo vali
 
 ---
 
+## Phase 29: TLS local en nginx del robot — secure context sin flag por device
+
+**Goal:** servir `https://<robot>` con un cert válido para los devices del operador, eliminando la flag `chrome://flags/#unsafely-treat-insecure-origin-as-secure` que actualmente hay que setear en cada laptop y celu para que WebCodecs funcione.
+
+**Contexto:** Phase 28 dejó WebCodecs operativo pero atado a un workaround manual: en cada device nuevo el operador tiene que abrir Chrome flags y agregar `http://192.168.0.10` al whitelist de "treat as secure". Eso no escala — un fundo nuevo, un celu de repuesto o un operador adicional fuerza el ritual cada vez. Además el tráfico actual va en texto plano por la LAN: cualquiera asociado al WiFi puede sniffear video, API tokens, y sesiones de conteo. TLS resuelve ambas cosas con cero costo en pesos (Phase 28 ya validó la suposición de que el operador usa Android Chrome, así que mkcert + cert self-signed cubre el caso). Sin esto, todo nuevo feature que dependa de secure context (Web Bluetooth, Web Serial, getUserMedia con cámaras locales, notificaciones push) hereda el mismo workaround.
+
+- [ ] Generar CA local con `mkcert` en máquina del admin y cert para `robot.local` (o IP `192.168.0.10`) firmado por esa CA. Documentar el flujo en `back/scripts/setup-tls.sh` o equivalente.
+- [ ] Actualizar plantilla nginx del robot (`back/templates/...` o donde viva) — listen 443 ssl, certificados desde `/etc/nginx/certs/robot.crt|key`, redirect HTTP→HTTPS en 80, reusar el bloque de `proxy_pass` actual.
+- [ ] `make deploy-robot` deja los certs en `/etc/nginx/certs/` con permisos correctos. Variables en `.env.robot` para path del cert si conviene customizar.
+- [ ] Documentar el setup per-device del CA root de mkcert (instructivo para operadores: una vez por device, link al archivo `.crt` de la CA).
+- [ ] Actualizar `useStream.ts` / `streamFraming.ts` para que el WS use `wss://` cuando la página esté servida sobre HTTPS (`window.location.protocol === "https:"` → `wss:`). Ya está en el código de Phase 28; validar.
+- [ ] Validar: con cert instalado en celu/laptop, `https://robot.local/vision` carga sin warnings, WebCodecs anda sin flag, lock candado verde.
+- [ ] Validar: con cert NO instalado en un device nuevo, browser muestra warning pero permite "Continue anyway" — el feature aún funciona si el operador acepta.
+- [ ] Validar: deploy `make update` sigue funcionando sin tocar el cert generado (no se regenera en cada deploy).
+- [ ] Validar: rate limiting, auth y demás middleware no se rompen por el cambio de scheme.
+
+Ver futuro `spec/<fecha>-tls-local-robot/`. Alternativas que se descartaron al planificar: Cloudflare Tunnel y Tailscale Funnel (requieren conectividad outbound del robot a la nube, no garantizada en fundos con WiFi propio); Let's Encrypt con dominio público (requiere FQDN y port forwarding, infra extra). mkcert es self-contained y suficiente para LAN privada.
+
+---
+
 ## Pendiente (sin fecha)
 
 - Clasificación offline de frutos (crops por track_id + modelo de calidad/madurez)
