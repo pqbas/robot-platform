@@ -321,7 +321,7 @@ Shipped en PR #TBD.
 
 ---
 
-## Phase 25: Streaming MJPEG + WebSocket (dual-mode con feature flag)
+## Phase 25: Streaming MJPEG + WebSocket (dual-mode con feature flag) (Complete)
 
 **Goal:** ofrecer un transport de video alternativo a WebRTC, más simple y robusto en LAN/WiFi flaky, sin remover el path actual. WebRTC sigue siendo válido para uso futuro (NAT traversal, multi-viewer SFU, audio). El nuevo path es la opción default para el caso real actual (operador en localhost o LAN).
 
@@ -350,6 +350,50 @@ Shipped en PR #TBD.
 - [ ] Cero regresión desktop: todos los cambios via media queries Tailwind
 
 Ver `spec/11-05-26-mobile-ux-acceso/`.
+
+---
+
+## Phase 27: MJPEG performance — bajar latencia en mobile
+
+**Goal:** acercar el FPS del path MJPEG en celular al de WebRTC (~25-30 fps vs ~10 actual), sin perder la robustez ganada en la fase 25.
+
+**Contexto:** la fase 25 dejó el MJPEG funcional y estable (sin freezes, sin desconexiones), pero en celular el decode JPEG corre en software JS y cuesta ~100 ms por frame a 720p q=80. WebRTC vuela porque tiene H264 con decode por hardware. La fase ataca dos frentes: (a) reducir el peso del frame que llega al cliente, (b) ocultar el RTT del ACK con pipeline depth > 1, y (c) opcionalmente partir en perfiles hi/lo para que desktop conserve calidad y mobile tenga FPS.
+
+- [ ] Backend: `JPEG_QUALITY` configurable vía env (default 60-65 en lugar de 80)
+- [ ] Backend: pipeline depth configurable en `stream_ws.py` (default 2, ocultar RTT)
+- [ ] Backend (opcional): perfiles hi/lo con resolución reducida (854x480 o 640x360) para mobile, encode por perfil activo, fan-out a clientes suscriptos
+- [ ] Frontend: cliente elige perfil vía query string (`?profile=lo|hi`), auto-detecta mobile
+- [ ] Frontend (opcional): throttle de `setFrameData` a 15 Hz si el re-render de overlays domina
+- [ ] Validar: ≥ 20 fps sostenido en mobile tras 5 min de stream, sin OOM
+- [ ] Validar: desktop no regresa (≥ 28 fps, calidad visual aceptable)
+- [ ] Validar: counting/detection sigue precisa (no perder boxes por throttle ni por compresión)
+
+Ver `spec/12-05-26-mjpeg-perf/` (a planificar con `/spec-phase`).
+
+---
+
+## Phase 28: Stream H264 vía WebCodecs sobre WebSocket — HW decode con control de drop
+
+**Goal:** transport de video que use el decoder hardware H264 del cliente (mismo silicio que decodifica Netflix/YouTube), sin las desconexiones y freezes que arrastra WebRTC. Apunta a 25-30 fps reales en celular, latencia ≤ 500 ms, con descarte explícito de frames cuando el render se atrasa.
+
+**Contexto:** MJPEG (fase 25) ganó robustez pero el decode JPEG en software JS tope a ~10 fps en mobile (la fase 27 lo lleva a ~15-20 a costa de calidad). WebRTC tiene HW decode pero arrastra codec stateful + ICE + RTP retransmission — frágil ante packet loss en WiFi débil. La WebCodecs API (`VideoDecoder`) da acceso directo al decoder hardware del SoC vía MediaCodec — sin muxer, sin SDP, sin buffering del browser. El servidor manda NAL units H264 Annex-B crudos por WS y el cliente los pasa al `VideoDecoder` con control total sobre qué chunks dropear. Trade-off: latencia ~100-300 ms vs <100 ms de WebRTC; pivote desde MSE (evaluado y descartado por buffer interno de 500ms-2s en el browser, que no cumplía el target de latencia).
+
+Mobile target acordado: Android moderno (Chrome / Edge / Samsung Internet, todos Chromium con WebCodecs maduro desde 2022). Firefox Android tiene soporte parcial — fuera de scope. iOS Safari ≥ 17 existe pero buggy — fuera de scope.
+
+- [ ] Backend: encoder H264 Annex-B reusando `back/services/nvenc_codec.py` — pipeline GStreamer Jetson termina en `h264parse config-interval=1 ! appsink` (sin muxer, SPS/PPS inband por keyframe).
+- [ ] Backend: `back/services/wc_broadcaster.py` análogo a `stream_broadcaster.py` — un encoder, fan-out a N clientes WS, per-cliente queue drop-oldest, lifecycle lazy.
+- [ ] Backend: `/ws/wc-stream` envía cada frame como `[uint32 BE header_len][JSON header][H264 NAL bytes]`. Header bundle-ea detections + `is_keyframe` + `timestamp_us` (overlay sin drift).
+- [ ] Frontend: `front/src/hooks/useWebCodecsStream.ts` crea `VideoDecoder`, configura al primer keyframe (SPS/PPS inband), dibuja `VideoFrame` a `<canvas>`. Drop policy: si `decodeQueueSize > 3`, descarta P-frames hasta próximo IDR.
+- [ ] Frontend: extraer parser `parseFrame()` a `front/src/lib/streamFraming.ts` y reusar desde MJPEG + WC.
+- [ ] Frontend: `useStream.ts` agrega `"wc"` como tercera opción del feature flag (mjpeg / wc / webrtc).
+- [ ] Frontend: pre-check con `VideoDecoder.isConfigSupported({hardwareAcceleration: "prefer-hardware"})`; sin soporte → `failed` con mensaje sugiriendo otro modo.
+- [ ] Validar: cel Android, 25-30 fps sostenidos tras 10 min, latencia glass-to-glass ≤ 500 ms, HW decode confirmado en `chrome://media-internals`.
+- [ ] Validar: detection boxes alineadas (drift ≤ 50 ms, bundle en header).
+- [ ] Validar: drop policy en funcionamiento (CPU throttle → fps baja pero latencia no acumula).
+- [ ] Validar: multi-cliente (2-3 navegadores simultáneos) sin degradación cruzada.
+- [ ] Validar: Chrome desktop ≥ 28 fps. Sin regresión en MJPEG ni WebRTC.
+
+Ver `spec/12-05-26-webcodecs-websocket/`. Fase 27 (MJPEG perf) sigue siendo valiosa como fallback para Firefox Android, iOS Safari, y cualquier browser sin WebCodecs HW.
 
 ---
 
