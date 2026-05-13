@@ -253,14 +253,14 @@ export function useWebCodecsStream() {
       }
 
       try {
+        // Copia fresca para que el tipo sea Uint8Array<ArrayBuffer> (no
+        // ArrayBufferLike). EncodedVideoChunk va a copiar igual, así que el
+        // costo extra es nulo en la práctica.
+        const data = new Uint8Array(payload)
         const chunk = makeChunk(
           header.is_keyframe ? "key" : "delta",
           header.timestamp_us ?? 0,
-          // Slice copia el rango exacto, evitando que el decoder vea el header.
-          payload.buffer.slice(
-            payload.byteOffset,
-            payload.byteOffset + payload.byteLength,
-          ),
+          data,
         )
         dec.decode(chunk)
       } catch (e) {
