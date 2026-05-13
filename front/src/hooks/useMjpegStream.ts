@@ -19,6 +19,10 @@ export function useMjpegStream() {
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectAttemptRef = useRef(0)
   const closingRef = useRef(false)
+  // Watermark — el frame_id más reciente que vimos llegar. Si terminamos de
+  // decodificar uno y otro más nuevo ya llegó, descartamos el viejo para no
+  // pintarlo encima del nuevo.
+  const latestFrameIdRef = useRef(0)
 
   const openWsRef = useRef<(() => void) | null>(null)
 
@@ -56,6 +60,7 @@ export function useMjpegStream() {
     clearFpsInterval()
     frameCountRef.current = 0
     inferenceFrameCountRef.current = 0
+    latestFrameIdRef.current = 0
     setConnectionState("connecting")
 
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
@@ -92,8 +97,22 @@ export function useMjpegStream() {
         const header = JSON.parse(new TextDecoder("utf-8").decode(headerBytes))
         const jpegBytes = new Uint8Array(buf, 4 + headerLen)
 
+        const myFrameId: number = header.frame_id ?? 0
+        // Pre-check: si ya llegó uno más nuevo mientras esperábamos el
+        // microtask, ni siquiera decodificamos.
+        if (myFrameId < latestFrameIdRef.current) return
+        latestFrameIdRef.current = Math.max(latestFrameIdRef.current, myFrameId)
+
         const blob = new Blob([jpegBytes], { type: "image/jpeg" })
         const bitmap = await createImageBitmap(blob)
+
+        // Post-check: si entre el await y aquí llegó uno más nuevo, descartar
+        // este bitmap en vez de pintarlo encima del frame nuevo.
+        if (myFrameId < latestFrameIdRef.current) {
+          bitmap.close()
+          return
+        }
+
         const canvas = canvasRef.current
         if (canvas) {
           if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
