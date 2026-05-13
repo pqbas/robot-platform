@@ -231,8 +231,14 @@ else
     export SERVER_NAME="_"
 fi
 
+if [[ "$MODE" == "robot" ]]; then
+    NGINX_TEMPLATE="$INSTALL_DIR/deploy/nginx.robot.conf.template"
+else
+    NGINX_TEMPLATE="$INSTALL_DIR/deploy/nginx.server.conf.template"
+fi
+
 envsubst '${BACKEND_PORT} ${SERVER_NAME}' \
-    < "$INSTALL_DIR/deploy/nginx.conf.template" \
+    < "$NGINX_TEMPLATE" \
     | sudo tee /etc/nginx/sites-available/robot-platform > /dev/null
 
 sudo ln -sf /etc/nginx/sites-available/robot-platform /etc/nginx/sites-enabled/robot-platform

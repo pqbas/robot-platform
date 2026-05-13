@@ -12,8 +12,7 @@
    - Método `_run()` (thread): loop infinito mientras `_running`, lee frame, encodea JPEG con `cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])`, despacha inferencia si hay sesión activa (mismo gate que `back/services/camera.py:161`), arma el mensaje binario, hace `queue.put_nowait()` por cada cliente (con `try/except QueueFull: queue.get_nowait(); queue.put_nowait()` para drop-oldest).
    - Función `_pack(header: dict, jpeg: bytes) -> bytes`: `struct.pack(">I", len(header_bytes)) + header_bytes + jpeg`.
 
-2. Verificar import de `cv2` aceptable en backend:
-   - Revisar `CLAUDE.md` invariante "Backend NO importa cv2". Confirmar con el usuario si esa invariante aplica también a este path. **Si aplica**, mover el encode JPEG a un nuevo worker (por ejemplo extender `camera_worker` para producir JPEG bajo demanda) o usar PyAV (`av.VideoFrame.from_ndarray` → JPEG container). Esta decisión bloquea el resto del plan — resolver antes de continuar.
+2. `cv2` en el backend ya está aceptado (ver Decisions en `requirements.md`): `back/services/perception/inference_client.py:75` usa `cv2.imencode` con el mismo patrón. Importar `cv2` directo en `stream_broadcaster.py` y continuar — no es bloqueo.
 
 3. Crear `back/routes/stream_ws.py`:
    - `router = APIRouter()`.

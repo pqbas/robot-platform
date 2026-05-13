@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react"
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from "lucide-react"
+import type { MediaRef } from "@/types/stream"
 
 type CountingLineOverlayProps = {
-  videoRef: React.RefObject<HTMLVideoElement | null>
+  mediaRef: MediaRef
   mode: string
   threshold: number
   direction: string
@@ -23,7 +24,7 @@ const ARROW_BY_DIRECTION: Record<string, React.ComponentType<{ className?: strin
 }
 
 export default function CountingLineOverlay({
-  videoRef,
+  mediaRef,
   mode,
   threshold,
   direction,
@@ -37,44 +38,43 @@ export default function CountingLineOverlay({
     if (!visible) return
     const line = lineRef.current
     const arrow = arrowRef.current
-    const video = videoRef.current
-    if (!line || !arrow || !video) return
+    const media = mediaRef.current
+    if (!line || !arrow || !media) return
 
     function position() {
-      if (!video || !line || !arrow) return
-      const videoRect = video.getBoundingClientRect()
+      if (!media || !line || !arrow) return
+      const mediaRect = media.getBoundingClientRect()
       const parentRect = line.parentElement?.getBoundingClientRect()
       if (!parentRect) {
         rafRef.current = requestAnimationFrame(position)
         return
       }
 
-      const offsetX = videoRect.left - parentRect.left
-      const offsetY = videoRect.top - parentRect.top
+      const offsetX = mediaRect.left - parentRect.left
+      const offsetY = mediaRect.top - parentRect.top
       const t = Math.max(0, Math.min(1, threshold))
 
       if (mode === "horizontal") {
-        const lineX = offsetX + t * videoRect.width
+        const lineX = offsetX + t * mediaRect.width
         line.style.left = `${lineX}px`
         line.style.top = `${offsetY}px`
         line.style.width = `${LINE_WIDTH}px`
-        line.style.height = `${videoRect.height}px`
+        line.style.height = `${mediaRect.height}px`
         line.style.backgroundImage = `repeating-linear-gradient(to bottom, ${LINE_COLOR} 0 ${DASH_LEN}px, transparent ${DASH_LEN}px ${DASH_LEN + GAP_LEN}px)`
 
-        // Arrow vertically centered on the line; horizontally pushed to the after-side.
         const arrowDelta = direction === "left2right" ? ARROW_OFFSET : -ARROW_OFFSET
         arrow.style.left = `${lineX + arrowDelta - 12}px`
-        arrow.style.top = `${offsetY + videoRect.height / 2 - 12}px`
+        arrow.style.top = `${offsetY + mediaRect.height / 2 - 12}px`
       } else {
-        const lineY = offsetY + t * videoRect.height
+        const lineY = offsetY + t * mediaRect.height
         line.style.left = `${offsetX}px`
         line.style.top = `${lineY}px`
-        line.style.width = `${videoRect.width}px`
+        line.style.width = `${mediaRect.width}px`
         line.style.height = `${LINE_WIDTH}px`
         line.style.backgroundImage = `repeating-linear-gradient(to right, ${LINE_COLOR} 0 ${DASH_LEN}px, transparent ${DASH_LEN}px ${DASH_LEN + GAP_LEN}px)`
 
         const arrowDelta = direction === "top2down" ? ARROW_OFFSET : -ARROW_OFFSET
-        arrow.style.left = `${offsetX + videoRect.width / 2 - 12}px`
+        arrow.style.left = `${offsetX + mediaRect.width / 2 - 12}px`
         arrow.style.top = `${lineY + arrowDelta - 12}px`
       }
 
@@ -83,7 +83,7 @@ export default function CountingLineOverlay({
 
     rafRef.current = requestAnimationFrame(position)
     return () => cancelAnimationFrame(rafRef.current)
-  }, [videoRef, mode, threshold, direction, visible])
+  }, [mediaRef, mode, threshold, direction, visible])
 
   if (!visible) return null
 

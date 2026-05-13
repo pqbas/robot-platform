@@ -1,12 +1,14 @@
-import type { ReactNode } from "react"
+import type { ReactNode, RefObject } from "react"
 import { Loader2 } from "lucide-react"
 import type { Detection } from "@/types"
+import type { MediaRef } from "@/types/stream"
 import DetectionOverlay from "./DetectionOverlay"
 import CountingLineOverlay from "./CountingLineOverlay"
 import RoiOverlay from "./RoiOverlay"
 
 type VideoStreamProps = {
-  videoRef: React.RefObject<HTMLVideoElement | null>
+  kind: "video" | "canvas"
+  mediaRef: MediaRef
   connected: boolean
   detections?: Detection[]
   showDetections?: boolean
@@ -16,7 +18,8 @@ type VideoStreamProps = {
 }
 
 export default function VideoStream({
-  videoRef,
+  kind,
+  mediaRef,
   connected,
   detections = [],
   showDetections = false,
@@ -26,21 +29,28 @@ export default function VideoStream({
 }: VideoStreamProps) {
   return (
     <div className="relative flex min-h-0 flex-1 items-center justify-center bg-black">
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className="max-h-full max-w-full"
-      />
-      <RoiOverlay videoRef={videoRef} visible={connected && showRoi} />
+      {kind === "video" ? (
+        <video
+          ref={mediaRef as RefObject<HTMLVideoElement | null>}
+          autoPlay
+          playsInline
+          muted
+          className="max-h-full max-w-full"
+        />
+      ) : (
+        <canvas
+          ref={mediaRef as RefObject<HTMLCanvasElement | null>}
+          className="max-h-full max-w-full"
+        />
+      )}
+      <RoiOverlay mediaRef={mediaRef} visible={connected && showRoi} />
       <DetectionOverlay
-        videoRef={videoRef}
+        mediaRef={mediaRef}
         detections={detections}
         visible={showDetections}
       />
       <CountingLineOverlay
-        videoRef={videoRef}
+        mediaRef={mediaRef}
         mode={countingLine?.mode ?? "horizontal"}
         threshold={countingLine?.threshold ?? 0.5}
         direction={countingLine?.direction ?? "left2right"}
