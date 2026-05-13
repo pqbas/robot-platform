@@ -372,7 +372,7 @@ Ver `spec/12-05-26-mjpeg-perf/` (a planificar con `/spec-phase`).
 
 ---
 
-## Phase 28: Stream H264 vía WebCodecs sobre WebSocket — HW decode con control de drop
+## Phase 28: Stream H264 vía WebCodecs sobre WebSocket — HW decode con control de drop (Complete)
 
 **Goal:** transport de video que use el decoder hardware H264 del cliente (mismo silicio que decodifica Netflix/YouTube), sin las desconexiones y freezes que arrastra WebRTC. Apunta a 25-30 fps reales en celular, latencia ≤ 500 ms, con descarte explícito de frames cuando el render se atrasa.
 
