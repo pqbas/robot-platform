@@ -70,7 +70,10 @@ class H264AnnexBEncoder:
                 "! nvvidconv "
                 "! video/x-raw(memory:NVMM),format=NV12 "
                 f"! nvv4l2h264enc name=enc bitrate={BITRATE_BPS} "
-                "preset-level=4 profile=4 control-rate=1 "
+                # profile=0 = Baseline. Matches el codec string del cliente
+                # (avc1.42E01E) y evita B-frames → menor latencia.
+                # nvv4l2h264enc profiles: 0=Baseline, 2=Main, 4=High.
+                "preset-level=4 profile=0 control-rate=1 "
                 f"iframeinterval={IFRAME_INTERVAL} maxperf-enable=true "
                 "insert-sps-pps=true "
                 "! h264parse config-interval=1 "
