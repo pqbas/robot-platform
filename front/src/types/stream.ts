@@ -2,7 +2,7 @@ import type { RefObject } from "react"
 import type { FrameData } from "@/types"
 import type { ConnectionState, FpsStats } from "@/hooks/useWebRTC"
 
-export type StreamMode = "webrtc" | "mjpeg"
+export type StreamMode = "webrtc" | "mjpeg" | "wc"
 
 export type MediaRef = RefObject<HTMLVideoElement | HTMLCanvasElement | null>
 
