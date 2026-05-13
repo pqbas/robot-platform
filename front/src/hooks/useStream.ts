@@ -4,11 +4,11 @@ import { useWebRTC } from "./useWebRTC"
 import type { StreamHandle, StreamMode } from "@/types/stream"
 
 function readMode(): StreamMode {
-  if (typeof window === "undefined") return "mjpeg"
+  if (typeof window === "undefined") return "wc"
   const value = localStorage.getItem("stream.mode")
   if (value === "webrtc") return "webrtc"
-  if (value === "wc") return "wc"
-  return "mjpeg"
+  if (value === "mjpeg") return "mjpeg"
+  return "wc"
 }
 
 // Read once at module load — hook choice is fixed for this page lifetime to
