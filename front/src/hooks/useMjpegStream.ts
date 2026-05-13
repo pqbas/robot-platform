@@ -74,6 +74,9 @@ export function useMjpegStream() {
 
     ws.onopen = () => {
       setConnectionState("connected")
+      // Crédito inicial: autoriza al server a enviar el primer frame. A partir
+      // de ahí el decodeLoop devuelve un "ready" por cada frame consumido.
+      ws.send("ready")
     }
 
     ws.onclose = () => {
@@ -100,25 +103,35 @@ export function useMjpegStream() {
           pendingJpegRef.current = null
           pendingFrameDataRef.current = null
 
-          const blob = new Blob([jpeg as BlobPart], { type: "image/jpeg" })
-          const bitmap = await createImageBitmap(blob)
-          const canvas = canvasRef.current
-          if (canvas) {
-            if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
-              canvas.width = bitmap.width
-              canvas.height = bitmap.height
+          let bitmap: ImageBitmap | null = null
+          try {
+            const blob = new Blob([jpeg as BlobPart], { type: "image/jpeg" })
+            bitmap = await createImageBitmap(blob)
+            const canvas = canvasRef.current
+            if (canvas) {
+              if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
+                canvas.width = bitmap.width
+                canvas.height = bitmap.height
+              }
+              const ctx = canvas.getContext("2d")
+              ctx?.drawImage(bitmap, 0, 0)
             }
-            const ctx = canvas.getContext("2d")
-            ctx?.drawImage(bitmap, 0, 0)
-          }
-          bitmap.close()
 
-          frameCountRef.current++
-          if (data.session_active) inferenceFrameCountRef.current++
-          setFrameData(data)
+            frameCountRef.current++
+            if (data.session_active) inferenceFrameCountRef.current++
+            setFrameData(data)
+          } catch (e) {
+            console.error("[mjpeg] decode error:", e)
+          } finally {
+            bitmap?.close()
+            // Devuelve crédito al server SIEMPRE — aunque el decode falle —
+            // para no quedarnos sin frames. Si el WS ya cerró, no enviamos.
+            const sock = wsRef.current
+            if (sock && sock.readyState === WebSocket.OPEN) {
+              sock.send("ready")
+            }
+          }
         }
-      } catch (e) {
-        console.error("[mjpeg] decode loop error:", e)
       } finally {
         decodingRef.current = false
       }
