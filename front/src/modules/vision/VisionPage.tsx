@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { Camellon } from "@/types"
 import { getCamellones } from "@/api/camellones"
-import { useWebRTC } from "@/hooks/useWebRTC"
+import { useStream } from "@/hooks/useStream"
 import { useCounting } from "@/hooks/useCounting"
 import { useDeviceContext } from "@/hooks/useDeviceContext"
 import { useRecording } from "@/hooks/useRecording"
@@ -35,7 +35,8 @@ function formatDuration(start: Date | null): string {
 }
 
 export default function VisionPage() {
-  const { videoRef, connectionState, frameData, fps, connect } = useWebRTC()
+  const stream = useStream()
+  const { kind, mediaRef, connectionState, frameData, fps, connect } = stream
   const counting = useCounting()
   const recording = useRecording()
   const { mode } = useAppMode()
@@ -253,7 +254,8 @@ export default function VisionPage() {
   return (
     <div className="relative flex h-full flex-col md:h-auto md:flex-1">
       <VideoStream
-        videoRef={videoRef}
+        kind={kind}
+        mediaRef={mediaRef}
         connected={connected}
         detections={frameData?.detections}
         showDetections={isCounting && !!frameData}

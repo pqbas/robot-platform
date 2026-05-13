@@ -1,8 +1,10 @@
 import { useEffect, useRef } from "react"
 import type { Detection } from "@/types"
+import type { MediaRef } from "@/types/stream"
+import { getNaturalSize } from "@/lib/streamMedia"
 
 type DetectionOverlayProps = {
-  videoRef: React.RefObject<HTMLVideoElement | null>
+  mediaRef: MediaRef
   detections: Detection[]
   visible: boolean
 }
@@ -19,7 +21,7 @@ function colorForTrackId(id: number | null): string {
 }
 
 export default function DetectionOverlay({
-  videoRef,
+  mediaRef,
   detections,
   visible,
 }: DetectionOverlayProps) {
@@ -28,36 +30,33 @@ export default function DetectionOverlay({
 
   useEffect(() => {
     const canvas = canvasRef.current
-    const video = videoRef.current
-    if (!canvas || !video) return
+    const media = mediaRef.current
+    if (!canvas || !media) return
 
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
     function draw() {
-      if (!video || !canvas || !ctx) return
+      if (!media || !canvas || !ctx) return
 
-      // Position canvas exactly over the video element
-      const videoRect = video.getBoundingClientRect()
+      const mediaRect = media.getBoundingClientRect()
       const parentRect = canvas.parentElement?.getBoundingClientRect()
       if (!parentRect) {
         rafRef.current = requestAnimationFrame(draw)
         return
       }
 
-      // Offset of video within parent container
-      const offsetX = videoRect.left - parentRect.left
-      const offsetY = videoRect.top - parentRect.top
+      const offsetX = mediaRect.left - parentRect.left
+      const offsetY = mediaRect.top - parentRect.top
 
       canvas.style.left = `${offsetX}px`
       canvas.style.top = `${offsetY}px`
-      canvas.style.width = `${videoRect.width}px`
-      canvas.style.height = `${videoRect.height}px`
+      canvas.style.width = `${mediaRect.width}px`
+      canvas.style.height = `${mediaRect.height}px`
 
-      // Set canvas resolution to match video display size
-      if (canvas.width !== videoRect.width || canvas.height !== videoRect.height) {
-        canvas.width = videoRect.width
-        canvas.height = videoRect.height
+      if (canvas.width !== mediaRect.width || canvas.height !== mediaRect.height) {
+        canvas.width = mediaRect.width
+        canvas.height = mediaRect.height
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -67,12 +66,9 @@ export default function DetectionOverlay({
         return
       }
 
-      // Scale factors: bbox coordinates are in original frame pixels,
-      // canvas is in displayed pixels
-      const vw = video.videoWidth || 1
-      const vh = video.videoHeight || 1
-      const sx = canvas.width / vw
-      const sy = canvas.height / vh
+      const { w: nw, h: nh } = getNaturalSize(media)
+      const sx = canvas.width / (nw || 1)
+      const sy = canvas.height / (nh || 1)
 
       ctx.lineWidth = LINE_WIDTH
       ctx.font = FONT
@@ -104,7 +100,7 @@ export default function DetectionOverlay({
 
     rafRef.current = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(rafRef.current)
-  }, [videoRef, detections, visible])
+  }, [mediaRef, detections, visible])
 
   return (
     <canvas
