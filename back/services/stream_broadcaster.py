@@ -23,7 +23,8 @@ import time
 import cv2
 
 from back.config import config
-from back.services.camera import _InferenceWorker, processing_enabled
+from back.services import camera as camera_module
+from back.services.camera import _InferenceWorker
 from back.services.camera_client import CameraClient
 from back.services.perception import counter
 
@@ -72,6 +73,17 @@ class StreamBroadcaster:
     def add_client(self) -> tuple[int, asyncio.Queue[bytes]]:
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=1)
+
+        # Drain the previous thread before starting a new one. read_frame can
+        # block up to STREAM_READ_TIMEOUT_S, so a rapid disconnect/reconnect
+        # would otherwise race two threads on the same CameraClient.
+        thread_to_join: threading.Thread | None = None
+        with self._lock:
+            if not self._running and self._thread is not None and self._thread.is_alive():
+                thread_to_join = self._thread
+        if thread_to_join is not None:
+            thread_to_join.join(timeout=6.0)
+
         with self._lock:
             client_id = self._next_client_id
             self._next_client_id += 1
@@ -126,7 +138,7 @@ class StreamBroadcaster:
                 self._frame_id += 1
 
                 session = counter.get_active_session()
-                if processing_enabled and session is not None:
+                if camera_module.processing_enabled and session is not None:
                     self._inference.submit_frame(frame.copy())
 
                 ok, jpeg_buf = cv2.imencode(
