@@ -60,6 +60,11 @@ export function useWebCodecsStream() {
   const decoderRef = useRef<VideoDecoderLike | null>(null)
   const configuredRef = useRef(false)
   const droppedCountRef = useRef(0)
+  // Config resuelta por isConfigSupported — reusada en decoder.configure()
+  // para evitar "Unsupported configuration" cuando el browser normaliza flags
+  // (e.g. hardwareAcceleration "prefer-hardware" → "no-preference" en laptops
+  // sin HW H264 decode).
+  const probedConfigRef = useRef<VideoDecoderConfig | null>(null)
 
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("disconnected")
@@ -132,25 +137,37 @@ export function useWebCodecsStream() {
       return
     }
 
-    let supported = false
-    try {
-      // Probe sin hardwareAcceleration — algunos browsers tratan
-      // "prefer-hardware" como requirement en isConfigSupported y rechazan
-      // si no hay decoder HW disponible. Como hint en configure() abajo,
-      // sí funciona: usa HW si lo tiene, fallback a SW si no.
-      const probe = await Decoder.isConfigSupported({ codec: CODEC })
-      supported = !!probe.supported
-    } catch (e) {
-      console.warn("[wc] isConfigSupported threw:", e)
-      supported = false
+    // Intentamos primero con prefer-hardware (Android moderno HW garantizado);
+    // si falla bajamos a la config minimal. Guardamos la config normalizada
+    // que retorna isConfigSupported para reusarla en configure() y evitar
+    // mismatch entre lo probado y lo configurado.
+    const attempts: VideoDecoderConfig[] = [
+      { codec: CODEC, hardwareAcceleration: "prefer-hardware", optimizeForLatency: true },
+      { codec: CODEC, optimizeForLatency: true },
+      { codec: CODEC },
+    ]
+    let workingConfig: VideoDecoderConfig | null = null
+    for (const cfg of attempts) {
+      try {
+        const probe = await Decoder.isConfigSupported(cfg)
+        if (probe.supported) {
+          const resolved = (probe as { config?: VideoDecoderConfig }).config
+          workingConfig = resolved ?? cfg
+          break
+        }
+      } catch (e) {
+        console.debug("[wc] probe threw, trying next:", e)
+      }
     }
-    if (!supported) {
+    if (!workingConfig) {
       console.warn(
         "[wc] codec no soportado en este navegador — cambiar a modo mjpeg o webrtc",
       )
       setConnectionState("failed")
       return
     }
+    probedConfigRef.current = workingConfig
+    console.log("[wc] decoder config:", workingConfig)
 
     closeDecoder()
     const decoder = new Decoder({
@@ -228,15 +245,12 @@ export function useWebCodecsStream() {
         return
       }
       if (!configuredRef.current && header.is_keyframe) {
+        const cfg = probedConfigRef.current ?? { codec: CODEC }
         try {
-          dec.configure({
-            codec: CODEC,
-            hardwareAcceleration: "prefer-hardware",
-            optimizeForLatency: true,
-          })
+          dec.configure(cfg)
           configuredRef.current = true
         } catch (e) {
-          console.error("[wc] decoder.configure failed:", e)
+          console.error("[wc] decoder.configure failed:", e, "config:", cfg)
           setConnectionState("failed")
           return
         }
