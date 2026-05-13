@@ -24,6 +24,7 @@ from back.routes.locations import router as locations_router
 from back.routes.recordings import router as recordings_router
 from back.routes.stream import router as stream_router
 from back.routes.stream_ws import router as stream_ws_router
+from back.routes.stream_wc import router as stream_wc_router
 from back.routes.auth import router as auth_router
 from back.routes.setup import router as setup_router
 from back.routes.sync import router as sync_router
@@ -118,6 +119,7 @@ if app_config.mode == AppMode.SERVER:
 
 app.include_router(stream_router)
 app.include_router(stream_ws_router)
+app.include_router(stream_wc_router)
 app.include_router(counting_router)
 app.include_router(camellones_router)
 app.include_router(locations_router)
