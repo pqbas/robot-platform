@@ -69,6 +69,10 @@ class StreamBroadcaster:
         self._next_client_id = 0
         self._camera_client: CameraClient | None = None
         self._inference: _InferenceWorker | None = None
+        # Cache último resultado de inferencia para no titilar entre frames sin
+        # resultado fresco (inferencia ~10-15 fps, cámara ~30 fps). Se limpia
+        # cuando termina la sesión.
+        self._last_result = None
 
     def add_client(self) -> tuple[int, asyncio.Queue[bytes]]:
         loop = asyncio.get_running_loop()
@@ -138,6 +142,8 @@ class StreamBroadcaster:
                 self._frame_id += 1
 
                 session = counter.get_active_session()
+                if session is None:
+                    self._last_result = None
                 if camera_module.processing_enabled and session is not None:
                     self._inference.submit_frame(frame.copy())
 
@@ -156,14 +162,16 @@ class StreamBroadcaster:
                     "session_active": False,
                     "session_total": 0,
                 }
-                result = self._inference.consume_result()
-                if result is not None:
-                    header["detections"] = [d.model_dump() for d in result.detections]
-                    header["target_class"] = result.target_class or None
-                    header["session_active"] = result.session_active
-                    header["session_total"] = result.session_total
-                    if result.error:
-                        header["error"] = result.error
+                fresh = self._inference.consume_result()
+                if fresh is not None:
+                    self._last_result = fresh
+                if self._last_result is not None:
+                    header["detections"] = [d.model_dump() for d in self._last_result.detections]
+                    header["target_class"] = self._last_result.target_class or None
+                    header["session_active"] = self._last_result.session_active
+                    header["session_total"] = self._last_result.session_total
+                    if self._last_result.error:
+                        header["error"] = self._last_result.error
                 elif session is not None:
                     header["target_class"] = session.target_class
                     header["session_active"] = True
