@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { FrameData } from "@/types"
 import type { ConnectionState, FpsStats } from "./useWebRTC"
-import { parseFrame } from "@/lib/streamFraming"
 
 const RECONNECT_DELAYS = [1000, 2000, 4000, 10000]
 
@@ -140,10 +139,15 @@ export function useMjpegStream() {
 
     ws.onmessage = (ev) => {
       try {
-        const { header, payload } = parseFrame(ev.data as ArrayBuffer)
+        const buf = ev.data as ArrayBuffer
+        const view = new DataView(buf)
+        const headerLen = view.getUint32(0, false) // big-endian
+        const headerBytes = new Uint8Array(buf, 4, headerLen)
+        const header = JSON.parse(new TextDecoder("utf-8").decode(headerBytes))
+        const jpegBytes = new Uint8Array(buf, 4 + headerLen)
 
         // Slot pendiente — sobreescribe si había uno (drop-oldest natural).
-        pendingJpegRef.current = payload
+        pendingJpegRef.current = jpegBytes
         pendingFrameDataRef.current = {
           count: 0,
           target_class: header.target_class ?? "",

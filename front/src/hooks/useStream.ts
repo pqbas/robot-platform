@@ -1,14 +1,10 @@
 import { useMjpegStream } from "./useMjpegStream"
-import { useWebCodecsStream } from "./useWebCodecsStream"
 import { useWebRTC } from "./useWebRTC"
 import type { StreamHandle, StreamMode } from "@/types/stream"
 
 function readMode(): StreamMode {
-  if (typeof window === "undefined") return "wc"
-  const value = localStorage.getItem("stream.mode")
-  if (value === "webrtc") return "webrtc"
-  if (value === "mjpeg") return "mjpeg"
-  return "wc"
+  if (typeof window === "undefined") return "mjpeg"
+  return localStorage.getItem("stream.mode") === "webrtc" ? "webrtc" : "mjpeg"
 }
 
 // Read once at module load — hook choice is fixed for this page lifetime to
@@ -23,19 +19,6 @@ export function useStream(): StreamHandle {
   /* eslint-disable react-hooks/rules-of-hooks */
   if (MODE === "mjpeg") {
     const h = useMjpegStream()
-    return {
-      kind: "canvas",
-      mediaRef: h.canvasRef,
-      connectionState: h.connectionState,
-      frameData: h.frameData,
-      fps: h.fps,
-      reconnectAttempt: h.reconnectAttempt,
-      connect: h.connect,
-      disconnect: h.disconnect,
-    }
-  }
-  if (MODE === "wc") {
-    const h = useWebCodecsStream()
     return {
       kind: "canvas",
       mediaRef: h.canvasRef,
