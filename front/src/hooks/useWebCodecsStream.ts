@@ -134,11 +134,11 @@ export function useWebCodecsStream() {
 
     let supported = false
     try {
-      const probe = await Decoder.isConfigSupported({
-        codec: CODEC,
-        hardwareAcceleration: "prefer-hardware",
-        optimizeForLatency: true,
-      })
+      // Probe sin hardwareAcceleration — algunos browsers tratan
+      // "prefer-hardware" como requirement en isConfigSupported y rechazan
+      // si no hay decoder HW disponible. Como hint en configure() abajo,
+      // sí funciona: usa HW si lo tiene, fallback a SW si no.
+      const probe = await Decoder.isConfigSupported({ codec: CODEC })
       supported = !!probe.supported
     } catch (e) {
       console.warn("[wc] isConfigSupported threw:", e)
