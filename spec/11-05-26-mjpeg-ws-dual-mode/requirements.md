@@ -80,6 +80,17 @@ mismas detecciones, sin que uno desconecte al otro.
 - **JPEG encode software (cv2) en v1.** `cv2.imencode` es portable y suficiente
   para 720p30 en Jetson. Migrar a `nvjpegenc` (GStreamer) sólo si el profile
   muestra que la CPU se satura. No premature optimization.
+- **cv2 en el backend: extender el precedente existente, no romper la invariante.**
+  `CLAUDE.md` lista `cv2` como import prohibido en el backend, pero la regla ya
+  está parcialmente violada: `back/services/perception/inference_client.py:75`
+  hace `cv2.imencode` y `back/routes/config_routes.py:74` hace `cv2.VideoCapture`.
+  `stream_broadcaster.py` agrega un tercer uso del mismo patrón (encode JPEG en
+  hot path), no introduce una nueva dependencia. La invariante real que importa
+  — no meter `torch`/`ultralytics`/`av`/`gi` al backend para preservar startup
+  rápido, crash isolation y resolución de versiones de NumPy — se mantiene
+  intacta. Si en el futuro la CPU del Jetson sufre, mover el encode a
+  `camera_worker` (que ya tiene los frames raw) es el siguiente paso, no
+  bloquea esta fase.
 - **Header binario length-prefixed, no JSON wrapper con base64.** Base64 inflaría
   el payload ~33%. El patrón length-prefixed JSON + binario ya está usado en
   `inference_client.py` y `camera_client.py` — consistencia.
