@@ -26,9 +26,13 @@ async def stream_wc(ws: WebSocket) -> None:
     client_id, queue = broadcaster.add_client()
 
     async def receiver() -> None:
+        # El cliente no envía nada — solo detectamos disconnect.
+        # receive_text() raisea WebSocketDisconnect limpio (a diferencia de
+        # receive() que devuelve el disconnect dict y luego rompe en la
+        # próxima iteración con "Cannot call receive once disconnected").
         try:
             while True:
-                await ws.receive()
+                await ws.receive_text()
         except WebSocketDisconnect:
             return
 
