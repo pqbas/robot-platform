@@ -130,13 +130,13 @@ class H264AnnexBEncoder:
         )
 
     def push_frame(self, bgr: np.ndarray) -> Iterator[tuple[bool, bytes]]:
-        """Empuja un frame BGR; yieldea tuples (is_keyframe, nal_bytes).
+        """Empuja un frame BGR; yieldea 0 o 1 tuples (is_keyframe, nal_bytes).
 
-        En estado estable yieldea 0 o 1 chunks por call: el pipeline absorbe
-        el frame, h264parse lo emite como un access unit cuando está listo. La
-        primera call típicamente yieldea 0 (warmup); las siguientes yieldean 1.
-        Durante warmup x264enc puede acumular varios pushes antes de emitir
-        el primer keyframe, así que drenamos en loop por seguridad.
+        1-frame pipelining (igual que `nvenc_codec.py`): push del frame N,
+        pull del frame N-1. Después de yieldear NO intentamos pullear otra
+        vez — esa segunda pull bloquearía 50ms esperando un AU que recién
+        sale en el próximo push, capando el throughput a ~20fps. La primera
+        call típicamente yieldea 0 (warmup); las siguientes yieldean 1.
         """
         h, w = bgr.shape[:2]
         if self._pipeline is None or w != self._width or h != self._height:
@@ -156,18 +156,17 @@ class H264AnnexBEncoder:
             logger.warning("H264AnnexBEncoder appsrc push-buffer returned %s", ret)
             return
 
-        while True:
-            sample = self._sink.try_pull_sample(50 * Gst.MSECOND)
-            if sample is None:
-                return
-            out_buf = sample.get_buffer()
-            is_keyframe = (out_buf.get_flags() & Gst.BufferFlags.DELTA_UNIT) == 0
-            ok, info = out_buf.map(Gst.MapFlags.READ)
-            if not ok:
-                continue
-            encoded = bytes(info.data)
-            out_buf.unmap(info)
-            yield is_keyframe, encoded
+        sample = self._sink.try_pull_sample(50 * Gst.MSECOND)
+        if sample is None:
+            return
+        out_buf = sample.get_buffer()
+        is_keyframe = (out_buf.get_flags() & Gst.BufferFlags.DELTA_UNIT) == 0
+        ok, info = out_buf.map(Gst.MapFlags.READ)
+        if not ok:
+            return
+        encoded = bytes(info.data)
+        out_buf.unmap(info)
+        yield is_keyframe, encoded
 
     def close(self) -> None:
         if self._pipeline is not None:
