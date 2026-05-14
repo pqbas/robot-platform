@@ -30,7 +30,7 @@ import {
 import { useCameraResolution } from "@/hooks/useCameraResolution"
 import { useAppMode } from "@/context/AppModeContext"
 import { forceSyncPull, forceSyncPush } from "@/api/sync"
-import AssignedModelsCard from "./components/AssignedModelsCard"
+import ModelStatusInline from "./components/ModelStatusInline"
 
 const SELECTED_LABEL_KEY = "vision.selectedLabel.v2"
 const PREFERRED_DEFAULT_LABEL = "blueberry"
@@ -50,7 +50,6 @@ type SectionId =
   | "camera"
   | "detection"
   | "counting"
-  | "models"
   | "sync"
   | "server"
 
@@ -83,7 +82,6 @@ export default function SettingsPage() {
       { id: "counting", label: "Conteo", description: "Línea de cruce y dirección" },
     ]
     if (mode === "robot") {
-      all.push({ id: "models", label: "Modelos", description: "Aceleración TensorRT" })
       all.push({ id: "sync", label: "Sincronización", description: "Forzar sync ahora" })
     }
     all.push({ id: "server", label: "Servidor", description: "Conexión y credenciales" })
@@ -245,6 +243,14 @@ export default function SettingsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {mode === "robot" && (
+                    <ModelStatusInline
+                      filename={
+                        labels.find((l) => l.label === draftLabel)
+                          ?.model_filename ?? null
+                      }
+                    />
+                  )}
                 </Field>
               )}
 
@@ -345,15 +351,6 @@ export default function SettingsPage() {
               </Field>
 
               <SaveBar onClick={handleSave} disabled={saving} saving={saving} />
-            </SectionPanel>
-          )}
-
-          {activeId === "models" && mode === "robot" && (
-            <SectionPanel
-              title="Modelos"
-              description="Modelos asignados a este robot y aceleración TensorRT"
-            >
-              <AssignedModelsCard />
             </SectionPanel>
           )}
 
