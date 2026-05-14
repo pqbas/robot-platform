@@ -422,10 +422,10 @@ function SectionNav({ sections, activeId, onChange }: SectionNavProps) {
             <li key={s.id}>
               <button
                 onClick={() => onChange(s.id)}
-                className={`w-full rounded-md border-l-2 px-3 py-2.5 text-left transition-colors ${
+                className={`w-full border-l-2 px-3 py-2.5 text-left transition-colors ${
                   activeId === s.id
-                    ? "border-primary bg-accent text-accent-foreground"
-                    : "border-transparent hover:bg-accent/50"
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <span className="block text-sm font-medium">{s.label}</span>
