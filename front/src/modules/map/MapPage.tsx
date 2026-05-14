@@ -14,6 +14,8 @@ import {
 import GoogleMap from "./components/GoogleMap"
 import SidePanel from "./components/SidePanel"
 
+const MAPS_ENABLED = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+
 export default function MapPage() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [camellones, setCamellones] = useState<Map<number, Camellon>>(new Map())
@@ -113,6 +115,30 @@ export default function MapPage() {
     )
   }
 
+  // Sin API key de Google Maps: solo Logs (SidePanel) full-width. Sin toggle
+  // mobile ni columna de mapa.
+  if (!MAPS_ENABLED) {
+    return (
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <SidePanel
+          sessions={sessions}
+          camellones={camellones}
+          locations={locations}
+          locationFilter={locationFilter}
+          onLocationFilterChange={setLocationFilter}
+          selectedSession={selectedSession}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onSelectSession={setSelectedSession}
+          onDateChange={(from, to) => {
+            setDateFrom(from)
+            setDateTo(to)
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
       {/* Mobile toggle */}
@@ -123,7 +149,7 @@ export default function MapPage() {
           onClick={() => setMobileView("table")}
         >
           <List className="mr-1.5 size-4" />
-          Sesiones
+          Logs
         </Button>
         <Button
           variant={mobileView === "map" ? "default" : "outline"}
