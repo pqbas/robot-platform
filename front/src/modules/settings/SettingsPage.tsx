@@ -163,7 +163,7 @@ export default function SettingsPage() {
     config && (directionsByMode[config.count_mode] ?? directionsByMode.vertical)
 
   return (
-    <div className="mx-auto h-full w-full max-w-5xl p-4 md:p-6">
+    <div className="mx-auto h-full w-full max-w-5xl overflow-y-auto p-4 md:p-6">
       <h1 className="mb-6 text-xl font-semibold md:text-2xl">Configuración</h1>
 
       <div className="flex flex-col gap-6 md:flex-row md:gap-8">
