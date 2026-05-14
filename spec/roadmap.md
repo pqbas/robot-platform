@@ -417,6 +417,26 @@ Ver futuro `spec/<fecha>-tls-local-robot/`. Alternativas que se descartaron al p
 
 ---
 
+## Phase 30: Upload de grabaciones restringido a LAN
+
+**Goal:** las grabaciones (MP4 de varios MB) solo se suben al server cuando el robot está en LAN del laboratorio; los metadatos (kBs) siguen sincronizándose siempre que haya conectividad, sea por Tailscale o LAN.
+
+**Contexto:** hoy el sync_loop sube todo por la misma `SYNC_SERVER_URL`. Si el robot está fuera del lab apuntando al hostname Tailscale del server, los uploads de grabaciones intentan ir por el túnel — un MP4 de 6 MB tarda minutos por enlace WAN y compite con el sync de metadatos. La separación natural es darle al uploader una URL aparte (`SYNC_LOCAL_SERVER_URL`) que solo resuelve dentro del lab; si está vacía o no responde, no se sube nada y los metadatos siguen su curso.
+
+- [ ] Backend: agregar `local_server_url: str = os.getenv("SYNC_LOCAL_SERVER_URL", "")` a `SyncConfig` en `back/config.py`
+- [ ] Backend: `back/services/sync_recordings_upload.py` usa `config.sync.local_server_url` en vez de `server_url`; si está vacío, return silencioso (mismo patrón que el guard actual de `server_url` en línea 73-74)
+- [ ] Backend: extender `POST /api/config/setup` (`back/routes/setup.py`) para aceptar y escribir `SYNC_LOCAL_SERVER_URL` en `.env.robot` y actualizar `config.sync.local_server_url` en memoria
+- [ ] Backend: exponer el valor actual de `local_server_url` en un GET (extender `/setup-status` o ruta nueva) para que el form pueda hacer prefill al volver a Settings
+- [ ] Frontend: agregar campo "URL local del servidor (lab)" al `ServerForm` en `front/src/modules/settings/SettingsPage.tsx` con hint explicando que solo se usa para subir grabaciones; cargar valor actual al montar; mandar en el POST
+- [ ] `.env.example`: documentar `SYNC_LOCAL_SERVER_URL=` (vacío por defecto, ejemplo en comentario `http://192.168.0.171:9090`)
+- [ ] Validar: con var vacía, `upload_pending_recordings` retorna sin hacer nada y los logs no muestran intentos de upload por Tailscale
+- [ ] Validar: con var apuntando al server LAN reachable, las grabaciones se suben normalmente; metadatos siguen yendo por `SYNC_SERVER_URL` sin cambios
+- [ ] Validar: cuando el robot sale del lab (LAN URL no responde), uploads se skipean sin error; al volver, retoman desde el primer MP4 pendiente
+
+Ver futuro `spec/14-05-26-recordings-lan-only/`.
+
+---
+
 ## Pendiente (sin fecha)
 
 - Clasificación offline de frutos (crops por track_id + modelo de calidad/madurez)
