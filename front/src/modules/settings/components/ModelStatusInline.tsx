@@ -151,38 +151,38 @@ export default function ModelStatusInline({ filename }: Props) {
   }
 
   return (
-    <div className="rounded-md border bg-muted/30 px-3 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-xs text-muted-foreground">Modelo</p>
-          <p className="truncate text-sm font-medium">{current.filename}</p>
-        </div>
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">Modelo:</span>
+        <span className="truncate text-xs font-medium">{current.filename}</span>
         <StatusBadge status={current.engine_status} />
-        {current.engine_status === "error" ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => handleToggle(true)}
-            disabled={busy}
-          >
-            Reintentar
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            size="sm"
-            variant={current.tensorrt_enabled ? "default" : "outline"}
-            onClick={() => handleToggle(!current.tensorrt_enabled)}
-            disabled={busy}
-            className="min-w-[88px]"
-          >
-            {current.tensorrt_enabled ? "TensorRT" : "PyTorch"}
-          </Button>
-        )}
+        <div className="ml-auto">
+          {current.engine_status === "error" ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => handleToggle(true)}
+              disabled={busy}
+            >
+              Reintentar
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant={current.tensorrt_enabled ? "default" : "outline"}
+              onClick={() => handleToggle(!current.tensorrt_enabled)}
+              disabled={busy}
+              className="min-w-[88px]"
+            >
+              {current.tensorrt_enabled ? "TensorRT" : "PyTorch"}
+            </Button>
+          )}
+        </div>
       </div>
       {current.engine_status === "error" && current.engine_error && (
-        <p className="mt-1 truncate text-xs text-destructive">
+        <p className="truncate text-xs text-destructive">
           {current.engine_error}
         </p>
       )}

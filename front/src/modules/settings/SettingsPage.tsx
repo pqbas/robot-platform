@@ -293,6 +293,7 @@ export default function SettingsPage() {
                       confidence_threshold: Number(e.target.value),
                     })
                   }
+                  className="max-w-[10rem]"
                 />
               </Field>
 
@@ -329,6 +330,7 @@ export default function SettingsPage() {
                   onChange={(e) =>
                     setConfig({ ...config, threshold: Number(e.target.value) })
                   }
+                  className="max-w-[10rem]"
                 />
               </Field>
 
@@ -401,9 +403,9 @@ function SectionNav({ sections, activeId, onChange }: SectionNavProps) {
             <button
               key={s.id}
               onClick={() => onChange(s.id)}
-              className={`shrink-0 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
                 activeId === s.id
-                  ? "border-foreground bg-foreground text-background"
+                  ? "border-primary bg-primary text-primary-foreground"
                   : "border-border bg-background hover:bg-accent hover:text-accent-foreground"
               }`}
             >
@@ -415,20 +417,20 @@ function SectionNav({ sections, activeId, onChange }: SectionNavProps) {
 
       {/* Desktop: vertical sidebar */}
       <nav className="hidden md:block md:w-56 md:shrink-0">
-        <ul className="space-y-1">
+        <ul className="space-y-0.5">
           {sections.map((s) => (
             <li key={s.id}>
               <button
                 onClick={() => onChange(s.id)}
-                className={`w-full rounded-md px-3 py-2 text-left transition-colors ${
+                className={`w-full rounded-md border-l-2 px-3 py-2.5 text-left transition-colors ${
                   activeId === s.id
-                    ? "bg-accent text-accent-foreground"
-                    : "hover:bg-accent/50"
+                    ? "border-primary bg-accent text-accent-foreground"
+                    : "border-transparent hover:bg-accent/50"
                 }`}
               >
                 <span className="block text-sm font-medium">{s.label}</span>
                 {s.description && (
-                  <span className="block text-xs text-muted-foreground">
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
                     {s.description}
                   </span>
                 )}
