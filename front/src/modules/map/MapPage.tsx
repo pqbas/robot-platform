@@ -149,7 +149,7 @@ export default function MapPage() {
           onClick={() => setMobileView("table")}
         >
           <List className="mr-1.5 size-4" />
-          Logs
+          Sesiones
         </Button>
         <Button
           variant={mobileView === "map" ? "default" : "outline"}
