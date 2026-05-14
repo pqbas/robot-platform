@@ -58,7 +58,6 @@ export default function Sidebar() {
       const robotItems: NavItem[] = [
         { label: "Vision", path: "/vision", icon: Eye },
         { label: "Mapa", path: "/mapa", icon: Map },
-        { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
         { label: "Grabaciones", path: "/recordings", icon: Video },
         { label: "Configuración", path: "/settings", icon: Settings },
       ]
