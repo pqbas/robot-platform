@@ -1,11 +1,9 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { RefreshCw } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
 import {
   Select,
   SelectContent,
@@ -32,9 +30,10 @@ import {
 import { useCameraResolution } from "@/hooks/useCameraResolution"
 import { useAppMode } from "@/context/AppModeContext"
 import { forceSyncPull, forceSyncPush } from "@/api/sync"
-import AssignedModelsCard from "./components/AssignedModelsCard"
+import ModelStatusInline from "./components/ModelStatusInline"
 
 const SELECTED_LABEL_KEY = "vision.selectedLabel.v2"
+const PREFERRED_DEFAULT_LABEL = "blueberry"
 
 const directionsByMode: Record<string, { value: string; label: string }[]> = {
   vertical: [
@@ -47,10 +46,24 @@ const directionsByMode: Record<string, { value: string; label: string }[]> = {
   ],
 }
 
-function CountingTab() {
+type SectionId =
+  | "camera"
+  | "detection"
+  | "counting"
+  | "sync"
+  | "server"
+
+type Section = {
+  id: SectionId
+  label: string
+  description?: string
+}
+
+export default function SettingsPage() {
   const { mode } = useAppMode()
   const resolution = useCameraResolution(mode === "robot")
 
+  // Shared state across sections
   const [config, setConfig] = useState<CountingConfig | null>(null)
   const [cameras, setCameras] = useState<CameraDevice[]>([])
   const [cameraConfig, setCameraConfig] = useState<CameraConfig | null>(null)
@@ -58,9 +71,24 @@ function CountingTab() {
   const [draftLabel, setDraftLabel] = useState<string>(
     () => localStorage.getItem(SELECTED_LABEL_KEY) ?? "",
   )
-  const PREFERRED_DEFAULT_LABEL = "blueberry"
   const [draftResolution, setDraftResolution] = useState<CameraPreset | null>(null)
   const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+
+  const sections = useMemo<Section[]>(() => {
+    const all: Section[] = [
+      { id: "camera", label: "Cámara", description: "Dispositivo y resolución" },
+      { id: "detection", label: "Detección", description: "Qué detectar y cómo" },
+      { id: "counting", label: "Conteo", description: "Línea de cruce y dirección" },
+    ]
+    if (mode === "robot") {
+      all.push({ id: "sync", label: "Sincronización", description: "Forzar sync ahora" })
+    }
+    all.push({ id: "server", label: "Servidor", description: "Conexión y credenciales" })
+    return all
+  }, [mode])
+
+  const [activeId, setActiveId] = useState<SectionId>("camera")
 
   useEffect(() => {
     getCountingConfig()
@@ -78,8 +106,6 @@ function CountingTab() {
         }
       })
       .catch(() => {})
-    // draftLabel intentionally omitted: we only want to seed the default once
-    // on mount, not re-seed every time the user picks something else.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -121,206 +147,356 @@ function CountingTab() {
     }
   }
 
-  if (!config) {
-    return (
-      <div className="text-sm text-muted-foreground">Cargando configuración</div>
-    )
+  async function handleSync() {
+    setSyncing(true)
+    try {
+      await Promise.all([forceSyncPush(), forceSyncPull()])
+      toast.success("Sincronizado")
+    } catch {
+      toast.error("Error de sincronización — revisa la conexión al server")
+    } finally {
+      setSyncing(false)
+    }
   }
 
   const directions =
-    directionsByMode[config.count_mode] ?? directionsByMode.vertical
+    config && (directionsByMode[config.count_mode] ?? directionsByMode.vertical)
 
   return (
-    <div className="space-y-4">
-      {labels.length > 0 && (
-        <div className="space-y-2">
-          <Label htmlFor="object-select">Objeto a detectar</Label>
-          <Select value={draftLabel} onValueChange={setDraftLabel}>
-            <SelectTrigger id="object-select" className="w-full capitalize">
-              <SelectValue placeholder="Selecciona un objeto" />
-            </SelectTrigger>
-            <SelectContent>
-              {labels.map((l) => (
-                <SelectItem
-                  key={`${l.model_filename}-${l.label}`}
-                  value={l.label}
-                  className="capitalize"
+    <div className="mx-auto h-full w-full max-w-5xl overflow-y-auto p-4 md:p-6">
+      <h1 className="mb-6 text-xl font-semibold md:text-2xl">Configuración</h1>
+
+      <div className="flex flex-col gap-6 md:flex-row md:gap-8">
+        <SectionNav
+          sections={sections}
+          activeId={activeId}
+          onChange={setActiveId}
+        />
+
+        <div className="min-w-0 flex-1">
+          {activeId === "camera" && (
+            <SectionPanel title="Cámara" description="Dispositivo de captura y resolución de la imagen">
+              {cameras.length > 0 && cameraConfig && (
+                <Field label="Cámara" htmlFor="camera-select" hint="El cambio se aplica en la próxima conexión.">
+                  <Select
+                    value={String(cameraConfig.index)}
+                    onValueChange={(v) =>
+                      setCameraConfig({ ...cameraConfig, index: Number(v) })
+                    }
+                  >
+                    <SelectTrigger id="camera-select" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cameras.map((cam) => (
+                        <SelectItem key={cam.index} value={String(cam.index)}>
+                          {cam.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+
+              {resolution.preset && (
+                <Field
+                  label="Resolución de captura"
+                  htmlFor="resolution-select"
+                  hint="El cambio reinicia la cámara; detén conteo y grabación antes."
                 >
-                  {l.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+                  <Select
+                    value={draftResolution ?? resolution.preset}
+                    onValueChange={(v) => setDraftResolution(v as CameraPreset)}
+                  >
+                    <SelectTrigger id="resolution-select" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1080p">1080p</SelectItem>
+                      <SelectItem value="720p">720p</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
 
-      {resolution.preset && (
-        <div className="space-y-2">
-          <Label htmlFor="resolution-select">Resolución de captura</Label>
-          <Select
-            value={draftResolution ?? resolution.preset}
-            onValueChange={(v) => setDraftResolution(v as CameraPreset)}
-          >
-            <SelectTrigger id="resolution-select" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1080p">1080p</SelectItem>
-              <SelectItem value="720p">720p</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            El cambio reinicia la cámara; detén conteo y grabación antes.
-          </p>
-        </div>
-      )}
+              <SaveBar onClick={handleSave} disabled={saving} saving={saving} />
+            </SectionPanel>
+          )}
 
-      {(labels.length > 0 || resolution.preset) && <Separator />}
+          {activeId === "detection" && config && (
+            <SectionPanel title="Detección" description="Qué objetos detectar y con qué exigencia">
+              {labels.length > 0 && (
+                <Field label="Objeto a detectar" htmlFor="object-select">
+                  <Select value={draftLabel} onValueChange={setDraftLabel}>
+                    <SelectTrigger id="object-select" className="w-full capitalize">
+                      <SelectValue placeholder="Selecciona un objeto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {labels.map((l) => (
+                        <SelectItem
+                          key={`${l.model_filename}-${l.label}`}
+                          value={l.label}
+                          className="capitalize"
+                        >
+                          {l.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {mode === "robot" && (
+                    <ModelStatusInline
+                      filename={
+                        labels.find((l) => l.label === draftLabel)
+                          ?.model_filename ?? null
+                      }
+                    />
+                  )}
+                </Field>
+              )}
 
-      {cameras.length > 0 && cameraConfig && (
-        <>
-          <div className="space-y-2">
-            <Label htmlFor="camera-select">Cámara</Label>
-            <Select
-              value={String(cameraConfig.index)}
-              onValueChange={(v) =>
-                setCameraConfig({ ...cameraConfig, index: Number(v) })
-              }
+              <Field
+                label="Área de detección"
+                htmlFor="roi-mode"
+                hint="Cuadrado central: YOLO ve un cuadrado de lado = altura del frame, sin letterbox. Frame completo: usa toda la imagen (con padding interno)."
+              >
+                <Select
+                  value={config.roi_mode}
+                  onValueChange={(v) =>
+                    setConfig({ ...config, roi_mode: v as "square" | "full" })
+                  }
+                >
+                  <SelectTrigger id="roi-mode" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="square">Cuadrado central (recomendado)</SelectItem>
+                    <SelectItem value="full">Frame completo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field
+                label="Umbral de confianza"
+                htmlFor="confidence"
+                hint="Detecciones por debajo de este valor se descartan (0.0 – 1.0)."
+              >
+                <Input
+                  id="confidence"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={config.confidence_threshold}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      confidence_threshold: Number(e.target.value),
+                    })
+                  }
+                  className="max-w-[10rem]"
+                />
+              </Field>
+
+              <SaveBar onClick={handleSave} disabled={saving} saving={saving} />
+            </SectionPanel>
+          )}
+
+          {activeId === "counting" && config && directions && (
+            <SectionPanel title="Conteo" description="Línea virtual que cuenta objetos al cruzarla">
+              <Field label="Modo de conteo" htmlFor="count-mode">
+                <Select value={config.count_mode} onValueChange={handleModeChange}>
+                  <SelectTrigger id="count-mode" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vertical">Vertical (línea horizontal)</SelectItem>
+                    <SelectItem value="horizontal">Horizontal (línea vertical)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field
+                label={`Línea de cruce (${config.count_mode === "vertical" ? "Y" : "X"} normalizada, 0–1)`}
+                htmlFor="threshold"
+                hint="Posición relativa de la línea sobre el frame (0 = borde inicial, 1 = borde opuesto). Independiente de la resolución."
+              >
+                <Input
+                  id="threshold"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={config.threshold}
+                  onChange={(e) =>
+                    setConfig({ ...config, threshold: Number(e.target.value) })
+                  }
+                  className="max-w-[10rem]"
+                />
+              </Field>
+
+              <Field label="Dirección de cruce" htmlFor="direction">
+                <Select
+                  value={config.direction}
+                  onValueChange={(v) => setConfig({ ...config, direction: v })}
+                >
+                  <SelectTrigger id="direction" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {directions.map((d) => (
+                      <SelectItem key={d.value} value={d.value}>
+                        {d.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <SaveBar onClick={handleSave} disabled={saving} saving={saving} />
+            </SectionPanel>
+          )}
+
+          {activeId === "sync" && mode === "robot" && (
+            <SectionPanel
+              title="Sincronización"
+              description="Forzar una sincronización con el servidor ahora"
             >
-              <SelectTrigger id="camera-select" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {cameras.map((cam) => (
-                  <SelectItem key={cam.index} value={String(cam.index)}>
-                    {cam.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              El cambio se aplica en la próxima conexión.
-            </p>
-          </div>
-          <Separator />
-        </>
-      )}
+              <Button
+                variant="outline"
+                onClick={handleSync}
+                disabled={syncing}
+                className="gap-2"
+              >
+                <RefreshCw className={`size-4 ${syncing ? "animate-spin" : ""}`} />
+                {syncing ? "Sincronizando..." : "Sincronizar ahora"}
+              </Button>
+            </SectionPanel>
+          )}
 
-      <div className="space-y-2">
-        <Label htmlFor="count-mode">Modo de conteo</Label>
-        <Select value={config.count_mode} onValueChange={handleModeChange}>
-          <SelectTrigger id="count-mode" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="vertical">Vertical (línea horizontal)</SelectItem>
-            <SelectItem value="horizontal">Horizontal (línea vertical)</SelectItem>
-          </SelectContent>
-        </Select>
+          {activeId === "server" && (
+            <SectionPanel
+              title="Servidor"
+              description="URL y credenciales del servidor central"
+            >
+              <ServerForm />
+            </SectionPanel>
+          )}
+        </div>
       </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="threshold">
-          Línea de cruce ({config.count_mode === "vertical" ? "Y" : "X"} normalizada, 0–1)
-        </Label>
-        <Input
-          id="threshold"
-          type="number"
-          min={0}
-          max={1}
-          step={0.05}
-          value={config.threshold}
-          onChange={(e) =>
-            setConfig({ ...config, threshold: Number(e.target.value) })
-          }
-        />
-        <p className="text-xs text-muted-foreground">
-          Posición relativa de la línea sobre el frame (0 = borde inicial, 1 = borde opuesto). Independiente de la resolución.
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="direction">Dirección de cruce</Label>
-        <Select
-          value={config.direction}
-          onValueChange={(v) => setConfig({ ...config, direction: v })}
-        >
-          <SelectTrigger id="direction" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {directions.map((d) => (
-              <SelectItem key={d.value} value={d.value}>
-                {d.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <Separator />
-
-      <div className="space-y-2">
-        <Label htmlFor="roi-mode">Área de detección</Label>
-        <Select
-          value={config.roi_mode}
-          onValueChange={(v) =>
-            setConfig({ ...config, roi_mode: v as "square" | "full" })
-          }
-        >
-          <SelectTrigger id="roi-mode" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="square">Cuadrado central (recomendado)</SelectItem>
-            <SelectItem value="full">Frame completo</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          Cuadrado central: YOLO ve un cuadrado de lado = altura del frame, sin letterbox. Frame completo: usa toda la imagen (con padding interno).
-        </p>
-      </div>
-
-      <Separator />
-
-      <div className="space-y-2">
-        <Label htmlFor="confidence">Umbral de confianza</Label>
-        <Input
-          id="confidence"
-          type="number"
-          min={0}
-          max={1}
-          step={0.05}
-          value={config.confidence_threshold}
-          onChange={(e) =>
-            setConfig({
-              ...config,
-              confidence_threshold: Number(e.target.value),
-            })
-          }
-        />
-        <p className="text-xs text-muted-foreground">
-          Detecciones por debajo de este valor se descartan (0.0 – 1.0).
-        </p>
-      </div>
-
-      <div className="flex justify-end pt-2">
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Guardando..." : "Guardar"}
-        </Button>
-      </div>
-
-      {mode === "robot" && (
-        <>
-          <Separator />
-          <AssignedModelsCard />
-        </>
-      )}
     </div>
   )
 }
 
-function ServerTab() {
+type SectionNavProps = {
+  sections: Section[]
+  activeId: SectionId
+  onChange: (id: SectionId) => void
+}
+
+function SectionNav({ sections, activeId, onChange }: SectionNavProps) {
+  return (
+    <>
+      {/* Mobile: horizontal scroll pills */}
+      <div className="-mx-4 overflow-x-auto px-4 md:hidden">
+        <div className="flex gap-2 pb-2">
+          {sections.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => onChange(s.id)}
+              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                activeId === s.id
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background hover:bg-accent hover:text-accent-foreground"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop: vertical sidebar */}
+      <nav className="hidden md:block md:w-56 md:shrink-0">
+        <ul className="space-y-0.5">
+          {sections.map((s) => (
+            <li key={s.id}>
+              <button
+                onClick={() => onChange(s.id)}
+                className={`w-full border-l-2 px-3 py-2.5 text-left transition-colors ${
+                  activeId === s.id
+                    ? "border-primary bg-accent text-accent-foreground"
+                    : "border-transparent hover:bg-accent/50"
+                }`}
+              >
+                <span className="block text-sm font-medium">{s.label}</span>
+                {s.description && (
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {s.description}
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </>
+  )
+}
+
+type SectionPanelProps = {
+  title: string
+  description?: string
+  children: React.ReactNode
+}
+
+function SectionPanel({ title, description, children }: SectionPanelProps) {
+  return (
+    <section className="space-y-5">
+      <header>
+        <h2 className="text-lg font-semibold">{title}</h2>
+        {description && (
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        )}
+      </header>
+      <div className="space-y-5">{children}</div>
+    </section>
+  )
+}
+
+type FieldProps = {
+  label: string
+  htmlFor: string
+  hint?: string
+  children: React.ReactNode
+}
+
+function Field({ label, htmlFor, hint, children }: FieldProps) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={htmlFor}>{label}</Label>
+      {children}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  )
+}
+
+type SaveBarProps = {
+  onClick: () => void
+  disabled?: boolean
+  saving?: boolean
+}
+
+function SaveBar({ onClick, disabled, saving }: SaveBarProps) {
+  return (
+    <div className="flex justify-end pt-2">
+      <Button onClick={onClick} disabled={disabled}>
+        {saving ? "Guardando..." : "Guardar"}
+      </Button>
+    </div>
+  )
+}
+
+function ServerForm() {
   const [serverUrl, setServerUrl] = useState("")
   const [deviceId, setDeviceId] = useState("")
   const [apiKey, setApiKey] = useState("")
@@ -360,34 +536,31 @@ function ServerTab() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="serverUrl">Server URL</Label>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <Field label="Server URL" htmlFor="serverUrl">
         <Input
           id="serverUrl"
           placeholder="http://192.168.1.100:9090"
           value={serverUrl}
           onChange={(e) => setServerUrl(e.target.value)}
         />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="deviceId">Device ID</Label>
+      </Field>
+      <Field label="Device ID" htmlFor="deviceId">
         <Input
           id="deviceId"
           placeholder="jetson-campo-01"
           value={deviceId}
           onChange={(e) => setDeviceId(e.target.value)}
         />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="apiKey">API Key</Label>
+      </Field>
+      <Field label="API Key" htmlFor="apiKey">
         <Input
           id="apiKey"
           placeholder="rbt_..."
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
         />
-      </div>
+      </Field>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex justify-end pt-2">
         <Button type="submit" disabled={saving}>
@@ -395,60 +568,5 @@ function ServerTab() {
         </Button>
       </div>
     </form>
-  )
-}
-
-export default function SettingsPage() {
-  const { mode } = useAppMode()
-  const [syncing, setSyncing] = useState(false)
-
-  const handleSync = async () => {
-    setSyncing(true)
-    try {
-      await Promise.all([forceSyncPush(), forceSyncPull()])
-      toast.success("Sincronizado")
-    } catch {
-      toast.error("Error de sincronización — revisa la conexión al server")
-    } finally {
-      setSyncing(false)
-    }
-  }
-
-  return (
-    <div className="mx-auto h-full w-full max-w-2xl overflow-y-auto p-4 md:p-6">
-      <h1 className="mb-4 text-xl font-semibold">Configuración</h1>
-
-      {mode === "robot" && (
-        <div className="mb-4 rounded-lg border p-4 space-y-2">
-          <p className="text-sm font-medium">Sincronización</p>
-          <p className="text-xs text-muted-foreground">
-            Fuerza una sincronización con el servidor ahora.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={syncing}
-            className="gap-2"
-          >
-            <RefreshCw className={`size-4 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Sincronizando..." : "Sincronizar ahora"}
-          </Button>
-        </div>
-      )}
-
-      <Tabs defaultValue="conteo">
-        <TabsList>
-          <TabsTrigger value="conteo">Conteo</TabsTrigger>
-          <TabsTrigger value="servidor">Servidor</TabsTrigger>
-        </TabsList>
-        <TabsContent value="conteo" className="mt-4">
-          <CountingTab />
-        </TabsContent>
-        <TabsContent value="servidor" className="mt-4">
-          <ServerTab />
-        </TabsContent>
-      </Tabs>
-    </div>
   )
 }
