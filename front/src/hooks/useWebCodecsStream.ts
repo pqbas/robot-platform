@@ -5,7 +5,7 @@ import { parseFrame } from "@/lib/streamFraming"
 
 const RECONNECT_DELAYS = [1000, 2000, 4000, 10000]
 const CODEC = "avc1.42E01E" // H.264 Baseline 3.0 — HW decode garantizado en Android moderno
-const DECODE_QUEUE_THRESHOLD = 3
+const DECODE_QUEUE_THRESHOLD = 5
 
 // Acceso tipado a la API global sin depender de DOM lib WebCodecs (vite/tsconfig
 // puede no incluirla). Usamos any-cast localizado.
@@ -60,6 +60,11 @@ export function useWebCodecsStream() {
   const decoderRef = useRef<VideoDecoderLike | null>(null)
   const configuredRef = useRef(false)
   const droppedCountRef = useRef(0)
+  const maxQueueRef = useRef(0)
+  const keyframeCountRef = useRef(0)
+  const lastKeyframeTsRef = useRef<number | null>(null)
+  const idrGapSumRef = useRef(0)
+  const idrGapMaxRef = useRef(0)
   // Config resuelta por isConfigSupported — reusada en decoder.configure()
   // para evitar "Unsupported configuration" cuando el browser normaliza flags
   // (e.g. hardwareAcceleration "prefer-hardware" → "no-preference" en laptops
@@ -256,6 +261,22 @@ export function useWebCodecsStream() {
         }
       }
 
+      // Métricas: queue depth y gap entre IDRs.
+      if (dec.decodeQueueSize > maxQueueRef.current) {
+        maxQueueRef.current = dec.decodeQueueSize
+      }
+      if (header.is_keyframe) {
+        const now = performance.now()
+        const prev = lastKeyframeTsRef.current
+        if (prev !== null) {
+          const gap = now - prev
+          idrGapSumRef.current += gap
+          if (gap > idrGapMaxRef.current) idrGapMaxRef.current = gap
+        }
+        lastKeyframeTsRef.current = now
+        keyframeCountRef.current++
+      }
+
       // Drop policy: si la cola interna se acumula y no es keyframe, descartar
       // P-frames hasta el próximo IDR para no acumular latencia.
       if (
@@ -298,14 +319,19 @@ export function useWebCodecsStream() {
         streamFps: frameCountRef.current,
         inferenceFps: inferenceFrameCountRef.current,
       })
-      if (droppedCountRef.current > 0) {
-        console.log(
-          `[wc] dropped ${droppedCountRef.current} P-frames waiting for keyframe`,
-        )
-      }
+      const kfCount = keyframeCountRef.current
+      const idrAvg = kfCount > 0 ? Math.round(idrGapSumRef.current / kfCount) : 0
+      const idrMax = Math.round(idrGapMaxRef.current)
+      console.log(
+        `[wc] stats: fps=${frameCountRef.current} drops=${droppedCountRef.current} maxQueue=${maxQueueRef.current} keyframes=${kfCount} avgIDRgap=${idrAvg}ms maxIDRgap=${idrMax}ms`,
+      )
       frameCountRef.current = 0
       inferenceFrameCountRef.current = 0
       droppedCountRef.current = 0
+      maxQueueRef.current = 0
+      keyframeCountRef.current = 0
+      idrGapSumRef.current = 0
+      idrGapMaxRef.current = 0
     }, 1000)
   }, [clearFpsInterval, closeDecoder, scheduleReconnect])
 

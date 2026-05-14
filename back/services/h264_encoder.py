@@ -27,7 +27,7 @@ if HAS_GSTREAMER:
 logger = logging.getLogger("h264_encoder")
 
 BITRATE_BPS = 2_000_000
-IFRAME_INTERVAL = 30  # keyframe cada ~1s a 30 fps
+IFRAME_INTERVAL = 15  # keyframe cada ~0.5s a 30 fps — recovery más rápida tras drop de P-frames
 
 
 class H264AnnexBEncoder:
