@@ -5,7 +5,7 @@ import { parseFrame } from "@/lib/streamFraming"
 
 const RECONNECT_DELAYS = [1000, 2000, 4000, 10000]
 const CODEC = "avc1.42E01E" // H.264 Baseline 3.0 — HW decode garantizado en Android moderno
-const DECODE_QUEUE_THRESHOLD = 3
+const DECODE_QUEUE_THRESHOLD = 5
 
 // Acceso tipado a la API global sin depender de DOM lib WebCodecs (vite/tsconfig
 // puede no incluirla). Usamos any-cast localizado.
@@ -320,7 +320,7 @@ export function useWebCodecsStream() {
         inferenceFps: inferenceFrameCountRef.current,
       })
       const kfCount = keyframeCountRef.current
-      const idrAvg = kfCount > 1 ? Math.round(idrGapSumRef.current / (kfCount - 1)) : 0
+      const idrAvg = kfCount > 0 ? Math.round(idrGapSumRef.current / kfCount) : 0
       const idrMax = Math.round(idrGapMaxRef.current)
       console.log(
         `[wc] stats: fps=${frameCountRef.current} drops=${droppedCountRef.current} maxQueue=${maxQueueRef.current} keyframes=${kfCount} avgIDRgap=${idrAvg}ms maxIDRgap=${idrMax}ms`,
