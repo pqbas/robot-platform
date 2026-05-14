@@ -199,6 +199,25 @@ fi
 ln -sf ".env.${MODE}" "$INSTALL_DIR/.env.active"
 info "Linked .env.active -> .env.${MODE}"
 
+# --- 6b. TLS certs (robot only) ---
+if [[ "$MODE" == "robot" ]]; then
+    CERTS_SRC="$INSTALL_DIR/data/robot/certs"
+
+    if [[ ! -f "$CERTS_SRC/robot.crt" || ! -f "$CERTS_SRC/robot.key" || ! -f "$CERTS_SRC/rootCA.pem" ]]; then
+        info "Certs TLS no encontrados — ejecutando deploy/setup-tls.sh"
+        "$INSTALL_DIR/deploy/setup-tls.sh" || \
+            error "setup-tls.sh falló. Ejecutar manualmente y volver a correr 'make deploy-robot'."
+    else
+        info "Certs TLS ya existen en $CERTS_SRC (no se regeneran)"
+    fi
+
+    sudo mkdir -p /etc/nginx/certs
+    sudo install -m 0600 -o root -g root "$CERTS_SRC/robot.crt"   /etc/nginx/certs/robot.crt
+    sudo install -m 0600 -o root -g root "$CERTS_SRC/robot.key"   /etc/nginx/certs/robot.key
+    sudo install -m 0644 -o root -g root "$CERTS_SRC/rootCA.pem"  /etc/nginx/certs/rootCA.pem
+    info "Certs TLS instalados en /etc/nginx/certs/"
+fi
+
 # --- 7. Nginx ---
 info "Configuring nginx..."
 
@@ -263,6 +282,11 @@ fi
 sudo nginx -t
 sudo systemctl reload nginx
 info "Nginx configurado y recargado"
+
+if [[ "$MODE" == "robot" ]]; then
+    IP_HINT=$(hostname -I | awk '{print $1}')
+    info "TLS habilitado. CA root descargable en http://${IP_HINT}/ca.crt (instalar una vez por device)"
+fi
 
 # --- 8. Systemd ---
 info "Configuring systemd service..."
@@ -370,7 +394,8 @@ echo ""
 
 if [[ "$MODE" == "robot" ]]; then
     IP=$(hostname -I | awk '{print $1}')
-    echo "  Access:  http://${IP}"
+    echo "  Access:  https://${IP}"
+    echo "  CA root: http://${IP}/ca.crt (install once per device — see deploy/ROBOT_SETUP.md)"
     echo "  First time? The UI will guide you through setup at /setup"
 else
     echo "  Access:  http://localhost"

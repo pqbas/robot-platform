@@ -2,15 +2,46 @@ upstream backend {
     server 127.0.0.1:${BACKEND_PORT};
 }
 
-# Robot mode: LAN-only, plain HTTP on port 80. No TLS — Tailscale Funnel
-# is not used on the robot. For public/HTTPS access, see
-# deploy/nginx.server.conf.template.
+# Robot mode: LAN-only, HTTPS on 443 with a mkcert-signed cert (see
+# deploy/setup-tls.sh). Plain HTTP on 80 redirects to HTTPS so old bookmarks
+# keep working. /ca.crt is served on BOTH 80 and 443 so a device without the
+# CA installed can still bootstrap (downloading the CA over plain HTTP is
+# fine — it's a public root cert, not a secret).
+#
+# For public/HTTPS access from internet, see deploy/nginx.server.conf.template
+# (that's a different deploy — robot mode is LAN-only).
 server {
     listen 80 default_server;
     server_name _;
 
+    location = /ca.crt {
+        alias /etc/nginx/certs/rootCA.pem;
+        default_type application/x-x509-ca-cert;
+        add_header Content-Disposition 'attachment; filename="robot-ca.crt"';
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl default_server;
+    server_name _;
+
+    ssl_certificate     /etc/nginx/certs/robot.crt;
+    ssl_certificate_key /etc/nginx/certs/robot.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
     root /opt/robot-platform/front/dist;
     index index.html;
+
+    location = /ca.crt {
+        alias /etc/nginx/certs/rootCA.pem;
+        default_type application/x-x509-ca-cert;
+        add_header Content-Disposition 'attachment; filename="robot-ca.crt"';
+    }
 
     # SPA routing
     location / {
@@ -44,7 +75,7 @@ server {
         client_max_body_size 200M;
     }
 
-    # WebSocket: MJPEG streaming (Phase 25 dual-mode).
+    # WebSocket: MJPEG / WebCodecs streaming (Phase 25/28 dual-mode).
     # Requires HTTP/1.1 + Upgrade/Connection; long timeouts so idle streams
     # are not killed by nginx defaults.
     location /ws/ {
