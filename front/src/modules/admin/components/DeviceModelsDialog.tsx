@@ -60,7 +60,7 @@ export default function DeviceModelsDialog({ device, open, onOpenChange }: Props
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Modelos — {device.label}</DialogTitle>
         </DialogHeader>
@@ -69,26 +69,43 @@ export default function DeviceModelsDialog({ device, open, onOpenChange }: Props
         ) : allModels.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4">No hay modelos registrados</p>
         ) : (
-          <div className="space-y-2 max-h-64 overflow-y-auto py-1">
-            {allModels.map((m) => (
-              <label
-                key={m.uuid}
-                className="flex items-center gap-3 rounded-md border px-3 py-2 cursor-pointer hover:bg-accent"
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.has(m.uuid)}
-                  onChange={() => toggle(m.uuid)}
-                  className="accent-primary"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{m.filename}</p>
-                  <p className="text-xs text-muted-foreground">{m.version}</p>
-                </div>
-                {m.is_active && (
-                  <span className="text-xs text-green-600 font-medium">activo</span>
-                )}
-              </label>
+          <div className="flex-1 overflow-y-auto space-y-4 py-1">
+            {[
+              { label: "Modelos subidos", items: allModels.filter((m) => m.source === "uploaded") },
+              { label: "Modelos de librería", items: allModels.filter((m) => m.source === "library") },
+            ].map(({ label, items }) => items.length === 0 ? null : (
+              <div key={label} className="space-y-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">{label}</p>
+                {items.map((m) => (
+                  <label
+                    key={m.uuid}
+                    className="flex items-center gap-3 rounded-md border px-3 py-2 cursor-pointer hover:bg-accent"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(m.uuid)}
+                      onChange={() => toggle(m.uuid)}
+                      className="accent-primary"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{m.filename}</p>
+                        {m.is_active && (
+                          <span className="shrink-0 text-[10px] text-green-600 font-medium">activo</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {m.version}
+                        {m.class_mapping && m.class_mapping.length > 0 && (
+                          <span className="ml-2">
+                            {m.class_mapping.map((c) => typeof c === "string" ? c : c.system_label || c.model_label).join(", ")}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </div>
             ))}
           </div>
         )}

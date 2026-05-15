@@ -232,23 +232,34 @@ export default function SettingsPage() {
                       <SelectValue placeholder="Selecciona un objeto" />
                     </SelectTrigger>
                     <SelectContent>
-                      {labels.map((l) => (
-                        <SelectItem
-                          key={`${l.model_filename}-${l.label}`}
-                          value={l.label}
-                          className="capitalize"
-                        >
-                          {l.label}
-                        </SelectItem>
-                      ))}
+                      {(["uploaded", "library"] as const).map((src) => {
+                        const group = labels.filter((l) => l.source === src)
+                        if (group.length === 0) return null
+                        return (
+                          <div key={src}>
+                            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {src === "uploaded" ? "Subidos" : "Librería"}
+                            </div>
+                            {group.map((l) => (
+                              <SelectItem
+                                key={`${l.model_filename}-${l.label}`}
+                                value={l.label}
+                                className="capitalize"
+                              >
+                                <span>{l.label}</span>
+                                <span className="ml-2 text-xs text-muted-foreground font-normal normal-case">
+                                  {l.model_filename}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </div>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
                   {mode === "robot" && (
                     <ModelStatusInline
-                      filename={
-                        labels.find((l) => l.label === draftLabel)
-                          ?.model_filename ?? null
-                      }
+                      filename={labels.find((l) => l.label === draftLabel)?.model_filename ?? null}
                     />
                   )}
                 </Field>

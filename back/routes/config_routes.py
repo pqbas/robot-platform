@@ -226,7 +226,7 @@ async def get_available_labels(db: AsyncSession = Depends(get_db)):
             else:
                 label = entry.get("system_label") or entry.get("model_label")
             if label:
-                labels.append(AvailableLabelItem(label=label, model_filename=m.filename))
+                labels.append(AvailableLabelItem(label=label, model_filename=m.filename, source=m.source))
     return labels
 
 
@@ -271,8 +271,26 @@ async def select_label(body: SelectLabelRequest, db: AsyncSession = Depends(get_
     if os.sep in worker_path or worker_path.startswith("."):
         worker_path = os.path.abspath(worker_path)
 
+    class_mapping: list = []
+    if model is not None and model.class_mapping:
+        try:
+            full_mapping = json.loads(model.class_mapping)
+            # Solo pasar la entrada que corresponde al label seleccionado.
+            for entry in full_mapping:
+                if isinstance(entry, str):
+                    if entry == body.label:
+                        class_mapping = [entry]
+                        break
+                elif isinstance(entry, dict):
+                    sl = entry.get("system_label") or entry.get("model_label", "")
+                    if sl == body.label:
+                        class_mapping = [entry]
+                        break
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     client = InferenceClient(config.perception.socket_path)
-    reload_result = client.reload_model(worker_path)
+    reload_result = client.reload_model(worker_path, class_mapping=class_mapping)
     if reload_result is None:
         raise HTTPException(status_code=503, detail="Inference worker not available")
     if not reload_result.get("ok"):

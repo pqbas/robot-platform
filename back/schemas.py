@@ -244,6 +244,7 @@ class DashboardStatsOut(BaseModel):
 class AvailableLabelItem(BaseModel):
     label: str
     model_filename: str
+    source: str = "uploaded"
 
 
 class SelectLabelRequest(BaseModel):
