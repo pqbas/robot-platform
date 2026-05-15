@@ -2,17 +2,21 @@
 name = "inference-worker"
 version = "0.1.0"
 description = "YOLO inference worker communicating via Unix socket"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "ultralytics>=8.4.11",
     "opencv-python>=4.13.0.90",
-    # JetPack TensorRT 8.5 uses ``np.bool`` which was removed in numpy 1.24.
-    "numpy<1.24",
     "lap>=0.5.13",
 ]
 
 [project.scripts]
 inference-worker = "inference_worker.main:main"
+
+[dependency-groups]
+# Laptop/CI: numpy moderno, sin constraint de TensorRT (Jetson usa .venv precompilado)
+dev = [
+    "numpy>=2.0",
+]
 
 [build-system]
 requires = ["hatchling"]

@@ -14,7 +14,7 @@ run-inference:
 	cd inference && VIRTUAL_ENV= .venv/bin/inference-worker
 
 run-inference-dev:
-	cd inference && uv run inference-worker
+	cd inference && uv run --group dev inference-worker
 
 run-camera:
 	cd camera_worker && uv run camera-worker

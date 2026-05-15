@@ -25,7 +25,7 @@ from back.config import config
 from back.services import camera as camera_module
 from back.services.camera import _InferenceWorker
 from back.services.camera_client import CameraClient
-from back.services.h264_encoder import H264AnnexBEncoder
+from back.services.h264_encoder import H264AnnexBEncoder, H264AnnexBEncoderPyAV, make_h264_encoder
 from back.services.perception import counter
 
 logger = logging.getLogger("wc_broadcaster")
@@ -65,7 +65,7 @@ class WCBroadcaster:
         self._next_client_id = 0
         self._camera_client: CameraClient | None = None
         self._inference: _InferenceWorker | None = None
-        self._encoder: H264AnnexBEncoder | None = None
+        self._encoder: H264AnnexBEncoder | H264AnnexBEncoderPyAV | None = None
         # Cache último resultado para no titilar el overlay entre frames sin
         # inferencia fresca (inferencia ~10–15 fps, video ~30 fps).
         self._last_result = None
@@ -131,7 +131,7 @@ class WCBroadcaster:
         self._inference = _InferenceWorker()
         self._inference.start()
         try:
-            self._encoder = H264AnnexBEncoder()
+            self._encoder = make_h264_encoder()
         except Exception:
             logger.exception("Failed to construct H264AnnexBEncoder; aborting WC broadcaster")
             self._running = False

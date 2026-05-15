@@ -19,6 +19,8 @@ class Detector:
     def __init__(self, model_path: str):
         self._model = YOLO(model_path, task="detect")
         self._model_path = model_path
+        # {model_label: system_label} — empty means pass all, no rename
+        self._class_filter: dict[str, str] = {}
         self._times_ms: collections.deque[float] = collections.deque(
             maxlen=_TIMING_WINDOW
         )
@@ -28,9 +30,24 @@ class Detector:
         self._frame_count = 0
         logger.info("Model loaded: %s", model_path)
 
+    def set_class_filter(self, class_mapping: list) -> None:
+        """Recibe class_mapping del backend y construye el dict de filtro/renombre."""
+        result: dict[str, str] = {}
+        for entry in class_mapping:
+            if isinstance(entry, str):
+                result[entry] = entry
+            elif isinstance(entry, dict):
+                ml = entry.get("model_label", "")
+                sl = entry.get("system_label") or ml
+                if ml:
+                    result[ml] = sl
+        self._class_filter = result
+        logger.info("Class filter updated: %s", self._class_filter)
+
     def reload_model(self, model_path: str) -> None:
         self._model = YOLO(model_path, task="detect")
         self._model_path = model_path
+        self._class_filter = {}
         self._times_ms.clear()
         self._pre_ms.clear()
         self._inf_ms.clear()
@@ -143,6 +160,14 @@ class Detector:
             # Translate ROI-space bbox back to full-frame pixels.
             xyxy_full = [xyxy[0] + x_off, xyxy[1], xyxy[2] + x_off, xyxy[3]]
 
+            # Apply class filter: if mapping defined, skip classes not in it.
+            if self._class_filter:
+                if cls_name not in self._class_filter:
+                    continue
+                display_name = self._class_filter[cls_name]
+            else:
+                display_name = cls_name
+
             track_id = None
             if box.id is not None:
                 track_id = int(box.id[0])
@@ -154,13 +179,13 @@ class Detector:
                 })
 
             detections.append({
-                "class_name": cls_name,
+                "class_name": display_name,
                 "confidence": round(box_conf, 3),
                 "bbox": [round(v, 1) for v in xyxy_full],
                 "track_id": track_id,
             })
 
-            if target_class is None or cls_name == target_class:
+            if target_class is None or display_name == target_class:
                 count += 1
 
         return {
