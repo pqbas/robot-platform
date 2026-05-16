@@ -32,8 +32,17 @@ import { useAppMode } from "@/context/AppModeContext"
 import { forceSyncPull, forceSyncPush } from "@/api/sync"
 import ModelStatusInline from "./components/ModelStatusInline"
 
-const SELECTED_LABEL_KEY = "vision.selectedLabel.v2"
+const SELECTED_LABEL_KEY = "vision.selectedLabel.v3"
 const PREFERRED_DEFAULT_LABEL = "blueberry"
+
+function toSelectKey(l: AvailableLabelItem) {
+  return `${l.label}::${l.model_filename}`
+}
+function fromSelectKey(key: string) {
+  const idx = key.indexOf("::")
+  if (idx === -1) return { label: key, model_filename: "" }
+  return { label: key.slice(0, idx), model_filename: key.slice(idx + 2) }
+}
 
 const directionsByMode: Record<string, { value: string; label: string }[]> = {
   vertical: [
@@ -68,7 +77,7 @@ export default function SettingsPage() {
   const [cameras, setCameras] = useState<CameraDevice[]>([])
   const [cameraConfig, setCameraConfig] = useState<CameraConfig | null>(null)
   const [labels, setLabels] = useState<AvailableLabelItem[]>([])
-  const [draftLabel, setDraftLabel] = useState<string>(
+  const [draftKey, setDraftKey] = useState<string>(
     () => localStorage.getItem(SELECTED_LABEL_KEY) ?? "",
   )
   const [draftResolution, setDraftResolution] = useState<CameraPreset | null>(null)
@@ -99,10 +108,10 @@ export default function SettingsPage() {
     getAvailableLabels()
       .then((items) => {
         setLabels(items)
-        if (!draftLabel && items.length > 0) {
+        if (!draftKey && items.length > 0) {
           const preferred =
             items.find((l) => l.label === PREFERRED_DEFAULT_LABEL) ?? items[0]
-          setDraftLabel(preferred.label)
+          setDraftKey(toSelectKey(preferred))
         }
       })
       .catch(() => {})
@@ -128,12 +137,13 @@ export default function SettingsPage() {
       await updateCountingConfig(config)
       if (cameraConfig) await updateCameraConfig(cameraConfig)
 
-      const storedLabel = localStorage.getItem(SELECTED_LABEL_KEY) ?? ""
-      if (draftLabel && draftLabel !== storedLabel) {
-        const item = labels.find((l) => l.label === draftLabel)
+      const storedKey = localStorage.getItem(SELECTED_LABEL_KEY) ?? ""
+      if (draftKey && draftKey !== storedKey) {
+        const { label, model_filename } = fromSelectKey(draftKey)
+        const item = labels.find((l) => l.label === label && l.model_filename === model_filename)
         if (item) {
           await selectLabel(item.label, item.model_filename)
-          localStorage.setItem(SELECTED_LABEL_KEY, item.label)
+          localStorage.setItem(SELECTED_LABEL_KEY, draftKey)
         }
       }
       if (draftResolution && draftResolution !== resolution.preset) {
@@ -227,28 +237,28 @@ export default function SettingsPage() {
             <SectionPanel title="Detección" description="Qué objetos detectar y con qué exigencia">
               {labels.length > 0 && (
                 <Field label="Objeto a detectar" htmlFor="object-select">
-                  <Select value={draftLabel} onValueChange={setDraftLabel}>
+                  <Select value={draftKey} onValueChange={setDraftKey}>
                     <SelectTrigger id="object-select" className="w-full capitalize">
                       <SelectValue placeholder="Selecciona un objeto" />
                     </SelectTrigger>
                     <SelectContent>
                       {labels.map((l) => (
                         <SelectItem
-                          key={`${l.model_filename}-${l.label}`}
-                          value={l.label}
+                          key={toSelectKey(l)}
+                          value={toSelectKey(l)}
                           className="capitalize"
                         >
-                          {l.label}
+                          <span>{l.label}</span>
+                          <span className="ml-2 text-xs text-muted-foreground font-normal normal-case">
+                            {l.model_filename}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   {mode === "robot" && (
                     <ModelStatusInline
-                      filename={
-                        labels.find((l) => l.label === draftLabel)
-                          ?.model_filename ?? null
-                      }
+                      filename={fromSelectKey(draftKey).model_filename || null}
                     />
                   )}
                 </Field>
