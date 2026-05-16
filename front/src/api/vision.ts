@@ -3,6 +3,7 @@ import { apiFetch } from "./client"
 export type AvailableLabelItem = {
   label: string
   model_filename: string
+  source: "uploaded" | "library"
 }
 
 export function getAvailableLabels(): Promise<AvailableLabelItem[]> {
