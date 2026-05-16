@@ -43,6 +43,11 @@ mobile/
 hello.py
 skills-lock.json
 
+# TLS certificates and private keys
+*.crt
+*.key
+*.pem
+
 # Local-only configuration (personal paths, institutional assets)
 LOCAL.md
 credentials.md

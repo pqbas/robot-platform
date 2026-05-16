@@ -54,9 +54,9 @@ class InferenceClient:
             self._disconnect()
             return None
 
-    def reload_model(self, model_path: str) -> dict | None:
+    def reload_model(self, model_path: str, class_mapping: list | None = None) -> dict | None:
         """Tell the worker to load a different model."""
-        return self.send_command("reload_model", model_path=model_path)
+        return self.send_command("reload_model", model_path=model_path, class_mapping=class_mapping or [])
 
     def detect(
         self,

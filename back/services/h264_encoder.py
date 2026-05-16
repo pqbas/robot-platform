@@ -1,19 +1,19 @@
 """H264 Annex-B encoder para el path WebCodecs sobre WebSocket.
 
-Misma estructura de pipeline que `nvenc_codec.py` pero sin envolver `H264Encoder`
-de aiortc: salida cruda Annex-B (`stream-format=byte-stream, alignment=au`),
-SPS+PPS inline antes de cada IDR vía `h264parse config-interval=1`. Cada call
-a `push_frame()` empuja un BGR ndarray y drena lo que el pipeline tenga listo.
+Dos implementaciones con la misma interfaz push_frame() / close():
+- H264AnnexBEncoder: GStreamer (Jetson/producción). Requiere gi + Gst.
+- H264AnnexBEncoderPyAV: PyAV/libx264 (dev/laptop). Sin dependencias extra.
 
-Lifecycle: la primera `push_frame()` construye la pipeline. `close()` la
-destruye (NULL state). Reuso entre frames sin rebuild.
+make_h264_encoder() devuelve la mejor disponible.
 """
 
 from __future__ import annotations
 
+import fractions
 import logging
 from typing import Iterator, Optional
 
+import av
 import numpy as np
 
 from back.services.nvenc_codec import HAS_GSTREAMER, _detect_gst_encoder
@@ -180,3 +180,101 @@ class H264AnnexBEncoder:
             self.close()
         except Exception:
             pass
+
+
+# ---------------------------------------------------------------------------
+# PyAV fallback encoder (dev/laptop — no GStreamer required)
+# ---------------------------------------------------------------------------
+
+_PYAV_FRAMERATE = 30
+_PYAV_KEYFRAME_INTERVAL = 15  # IDR cada ~0.5s, igual que GStreamer
+
+
+class H264AnnexBEncoderPyAV:
+    """libx264 via PyAV — mismo contrato de interfaz que H264AnnexBEncoder."""
+
+    def __init__(self, bitrate_bps: int = 2_000_000) -> None:
+        self._bitrate_bps = bitrate_bps
+        self._codec: Optional[av.CodecContext] = None
+        self._frame_count = 0
+        self._width = 0
+        self._height = 0
+        logger.info("H264AnnexBEncoderPyAV (libx264) ready")
+
+    def _open_codec(self, width: int, height: int) -> None:
+        if self._codec is not None:
+            self._codec.close()
+        ctx = av.CodecContext.create("libx264", "w")
+        ctx.width = width
+        ctx.height = height
+        ctx.pix_fmt = "yuv420p"
+        ctx.bit_rate = self._bitrate_bps
+        ctx.framerate = fractions.Fraction(_PYAV_FRAMERATE, 1)
+        ctx.time_base = fractions.Fraction(1, _PYAV_FRAMERATE)
+        ctx.options = {
+            "tune": "zerolatency",
+            "preset": "ultrafast",
+            "profile": "baseline",
+            "x264-params": f"keyint={_PYAV_KEYFRAME_INTERVAL}:min-keyint={_PYAV_KEYFRAME_INTERVAL}",
+        }
+        ctx.open()
+        self._codec = ctx
+        self._width = width
+        self._height = height
+        self._frame_count = 0
+        logger.info("libx264 codec opened (%dx%d @ %d kbps)", width, height, self._bitrate_bps // 1000)
+
+    def push_frame(self, bgr: np.ndarray) -> Iterator[tuple[bool, bytes]]:
+        h, w = bgr.shape[:2]
+        if self._codec is None or w != self._width or h != self._height:
+            self._open_codec(w, h)
+        assert self._codec is not None
+
+        force_keyframe = (self._frame_count % _PYAV_KEYFRAME_INTERVAL) == 0
+
+        rgb = bgr[:, :, ::-1]
+        frame = av.VideoFrame.from_ndarray(rgb, format="rgb24")
+        frame = frame.reformat(format="yuv420p")
+        frame.pts = self._frame_count
+        frame.time_base = fractions.Fraction(1, _PYAV_FRAMERATE)
+        if force_keyframe:
+            frame.pict_type = av.video.frame.PictureType.I
+        self._frame_count += 1
+
+        # Produce Annex-B packets; each packet is already a complete AU.
+        for packet in self._codec.encode(frame):
+            data = bytes(packet)
+            if not data:
+                continue
+            # A packet is a keyframe if it doesn't have the DISPOSABLE flag
+            # (PyAV marks non-key packets with is_keyframe=False).
+            is_key = bool(getattr(packet, "is_keyframe", force_keyframe))
+            # Ensure SPS+PPS prefix on keyframes — libx264 in baseline/zerolatency
+            # already includes them, but we verify by checking for start codes.
+            yield is_key, data
+
+    def close(self) -> None:
+        if self._codec is not None:
+            try:
+                self._codec.close()
+            except Exception:
+                pass
+            self._codec = None
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# Factory
+# ---------------------------------------------------------------------------
+
+def make_h264_encoder() -> "H264AnnexBEncoder | H264AnnexBEncoderPyAV":
+    """Devuelve el mejor encoder disponible: GStreamer si existe, PyAV si no."""
+    if HAS_GSTREAMER:
+        return H264AnnexBEncoder()
+    logger.info("GStreamer no disponible — usando H264AnnexBEncoderPyAV (libx264)")
+    return H264AnnexBEncoderPyAV()

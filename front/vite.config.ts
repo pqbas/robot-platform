@@ -31,6 +31,7 @@ export default defineConfig({
       "/offer": backendUrl,
       "/toggle_processing": backendUrl,
       "/api": backendUrl,
+      "/ws": { target: backendUrl, ws: true },
     },
   },
 })

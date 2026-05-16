@@ -252,8 +252,8 @@ export default function SettingsPage() {
                             </div>
                             {group.map((l) => (
                               <SelectItem
-                                key={toSelectKey(l)}
-                                value={toSelectKey(l)}
+                                key={`${l.model_filename}-${l.label}`}
+                                value={l.label}
                                 className="capitalize"
                               >
                                 <span>{l.label}</span>
@@ -269,7 +269,7 @@ export default function SettingsPage() {
                   </Select>
                   {mode === "robot" && (
                     <ModelStatusInline
-                      filename={fromSelectKey(draftKey).model_filename || null}
+                      filename={labels.find((l) => l.label === draftLabel)?.model_filename ?? null}
                     />
                   )}
                 </Field>

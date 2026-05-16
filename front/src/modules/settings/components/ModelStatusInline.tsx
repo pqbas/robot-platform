@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import {
   type EngineStatus,
   type LocalModel,
@@ -10,39 +8,38 @@ import {
   setTensorRT,
 } from "@/api/models"
 import { ApiError } from "@/api/client"
+import { cn } from "@/lib/utils"
 
 const POLL_INTERVAL_MS = 5000
 
-const STATUS_LABEL: Record<EngineStatus, string> = {
-  pytorch: "PyTorch",
-  pending: "En cola",
-  converting: "Convirtiendo...",
-  ready: "TensorRT FP16",
-  error: "Error",
+type ModeOption = {
+  key: "pytorch" | "tensorrt"
+  label: string
+  sublabel?: string
+  active: boolean
+  disabled: boolean
+  onClick: () => void
 }
 
-function StatusBadge({ status }: { status: EngineStatus }) {
-  const label = STATUS_LABEL[status]
-  switch (status) {
-    case "ready":
-      return (
-        <Badge className="bg-green-600 hover:bg-green-600 text-white">
-          {label}
-        </Badge>
-      )
-    case "converting":
-    case "pending":
-      return (
-        <Badge className="bg-yellow-500 hover:bg-yellow-500 text-black">
-          {label}
-        </Badge>
-      )
-    case "error":
-      return <Badge variant="destructive">{label}</Badge>
-    case "pytorch":
-    default:
-      return <Badge variant="secondary">{label}</Badge>
-  }
+function InferenceOption({ label, sublabel, active, disabled, onClick }: Omit<ModeOption, "key">) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors",
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border bg-background text-muted-foreground hover:border-foreground/40 hover:text-foreground",
+        disabled && "cursor-not-allowed opacity-50",
+      )}
+    >
+      <span className={cn("h-1.5 w-1.5 rounded-full", active ? "bg-primary-foreground" : "bg-muted-foreground/50")} />
+      <span>{label}</span>
+      {sublabel && <span className="opacity-60">{sublabel}</span>}
+    </button>
+  )
 }
 
 type Props = {
@@ -70,9 +67,7 @@ export default function ModelStatusInline({ filename }: Props) {
     }
   }
 
-  useEffect(() => {
-    refresh()
-  }, [])
+  useEffect(() => { refresh() }, [])
 
   const current = filename
     ? models.find((m) => m.filename === filename) ?? null
@@ -81,22 +76,15 @@ export default function ModelStatusInline({ filename }: Props) {
   useEffect(() => {
     const needsPoll =
       current &&
-      (current.engine_status === "converting" ||
-        current.engine_status === "pending")
+      (current.engine_status === "converting" || current.engine_status === "pending")
     if (!needsPoll) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
       return
     }
     if (intervalRef.current) return
     intervalRef.current = setInterval(refresh, POLL_INTERVAL_MS)
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
     }
   }, [current])
 
@@ -107,34 +95,21 @@ export default function ModelStatusInline({ filename }: Props) {
     setModels((ms) =>
       ms.map((m) =>
         m.uuid === current.uuid
-          ? {
-              ...m,
-              tensorrt_enabled: nextEnabled,
-              engine_status: optimistic,
-              engine_error: null,
-            }
+          ? { ...m, tensorrt_enabled: nextEnabled, engine_status: optimistic, engine_error: null }
           : m,
       ),
     )
     try {
       const result = await setTensorRT(current.uuid, nextEnabled)
       setModels((ms) =>
-        ms.map((m) =>
-          m.uuid === current.uuid
-            ? { ...m, engine_status: result.engine_status }
-            : m,
-        ),
+        ms.map((m) => m.uuid === current.uuid ? { ...m, engine_status: result.engine_status } : m),
       )
     } catch (err) {
-      setModels((ms) =>
-        ms.map((m) => (m.uuid === current.uuid ? current : m)),
-      )
+      setModels((ms) => ms.map((m) => (m.uuid === current.uuid ? current : m)))
       if (err instanceof ApiError && err.status === 409) {
         toast.error("Conversión en curso, espera a que termine")
       } else {
-        const msg =
-          err instanceof Error ? err.message : "Error al actualizar TensorRT"
-        toast.error(msg)
+        toast.error(err instanceof Error ? err.message : "Error al actualizar TensorRT")
       }
     } finally {
       setBusy(false)
@@ -150,41 +125,33 @@ export default function ModelStatusInline({ filename }: Props) {
     )
   }
 
+  const isConverting = current.engine_status === "converting" || current.engine_status === "pending"
+  const trtReady = current.engine_status === "ready"
+  const trtError = current.engine_status === "error"
+
+  let trtSublabel: string | undefined
+  if (isConverting) trtSublabel = "convirtiendo..."
+  else if (trtError) trtSublabel = "error"
+
   return (
     <div className="space-y-1">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-muted-foreground">Modelo:</span>
-        <span className="truncate text-xs font-medium">{current.filename}</span>
-        <StatusBadge status={current.engine_status} />
-        <div className="ml-auto">
-          {current.engine_status === "error" ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => handleToggle(true)}
-              disabled={busy}
-            >
-              Reintentar
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              variant={current.tensorrt_enabled ? "default" : "outline"}
-              onClick={() => handleToggle(!current.tensorrt_enabled)}
-              disabled={busy}
-              className="min-w-[88px]"
-            >
-              {current.tensorrt_enabled ? "TensorRT" : "PyTorch"}
-            </Button>
-          )}
-        </div>
+      <div className="flex gap-2">
+        <InferenceOption
+          label="PyTorch"
+          active={!current.tensorrt_enabled}
+          disabled={busy}
+          onClick={() => current.tensorrt_enabled && handleToggle(false)}
+        />
+        <InferenceOption
+          label="TensorRT"
+          sublabel={trtSublabel}
+          active={current.tensorrt_enabled && trtReady}
+          disabled={busy || isConverting}
+          onClick={() => !current.tensorrt_enabled && !isConverting && handleToggle(true)}
+        />
       </div>
-      {current.engine_status === "error" && current.engine_error && (
-        <p className="truncate text-xs text-destructive">
-          {current.engine_error}
-        </p>
+      {trtError && current.engine_error && (
+        <p className="text-xs text-destructive truncate">{current.engine_error}</p>
       )}
     </div>
   )

@@ -40,6 +40,9 @@ def handle_command(header: dict, detector: Detector) -> dict:
             return {"ok": False, "error": "model_path required"}
         try:
             detector.reload_model(model_path)
+            class_mapping = header.get("class_mapping", [])
+            if class_mapping:
+                detector.set_class_filter(class_mapping)
             return {"ok": True, "model_path": model_path}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
