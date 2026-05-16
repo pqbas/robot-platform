@@ -5,7 +5,7 @@ import re
 
 import cv2
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import AppMode, config
@@ -33,6 +33,7 @@ from back.services.perception.engine_paths import (
     engine_cache_path_for,
 )
 from back.services.perception.inference_client import InferenceClient
+from back.services.perception.label_selection import derive_filtered_class_mapping
 
 logger = logging.getLogger("config_routes")
 
@@ -272,22 +273,8 @@ async def select_label(body: SelectLabelRequest, db: AsyncSession = Depends(get_
         worker_path = os.path.abspath(worker_path)
 
     class_mapping: list = []
-    if model is not None and model.class_mapping:
-        try:
-            full_mapping = json.loads(model.class_mapping)
-            # Solo pasar la entrada que corresponde al label seleccionado.
-            for entry in full_mapping:
-                if isinstance(entry, str):
-                    if entry == body.label:
-                        class_mapping = [entry]
-                        break
-                elif isinstance(entry, dict):
-                    sl = entry.get("system_label") or entry.get("model_label", "")
-                    if sl == body.label:
-                        class_mapping = [entry]
-                        break
-        except (json.JSONDecodeError, TypeError):
-            pass
+    if model is not None:
+        class_mapping = derive_filtered_class_mapping(model.class_mapping, body.label)
 
     client = InferenceClient(config.perception.socket_path)
     reload_result = client.reload_model(worker_path, class_mapping=class_mapping)
@@ -298,4 +285,17 @@ async def select_label(body: SelectLabelRequest, db: AsyncSession = Depends(get_
             status_code=500,
             detail=f"Inference worker rejected reload: {reload_result.get('error')}",
         )
+
+    # Persist the selection globally: only one model holds selected_label
+    # at a time, so reloads from sync_pull / conversion_poller can re-derive
+    # the same filter instead of wiping it.
+    if model is not None:
+        await db.execute(
+            update(DetectionModel)
+            .where(DetectionModel.filename != body.model_filename)
+            .values(selected_label=None)
+        )
+        model.selected_label = body.label
+        await db.commit()
+
     return {"ok": True, "model": body.model_filename, "loaded": worker_path}

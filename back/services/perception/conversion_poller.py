@@ -34,6 +34,7 @@ from back.services.perception.conversion_client import (
 )
 from back.services.perception.engine_paths import engine_cache_path_for
 from back.services.perception.inference_client import InferenceClient
+from back.services.perception.label_selection import derive_filtered_class_mapping
 
 logger = logging.getLogger("conversion_poller")
 
@@ -98,8 +99,21 @@ async def _maybe_reload_active_model(engine_path: str) -> None:
     engine_stem = Path(engine_path).name.split(".")[0]
     current_stem = Path(current).stem
     if engine_stem and engine_stem == current_stem:
+        # Re-derive the user's class filter from the persisted
+        # selected_label so the .pt→.engine swap doesn't wipe it.
+        class_mapping: list = []
+        async with AsyncSessionLocal() as db:
+            row = (await db.execute(
+                select(DetectionModel).where(
+                    DetectionModel.filename == f"{engine_stem}.pt"
+                )
+            )).scalar_one_or_none()
+            if row and row.selected_label:
+                class_mapping = derive_filtered_class_mapping(
+                    row.class_mapping, row.selected_label
+                )
         logger.info("Auto-reloading inference worker with %s", engine_path)
-        result = inference.reload_model(engine_path)
+        result = inference.reload_model(engine_path, class_mapping=class_mapping)
         if not result or not result.get("ok"):
             logger.warning("Auto-reload failed: %s", result)
 
