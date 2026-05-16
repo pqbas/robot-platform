@@ -11,6 +11,7 @@ from back.config import config
 from back.database import AsyncSessionLocal
 from back.models import DetectionModel
 from back.services.perception.inference_client import InferenceClient
+from back.services.perception.label_selection import derive_filtered_class_mapping
 
 logger = logging.getLogger(__name__)
 
@@ -89,15 +90,17 @@ async def pull_models() -> None:
                 return
 
             # 3. Download new/updated model files (skip library models — managed by ultralytics)
-            latest_target = None  # tuple (path_for_worker, display_name)
+            # Build the assignment set as we go so step 4 can tell whether
+            # the worker's currently-loaded model is still valid.
+            assigned: list[tuple[str, str]] = []  # list of (path_for_worker, display_name)
             for model in remote_models:
                 if model.get("source") == "library":
                     logger.info("Sync pull: %s is library model, skipping download", model["filename"])
-                    latest_target = (model["filename"], model["filename"])
+                    assigned.append((model["filename"], model["filename"]))
                     continue
 
                 local_path = models_dir / model["filename"]
-                latest_target = (str(local_path.resolve()), model["filename"])
+                assigned.append((str(local_path.resolve()), model["filename"]))
                 if local_path.exists():
                     local_hash = _file_hash(local_path)
                     if local_hash == model["file_hash"]:
@@ -116,14 +119,50 @@ async def pull_models() -> None:
                     local_path.write_bytes(content)
                     logger.info("Sync pull: downloaded %s (%d bytes)", model["filename"], len(content))
 
-            # 4. Ensure worker is using one of the assigned models
-            if latest_target:
-                worker_path, display_name = latest_target
+            # 4. Ensure worker is using one of the assigned models.
+            # If the current model is already in the assigned set, leave it
+            # alone — overriding would clobber the user's manual selection
+            # (and its class filter). Only swap when nothing valid is loaded.
+            if assigned:
                 client = InferenceClient(config.perception.socket_path)
                 status = client.send_command("status")
                 current = status.get("model_path", "") if status else ""
-                if worker_path != current:
-                    result = client.reload_model(worker_path)
+                assigned_paths = {p for p, _ in assigned}
+                # Also match by basename: select_label may have sent an
+                # engine path while sync only knows the .pt filename.
+                assigned_basenames = {Path(p).stem.split(".")[0] for p in assigned_paths}
+                current_basename = Path(current).stem.split(".")[0] if current else ""
+                if current in assigned_paths or current_basename in assigned_basenames:
+                    logger.debug("Sync pull: worker already on assigned model %s", current)
+                else:
+                    # Prefer the model the user explicitly selected.
+                    target = None
+                    async with AsyncSessionLocal() as db:
+                        for worker_path, display_name in assigned:
+                            row = (await db.execute(
+                                select(DetectionModel).where(
+                                    DetectionModel.filename == display_name
+                                )
+                            )).scalar_one_or_none()
+                            if row and row.selected_label:
+                                target = (worker_path, display_name, row)
+                                break
+                        if target is None:
+                            worker_path, display_name = assigned[0]
+                            row = (await db.execute(
+                                select(DetectionModel).where(
+                                    DetectionModel.filename == display_name
+                                )
+                            )).scalar_one_or_none()
+                            target = (worker_path, display_name, row)
+
+                    worker_path, display_name, row = target
+                    class_mapping: list = []
+                    if row and row.selected_label:
+                        class_mapping = derive_filtered_class_mapping(
+                            row.class_mapping, row.selected_label
+                        )
+                    result = client.reload_model(worker_path, class_mapping=class_mapping)
                     if result and result.get("ok"):
                         logger.info("Sync pull: worker reloaded with %s", display_name)
                     else:

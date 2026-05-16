@@ -15,6 +15,10 @@ _TIMING_WINDOW = 600
 _TIMING_LOG_EVERY = 150
 
 
+def _backend_for(path: str) -> str:
+    return "TensorRT (engine)" if path.endswith(".engine") else "PyTorch (.pt)"
+
+
 class Detector:
     def __init__(self, model_path: str):
         self._model = YOLO(model_path, task="detect")
@@ -28,7 +32,8 @@ class Detector:
         self._inf_ms: collections.deque[float] = collections.deque(maxlen=_TIMING_WINDOW)
         self._post_ms: collections.deque[float] = collections.deque(maxlen=_TIMING_WINDOW)
         self._frame_count = 0
-        logger.info("Model loaded: %s", model_path)
+        self._logged_first_detect = False
+        logger.info("Model loaded [%s]: %s", _backend_for(model_path), model_path)
 
     def set_class_filter(self, class_mapping: list) -> None:
         """Recibe class_mapping del backend y construye el dict de filtro/renombre."""
@@ -53,7 +58,8 @@ class Detector:
         self._inf_ms.clear()
         self._post_ms.clear()
         self._frame_count = 0
-        logger.info("Model reloaded: %s", model_path)
+        self._logged_first_detect = False
+        logger.info("Model reloaded [%s]: %s", _backend_for(model_path), model_path)
 
     @property
     def model_path(self) -> str:
@@ -136,6 +142,13 @@ class Detector:
         results = self._model.track(roi, conf=conf, persist=True, verbose=False)
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         self._times_ms.append(elapsed_ms)
+        if not self._logged_first_detect:
+            logger.info(
+                "First detect on %s using %s",
+                self._model_path,
+                _backend_for(self._model_path),
+            )
+            self._logged_first_detect = True
         # Capture ultralytics' own per-stage breakdown (preprocess/
         # inference/postprocess in ms). Helps identify which stage
         # dominates when total time looks slow.
