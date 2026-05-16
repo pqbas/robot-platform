@@ -147,6 +147,11 @@ sudo tailscale funnel --https=443 off
 
 Más detalles y troubleshooting en [`deploy/README.md`](deploy/README.md).
 
+## Planificación
+
+- Fases en curso y futuras: [`spec/roadmap.md`](spec/roadmap.md).
+- Observaciones y mejoras pendientes (aún sin fase): [`spec/backlog.md`](spec/backlog.md).
+
 ## Agradecimientos
 
 Este trabajo es financiado por el Programa Nacional de Investigación Científica y Estudios Avanzados (**PROCIENCIA**) en el marco del proyecto **PE5010-86701-2024-PROCIENCIA**: *"Desarrollo e implementación de un robot móvil multifuncional reconfigurable mecánicamente para adaptarse a fundos agrícolas con diferentes camellones y entre surcos variables de la Región La Libertad-Perú"*.
