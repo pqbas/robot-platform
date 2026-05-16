@@ -242,18 +242,29 @@ export default function SettingsPage() {
                       <SelectValue placeholder="Selecciona un objeto" />
                     </SelectTrigger>
                     <SelectContent>
-                      {labels.map((l) => (
-                        <SelectItem
-                          key={toSelectKey(l)}
-                          value={toSelectKey(l)}
-                          className="capitalize"
-                        >
-                          <span>{l.label}</span>
-                          <span className="ml-2 text-xs text-muted-foreground font-normal normal-case">
-                            {l.model_filename}
-                          </span>
-                        </SelectItem>
-                      ))}
+                      {(["uploaded", "library"] as const).map((src) => {
+                        const group = labels.filter((l) => l.source === src)
+                        if (group.length === 0) return null
+                        return (
+                          <div key={src}>
+                            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {src === "uploaded" ? "Subidos" : "Librería"}
+                            </div>
+                            {group.map((l) => (
+                              <SelectItem
+                                key={toSelectKey(l)}
+                                value={toSelectKey(l)}
+                                className="capitalize"
+                              >
+                                <span>{l.label}</span>
+                                <span className="ml-2 text-xs text-muted-foreground font-normal normal-case">
+                                  {l.model_filename}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </div>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
                   {mode === "robot" && (
