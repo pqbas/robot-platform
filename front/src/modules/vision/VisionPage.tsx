@@ -23,8 +23,19 @@ import {
 import { getCountingConfig, type CountingConfig } from "@/api/config"
 import { apiFetch } from "@/api/client"
 
-const SELECTED_LABEL_KEY = "vision.selectedLabel.v2"
+const SELECTED_LABEL_KEY = "vision.selectedLabel.v3"
 const PREFERRED_DEFAULT_LABEL = "blueberry"
+
+// Composite key shared with SettingsPage so both pages agree on
+// "what's selected" via the same localStorage entry.
+function toSelectKey(l: { label: string; model_filename: string }) {
+  return `${l.label}::${l.model_filename}`
+}
+function fromSelectKey(key: string) {
+  const idx = key.indexOf("::")
+  if (idx === -1) return { label: key, model_filename: "" }
+  return { label: key.slice(0, idx), model_filename: key.slice(idx + 2) }
+}
 
 function formatDuration(start: Date | null): string {
   if (!start) return "0s"
@@ -44,6 +55,7 @@ export default function VisionPage() {
   const resolution = useCameraResolution(mode === "robot")
 
   const [selectedClass, setSelectedClass] = useState("")
+  const [selectedModelFilename, setSelectedModelFilename] = useState("")
   const [labels, setLabels] = useState<AvailableLabelItem[]>([])
   const [labelsLoading, setLabelsLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
@@ -73,14 +85,19 @@ export default function VisionPage() {
         if (cancelled) return
         setLabels(items)
         setLabelsLoading(false)
-        if (items.length === 0) return
         const stored = localStorage.getItem(SELECTED_LABEL_KEY) ?? ""
+        if (items.length === 0) return
+        const { label: storedLabel, model_filename: storedFile } = fromSelectKey(stored)
         const initial =
-          items.find((i) => i.label === stored) ??
+          items.find((i) => i.label === storedLabel && i.model_filename === storedFile) ??
+          items.find((i) => i.label === storedLabel) ??
           items.find((i) => i.label === PREFERRED_DEFAULT_LABEL) ??
           items[0]
         setSelectedClass(initial.label)
-        selectLabel(initial.label, initial.model_filename).catch(console.error)
+        setSelectedModelFilename(initial.model_filename)
+        // Don't auto-push selection to backend on mount — that overrides
+        // whatever the user last picked in Settings. ObjectPicker fires
+        // selectLabel only when the user explicitly changes the class.
       })
       .catch(() => {
         if (!cancelled) setLabelsLoading(false)
@@ -90,10 +107,14 @@ export default function VisionPage() {
     }
   }, [])
 
-  // Persist selection
+  // Persist selection in the SAME composite format Settings uses,
+  // so the two pages stay in sync via localStorage.
   useEffect(() => {
-    if (selectedClass) localStorage.setItem(SELECTED_LABEL_KEY, selectedClass)
-  }, [selectedClass])
+    if (selectedClass && selectedModelFilename) {
+      const key = toSelectKey({ label: selectedClass, model_filename: selectedModelFilename })
+      localStorage.setItem(SELECTED_LABEL_KEY, key)
+    }
+  }, [selectedClass, selectedModelFilename])
 
   // Auto-connect when an object is selected and we're idle
   useEffect(() => {
@@ -111,6 +132,7 @@ export default function VisionPage() {
       if (fresh.length > 0 && !selectedClass) {
         const first = fresh[0]
         setSelectedClass(first.label)
+        setSelectedModelFilename(first.model_filename)
         await selectLabel(first.label, first.model_filename)
       }
     } finally {

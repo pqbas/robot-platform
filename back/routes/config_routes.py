@@ -240,6 +240,10 @@ async def select_label(body: SelectLabelRequest, db: AsyncSession = Depends(get_
 
     # Default fallback (no DB row): ultralytics resolves the bare filename.
     if model is None:
+        logger.info(
+            "select_label: no DB row for %s, falling back to bare filename",
+            body.model_filename,
+        )
         worker_path = body.model_filename
     else:
         # If TensorRT is on and the engine is built, hand the .engine to
@@ -255,13 +259,27 @@ async def select_label(body: SelectLabelRequest, db: AsyncSession = Depends(get_
             )
             if os.path.exists(engine_path):
                 worker_path = engine_path
+                logger.info(
+                    "select_label: %s -> ENGINE %s",
+                    body.model_filename, worker_path,
+                )
             else:
                 worker_path = actual_pt_path_for(
                     model.filename, model.source, config.storage.models_dir
                 )
+                logger.warning(
+                    "select_label: %s engine_status=ready but file missing at %s, falling back to .pt %s",
+                    body.model_filename, engine_path, worker_path,
+                )
         else:
             worker_path = actual_pt_path_for(
                 model.filename, model.source, config.storage.models_dir
+            )
+            logger.info(
+                "select_label: %s -> PT %s (tensorrt_enabled=%s, engine_status=%s, file_hash=%s)",
+                body.model_filename, worker_path,
+                model.tensorrt_enabled, model.engine_status,
+                bool(model.file_hash),
             )
 
     # Absolutise non-bare paths — the inference worker's cwd

@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -131,30 +133,49 @@ export default function SettingsPage() {
   }
 
   async function handleSave() {
-    if (!config) return
     setSaving(true)
-    try {
-      await updateCountingConfig(config)
-      if (cameraConfig) await updateCameraConfig(cameraConfig)
+    let anyError = false
 
-      const storedKey = localStorage.getItem(SELECTED_LABEL_KEY) ?? ""
-      if (draftKey && draftKey !== storedKey) {
-        const { label, model_filename } = fromSelectKey(draftKey)
-        const item = labels.find((l) => l.label === label && l.model_filename === model_filename)
-        if (item) {
+    // Label save runs first and independently — counting/camera failures
+    // shouldn't suppress it, and vice versa.
+    if (draftKey) {
+      const { label, model_filename } = fromSelectKey(draftKey)
+      const item = labels.find((l) => l.label === label && l.model_filename === model_filename)
+      if (item) {
+        try {
           await selectLabel(item.label, item.model_filename)
           localStorage.setItem(SELECTED_LABEL_KEY, draftKey)
+        } catch {
+          anyError = true
         }
       }
-      if (draftResolution && draftResolution !== resolution.preset) {
-        await resolution.change(draftResolution)
-      }
-      toast.success("Configuración guardada")
-    } catch {
-      toast.error("Error al guardar configuración")
-    } finally {
-      setSaving(false)
     }
+
+    if (config) {
+      try {
+        await updateCountingConfig(config)
+      } catch {
+        anyError = true
+      }
+    }
+    if (cameraConfig) {
+      try {
+        await updateCameraConfig(cameraConfig)
+      } catch {
+        anyError = true
+      }
+    }
+    if (draftResolution && draftResolution !== resolution.preset) {
+      try {
+        await resolution.change(draftResolution)
+      } catch {
+        anyError = true
+      }
+    }
+
+    if (anyError) toast.error("Error al guardar configuración")
+    else toast.success("Configuración guardada")
+    setSaving(false)
   }
 
   async function handleSync() {
@@ -246,14 +267,14 @@ export default function SettingsPage() {
                         const group = labels.filter((l) => l.source === src)
                         if (group.length === 0) return null
                         return (
-                          <div key={src}>
-                            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <SelectGroup key={src}>
+                            <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
                               {src === "uploaded" ? "Subidos" : "Librería"}
-                            </div>
+                            </SelectLabel>
                             {group.map((l) => (
                               <SelectItem
-                                key={`${l.model_filename}-${l.label}`}
-                                value={l.label}
+                                key={toSelectKey(l)}
+                                value={toSelectKey(l)}
                                 className="capitalize"
                               >
                                 <span>{l.label}</span>
@@ -262,14 +283,14 @@ export default function SettingsPage() {
                                 </span>
                               </SelectItem>
                             ))}
-                          </div>
+                          </SelectGroup>
                         )
                       })}
                     </SelectContent>
                   </Select>
                   {mode === "robot" && (
                     <ModelStatusInline
-                      filename={labels.find((l) => l.label === draftLabel)?.model_filename ?? null}
+                      filename={fromSelectKey(draftKey).model_filename || null}
                     />
                   )}
                 </Field>
