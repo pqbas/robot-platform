@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Check, Pencil, Plus, X } from "lucide-react"
+import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 type Props = {
@@ -28,30 +28,33 @@ type Props = {
   onSaved: (updated: Session) => void
 }
 
+type Mode = "idle" | "creating" | "renaming"
+
 export default function SessionEditDialog({ session, open, onOpenChange, onSaved }: Props) {
   const [camellones, setCamellones] = useState<Camellon[]>([])
   const [camellonId, setCamellonId] = useState(String(session.camellon_id))
-  const [creating, setCreating] = useState(false)
-  const [newNombre, setNewNombre] = useState("")
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [editNombre, setEditNombre] = useState("")
+  const [mode, setMode] = useState<Mode>("idle")
+  const [inputValue, setInputValue] = useState("")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) return
     getCamellones().then(setCamellones).catch(() => toast.error("Error al cargar camellones"))
+    setMode("idle")
   }, [open])
 
+  const selectedCamellon = camellones.find((c) => String(c.id) === camellonId)
+
   async function handleCreate() {
-    const nombre = newNombre.trim()
+    const nombre = inputValue.trim()
     if (!nombre) return
     setSaving(true)
     try {
       const cam = await createCamellon(nombre)
       setCamellones((prev) => [...prev, cam])
       setCamellonId(String(cam.id))
-      setNewNombre("")
-      setCreating(false)
+      setInputValue("")
+      setMode("idle")
       toast.success(`Camellón "${cam.nombre}" creado`)
     } catch {
       toast.error("Error al crear el camellón")
@@ -60,14 +63,15 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
     }
   }
 
-  async function handleRename(id: number) {
-    const nombre = editNombre.trim()
-    if (!nombre) return
+  async function handleRename() {
+    const nombre = inputValue.trim()
+    if (!nombre || !selectedCamellon) return
     setSaving(true)
     try {
-      const updated = await renameCamellon(id, nombre)
-      setCamellones((prev) => prev.map((c) => (c.id === id ? updated : c)))
-      setEditingId(null)
+      const updated = await renameCamellon(selectedCamellon.id, nombre)
+      setCamellones((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
+      setInputValue("")
+      setMode("idle")
       toast.success("Camellón renombrado")
     } catch {
       toast.error("Error al renombrar el camellón")
@@ -90,6 +94,11 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
     }
   }
 
+  function handleConfirm() {
+    if (mode === "creating") handleCreate()
+    else if (mode === "renaming") handleRename()
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
@@ -97,88 +106,62 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
           <DialogTitle>Editar sesión #{session.id}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
-          <Select value={camellonId} onValueChange={setCamellonId}>
+          <Select value={camellonId} onValueChange={(v) => { setCamellonId(v); setMode("idle") }}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Selecciona un camellón" />
             </SelectTrigger>
             <SelectContent>
               {camellones.map((c) => (
-                <SelectItem key={c.id} value={String(c.id)} className="pr-1">
-                  <div className="flex w-full items-center justify-between gap-2">
-                    {editingId === c.id ? (
-                      <>
-                        <Input
-                          className="h-6 text-sm"
-                          value={editNombre}
-                          onChange={(e) => setEditNombre(e.target.value)}
-                          onKeyDown={(e) => {
-                            e.stopPropagation()
-                            if (e.key === "Enter") handleRename(c.id)
-                            if (e.key === "Escape") setEditingId(null)
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          autoFocus
-                        />
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleRename(c.id) }}
-                          className="text-primary"
-                        >
-                          <Check className="size-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setEditingId(null) }}
-                          className="text-muted-foreground"
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <span>{c.nombre}</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setEditingId(c.id)
-                            setEditNombre(c.nombre)
-                          }}
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <Pencil className="size-3" />
-                        </button>
-                      </>
-                    )}
-                  </div>
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.nombre}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          {creating ? (
+          {mode === "idle" && (
             <div className="flex gap-2">
-              <Input
-                placeholder="Nombre del camellón"
-                value={newNombre}
-                onChange={(e) => setNewNombre(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-                autoFocus
-              />
-              <Button size="sm" onClick={handleCreate} disabled={saving || !newNombre.trim()}>
-                Crear
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={() => { setMode("renaming"); setInputValue(selectedCamellon?.nombre ?? "") }}
+                disabled={!selectedCamellon}
+              >
+                Editar nombre
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setCreating(false)}>
-                Cancelar
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={() => { setMode("creating"); setInputValue("") }}
+              >
+                <Plus className="size-3.5" />
+                Nuevo
               </Button>
             </div>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full gap-1.5"
-              onClick={() => setCreating(true)}
-            >
-              <Plus className="size-3.5" />
-              Nuevo camellón
-            </Button>
+          )}
+
+          {(mode === "creating" || mode === "renaming") && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                {mode === "creating" ? "Nombre del nuevo camellón" : `Renombrar "${selectedCamellon?.nombre}"`}
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleConfirm() }}
+                  autoFocus
+                />
+                <Button size="sm" onClick={handleConfirm} disabled={saving || !inputValue.trim()}>
+                  Confirmar
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setMode("idle")}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
           )}
         </div>
         <DialogFooter>
