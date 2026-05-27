@@ -106,18 +106,20 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
           <DialogTitle>Editar sesión #{session.id}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
-          <Select value={camellonId} onValueChange={(v) => setCamellonId(v)}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Selecciona un camellón" />
-            </SelectTrigger>
-            <SelectContent>
-              {camellones.map((c) => (
-                <SelectItem key={c.id} value={String(c.id)}>
-                  {c.nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {mode === "idle" && (
+            <Select value={camellonId} onValueChange={(v) => setCamellonId(v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecciona un camellón" />
+              </SelectTrigger>
+              <SelectContent>
+                {camellones.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           {mode === "idle" ? (
             <div className="flex gap-2">
