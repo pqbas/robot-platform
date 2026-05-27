@@ -59,6 +59,13 @@ export function saveSession(
   })
 }
 
+export function patchSession(id: number, camellonId: number): Promise<Session> {
+  return apiFetch(`/api/sessions/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ camellon_id: camellonId }),
+  })
+}
+
 export function exportSession(id: number): void {
   window.open(`/api/sessions/${id}/export`, "_blank")
 }

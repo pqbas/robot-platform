@@ -130,6 +130,9 @@ export default function MapPage() {
           dateFrom={dateFrom}
           dateTo={dateTo}
           onSelectSession={setSelectedSession}
+          onSessionUpdated={(updated) =>
+            setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+          }
           onDateChange={(from, to) => {
             setDateFrom(from)
             setDateTo(to)
@@ -188,6 +191,9 @@ export default function MapPage() {
           dateFrom={dateFrom}
           dateTo={dateTo}
           onSelectSession={setSelectedSession}
+          onSessionUpdated={(updated) =>
+            setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+          }
           onDateChange={(from, to) => {
             setDateFrom(from)
             setDateTo(to)

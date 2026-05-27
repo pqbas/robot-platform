@@ -24,6 +24,7 @@ type SidePanelProps = {
   dateFrom: string | null
   dateTo: string | null
   onSelectSession: (session: Session) => void
+  onSessionUpdated: (updated: Session) => void
   onDateChange: (from: string | null, to: string | null) => void
 }
 
@@ -37,6 +38,7 @@ export default function SidePanel({
   dateFrom,
   dateTo,
   onSelectSession,
+  onSessionUpdated,
   onDateChange,
 }: SidePanelProps) {
   const [classFilter, setClassFilter] = useState<string>("all")
@@ -178,6 +180,7 @@ export default function SidePanel({
             camellones={camellones}
             selectedId={selectedSession?.id ?? null}
             onSelect={onSelectSession}
+            onSessionUpdated={onSessionUpdated}
           />
         </div>
       </div>

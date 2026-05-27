@@ -68,6 +68,10 @@ class SessionSave(BaseModel):
     total_count: int
 
 
+class SessionUpdate(BaseModel):
+    camellon_id: int
+
+
 # --- Counting (live) ---
 
 class CountingStartRequest(BaseModel):

@@ -15,6 +15,7 @@ from back.schemas import (
     EventOut,
     SessionOut,
     SessionSave,
+    SessionUpdate,
 )
 from back.services import storage
 from back.services.perception import counter
@@ -108,6 +109,22 @@ async def export_session_csv(session_id: int, db: AsyncSession = Depends(get_db)
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=session_{session_id}.csv"},
     )
+
+
+@router.patch("/sessions/{session_id}", response_model=SessionOut)
+async def update_session(
+    session_id: int, body: SessionUpdate, db: AsyncSession = Depends(get_db)
+):
+    sess = await storage.get_session(db, session_id)
+    if sess is None:
+        raise HTTPException(404, "Session not found")
+    cam = await storage.get_camellon(db, body.camellon_id)
+    if cam is None:
+        raise HTTPException(404, "Camellon not found")
+    sess.camellon_id = body.camellon_id
+    await db.commit()
+    await db.refresh(sess)
+    return sess
 
 
 @router.post("/sessions/save", response_model=SessionOut)
