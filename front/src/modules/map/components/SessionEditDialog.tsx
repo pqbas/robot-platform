@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import type { Session, Camellon } from "@/types"
 import { patchSession } from "@/api/sessions"
-import { getCamellones, createCamellon } from "@/api/camellones"
+import { getCamellones, createCamellon, renameCamellon } from "@/api/camellones"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus } from "lucide-react"
+import { Check, Pencil, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 
 type Props = {
@@ -33,6 +33,8 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
   const [camellonId, setCamellonId] = useState(String(session.camellon_id))
   const [creating, setCreating] = useState(false)
   const [newNombre, setNewNombre] = useState("")
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editNombre, setEditNombre] = useState("")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -53,6 +55,22 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
       toast.success(`Camellón "${cam.nombre}" creado`)
     } catch {
       toast.error("Error al crear el camellón")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleRename(id: number) {
+    const nombre = editNombre.trim()
+    if (!nombre) return
+    setSaving(true)
+    try {
+      const updated = await renameCamellon(id, nombre)
+      setCamellones((prev) => prev.map((c) => (c.id === id ? updated : c)))
+      setEditingId(null)
+      toast.success("Camellón renombrado")
+    } catch {
+      toast.error("Error al renombrar el camellón")
     } finally {
       setSaving(false)
     }
@@ -85,8 +103,51 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
             </SelectTrigger>
             <SelectContent>
               {camellones.map((c) => (
-                <SelectItem key={c.id} value={String(c.id)}>
-                  {c.nombre}
+                <SelectItem key={c.id} value={String(c.id)} className="pr-1">
+                  <div className="flex w-full items-center justify-between gap-2">
+                    {editingId === c.id ? (
+                      <>
+                        <Input
+                          className="h-6 text-sm"
+                          value={editNombre}
+                          onChange={(e) => setEditNombre(e.target.value)}
+                          onKeyDown={(e) => {
+                            e.stopPropagation()
+                            if (e.key === "Enter") handleRename(c.id)
+                            if (e.key === "Escape") setEditingId(null)
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          autoFocus
+                        />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRename(c.id) }}
+                          className="text-primary"
+                        >
+                          <Check className="size-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditingId(null) }}
+                          className="text-muted-foreground"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span>{c.nombre}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingId(c.id)
+                            setEditNombre(c.nombre)
+                          }}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Pencil className="size-3" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>

@@ -10,6 +10,7 @@ from back.schemas import (
     CamellonGeoSummary,
     CamellonLocationUpdate,
     CamellonOut,
+    CamellonRename,
     CamellonSummary,
 )
 from back.services import storage
@@ -36,6 +37,22 @@ async def create_camellon(body: CamellonCreate, db: AsyncSession = Depends(get_d
         fundo = ctx.get("fundo") or {}
         fundo_uuid = fundo.get("uuid") if isinstance(fundo, dict) else None
     return await storage.create_camellon(db, body.nombre, fundo_uuid)
+
+
+@router.patch("/{camellon_id}", response_model=CamellonOut)
+async def rename_camellon(
+    camellon_id: int, body: CamellonRename, db: AsyncSession = Depends(get_db)
+):
+    cam = await storage.get_camellon(db, camellon_id)
+    if cam is None:
+        raise HTTPException(404, "Camellon not found")
+    existing = await storage.get_camellon_by_nombre(db, body.nombre)
+    if existing is not None and existing.id != camellon_id:
+        raise HTTPException(409, f"Camellon '{body.nombre}' already exists")
+    cam.nombre = body.nombre
+    await db.commit()
+    await db.refresh(cam)
+    return cam
 
 
 @router.put("/{camellon_id}/location", response_model=CamellonOut)

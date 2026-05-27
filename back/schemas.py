@@ -10,6 +10,10 @@ class CamellonCreate(BaseModel):
     nombre: str
 
 
+class CamellonRename(BaseModel):
+    nombre: str
+
+
 class CamellonLocationUpdate(BaseModel):
     lat: float
     lng: float
