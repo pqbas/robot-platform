@@ -106,7 +106,7 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
           <DialogTitle>Editar sesión #{session.id}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
-          <Select value={camellonId} onValueChange={(v) => setCamellonId(v)} disabled={mode !== "idle"}>
+          <Select value={camellonId} onValueChange={(v) => setCamellonId(v)}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Selecciona un camellón" />
             </SelectTrigger>
