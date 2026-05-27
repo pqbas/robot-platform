@@ -130,10 +130,9 @@ export default function MapPage() {
           dateFrom={dateFrom}
           dateTo={dateTo}
           onSelectSession={setSelectedSession}
-          onSessionUpdated={(updated, newCamellon) => {
+          onSessionUpdated={(updated) =>
             setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
-            if (newCamellon) setCamellones((prev) => new Map([...prev, [newCamellon.id, newCamellon]]))
-          }}
+          }
           onDateChange={(from, to) => {
             setDateFrom(from)
             setDateTo(to)
@@ -192,10 +191,9 @@ export default function MapPage() {
           dateFrom={dateFrom}
           dateTo={dateTo}
           onSelectSession={setSelectedSession}
-          onSessionUpdated={(updated, newCamellon) => {
+          onSessionUpdated={(updated) =>
             setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
-            if (newCamellon) setCamellones((prev) => new Map([...prev, [newCamellon.id, newCamellon]]))
-          }}
+          }
           onDateChange={(from, to) => {
             setDateFrom(from)
             setDateTo(to)

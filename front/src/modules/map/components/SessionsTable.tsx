@@ -20,7 +20,7 @@ type SessionsTableProps = {
   camellones: Map<number, Camellon>
   selectedId: number | null
   onSelect: (session: Session) => void
-  onSessionUpdated: (updated: Session, newCamellon?: import("@/types").Camellon) => void
+  onSessionUpdated: (updated: Session) => void
 }
 
 function formatDate(iso: string): string {
@@ -47,8 +47,6 @@ export default function SessionsTable({
   const totalPages = Math.max(1, Math.ceil(sessions.length / PAGE_SIZE))
   const safeePage = Math.min(page, totalPages - 1)
   const paged = sessions.slice(safeePage * PAGE_SIZE, (safeePage + 1) * PAGE_SIZE)
-  const camellonList = Array.from(camellones.values())
-
   if (sessions.length === 0) {
     return (
       <p className="py-8 text-center text-muted-foreground">
@@ -123,11 +121,10 @@ export default function SessionsTable({
       {editingSession && (
         <SessionEditDialog
           session={editingSession}
-          camellones={camellonList}
           open={!!editingSession}
           onOpenChange={(open) => { if (!open) setEditingSession(null) }}
-          onSaved={(updated, newCamellon) => {
-            onSessionUpdated(updated, newCamellon)
+          onSaved={(updated) => {
+            onSessionUpdated(updated)
             setEditingSession(null)
           }}
         />

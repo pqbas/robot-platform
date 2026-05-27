@@ -24,7 +24,7 @@ type SidePanelProps = {
   dateFrom: string | null
   dateTo: string | null
   onSelectSession: (session: Session) => void
-  onSessionUpdated: (updated: Session, newCamellon?: Camellon) => void
+  onSessionUpdated: (updated: Session) => void
   onDateChange: (from: string | null, to: string | null) => void
 }
 

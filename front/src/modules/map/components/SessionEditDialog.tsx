@@ -1,7 +1,7 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { Session, Camellon } from "@/types"
 import { patchSession } from "@/api/sessions"
-import { createCamellon } from "@/api/camellones"
+import { getCamellones, createCamellon } from "@/api/camellones"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -23,24 +23,22 @@ import { toast } from "sonner"
 
 type Props = {
   session: Session
-  camellones: Camellon[]
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSaved: (updated: Session, newCamellon?: Camellon) => void
+  onSaved: (updated: Session) => void
 }
 
-export default function SessionEditDialog({
-  session,
-  camellones: initialCamellones,
-  open,
-  onOpenChange,
-  onSaved,
-}: Props) {
-  const [camellones, setCamellones] = useState(initialCamellones)
+export default function SessionEditDialog({ session, open, onOpenChange, onSaved }: Props) {
+  const [camellones, setCamellones] = useState<Camellon[]>([])
   const [camellonId, setCamellonId] = useState(String(session.camellon_id))
   const [creating, setCreating] = useState(false)
   const [newNombre, setNewNombre] = useState("")
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    getCamellones().then(setCamellones).catch(() => toast.error("Error al cargar camellones"))
+  }, [open])
 
   async function handleCreate() {
     const nombre = newNombre.trim()
@@ -64,9 +62,7 @@ export default function SessionEditDialog({
     setSaving(true)
     try {
       const updated = await patchSession(session.id, Number(camellonId))
-      const newCam = camellones.find((c) => c.id === Number(camellonId))
-      const isNew = !initialCamellones.some((c) => c.id === Number(camellonId))
-      onSaved(updated, isNew ? newCam : undefined)
+      onSaved(updated)
       onOpenChange(false)
       toast.success("Sesión actualizada")
     } catch {
