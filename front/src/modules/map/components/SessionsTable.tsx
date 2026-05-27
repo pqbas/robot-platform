@@ -20,7 +20,7 @@ type SessionsTableProps = {
   camellones: Map<number, Camellon>
   selectedId: number | null
   onSelect: (session: Session) => void
-  onSessionUpdated: (updated: Session) => void
+  onSessionUpdated: (updated: Session, newCamellon?: import("@/types").Camellon) => void
 }
 
 function formatDate(iso: string): string {
@@ -126,8 +126,8 @@ export default function SessionsTable({
           camellones={camellonList}
           open={!!editingSession}
           onOpenChange={(open) => { if (!open) setEditingSession(null) }}
-          onSaved={(updated) => {
-            onSessionUpdated(updated)
+          onSaved={(updated, newCamellon) => {
+            onSessionUpdated(updated, newCamellon)
             setEditingSession(null)
           }}
         />
