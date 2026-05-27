@@ -106,38 +106,20 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
           <DialogTitle>Editar sesión #{session.id}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
-          {mode === "idle" ? (
-            <Select value={camellonId} onValueChange={(v) => setCamellonId(v)}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecciona un camellón" />
-              </SelectTrigger>
-              <SelectContent>
-                {camellones.map((c) => (
-                  <SelectItem key={c.id} value={String(c.id)}>
-                    {c.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className="flex gap-2">
-              <Input
-                placeholder={mode === "creating" ? "Nombre del nuevo camellón" : `Renombrar "${selectedCamellon?.nombre}"`}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleConfirm() }}
-                autoFocus
-              />
-              <Button size="sm" onClick={handleConfirm} disabled={saving || !inputValue.trim()}>
-                Confirmar
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setMode("idle")}>
-                Cancelar
-              </Button>
-            </div>
-          )}
+          <Select value={camellonId} onValueChange={(v) => setCamellonId(v)} disabled={mode !== "idle"}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Selecciona un camellón" />
+            </SelectTrigger>
+            <SelectContent>
+              {camellones.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          {mode === "idle" && (
+          {mode === "idle" ? (
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -157,6 +139,24 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
                 <Plus className="size-3.5" />
                 Nuevo
               </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Input
+                placeholder={mode === "creating" ? "Nombre del nuevo camellón" : `Renombrar "${selectedCamellon?.nombre}"`}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleConfirm() }}
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <Button size="sm" className="flex-1" onClick={handleConfirm} disabled={saving || !inputValue.trim()}>
+                  Confirmar
+                </Button>
+                <Button size="sm" variant="ghost" className="flex-1" onClick={() => setMode("idle")}>
+                  Cancelar
+                </Button>
+              </div>
             </div>
           )}
         </div>
