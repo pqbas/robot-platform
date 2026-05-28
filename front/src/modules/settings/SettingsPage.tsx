@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -38,11 +40,10 @@ const PREFERRED_DEFAULT_LABEL = "blueberry"
 function toSelectKey(l: AvailableLabelItem) {
   return `${l.label}::${l.model_filename}`
 }
-
-function fromSelectKey(key: string): { label: string; model_filename: string } {
-  const sep = key.indexOf("::")
-  if (sep === -1) return { label: key, model_filename: "" }
-  return { label: key.slice(0, sep), model_filename: key.slice(sep + 2) }
+function fromSelectKey(key: string) {
+  const idx = key.indexOf("::")
+  if (idx === -1) return { label: key, model_filename: "" }
+  return { label: key.slice(0, idx), model_filename: key.slice(idx + 2) }
 }
 
 const directionsByMode: Record<string, { value: string; label: string }[]> = {
@@ -132,30 +133,47 @@ export default function SettingsPage() {
   }
 
   async function handleSave() {
-    if (!config) return
     setSaving(true)
-    try {
-      await updateCountingConfig(config)
-      if (cameraConfig) await updateCameraConfig(cameraConfig)
+    let anyError = false
 
-      const storedKey = localStorage.getItem(SELECTED_LABEL_KEY) ?? ""
-      if (draftKey && draftKey !== storedKey) {
-        const { label, model_filename } = fromSelectKey(draftKey)
-        const item = labels.find((l) => l.label === label && l.model_filename === model_filename)
-        if (item) {
+    if (draftKey) {
+      const { label, model_filename } = fromSelectKey(draftKey)
+      const item = labels.find((l) => l.label === label && l.model_filename === model_filename)
+      if (item) {
+        try {
           await selectLabel(item.label, item.model_filename)
           localStorage.setItem(SELECTED_LABEL_KEY, draftKey)
+        } catch {
+          anyError = true
         }
       }
-      if (draftResolution && draftResolution !== resolution.preset) {
-        await resolution.change(draftResolution)
-      }
-      toast.success("Configuración guardada")
-    } catch {
-      toast.error("Error al guardar configuración")
-    } finally {
-      setSaving(false)
     }
+
+    if (config) {
+      try {
+        await updateCountingConfig(config)
+      } catch {
+        anyError = true
+      }
+    }
+    if (cameraConfig) {
+      try {
+        await updateCameraConfig(cameraConfig)
+      } catch {
+        anyError = true
+      }
+    }
+    if (draftResolution && draftResolution !== resolution.preset) {
+      try {
+        await resolution.change(draftResolution)
+      } catch {
+        anyError = true
+      }
+    }
+
+    if (anyError) toast.error("Error al guardar configuración")
+    else toast.success("Configuración guardada")
+    setSaving(false)
   }
 
   async function handleSync() {
@@ -247,10 +265,10 @@ export default function SettingsPage() {
                         const group = labels.filter((l) => l.source === src)
                         if (group.length === 0) return null
                         return (
-                          <div key={src}>
-                            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <SelectGroup key={src}>
+                            <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
                               {src === "uploaded" ? "Subidos" : "Librería"}
-                            </div>
+                            </SelectLabel>
                             {group.map((l) => (
                               <SelectItem
                                 key={toSelectKey(l)}
@@ -263,7 +281,7 @@ export default function SettingsPage() {
                                 </span>
                               </SelectItem>
                             ))}
-                          </div>
+                          </SelectGroup>
                         )
                       })}
                     </SelectContent>

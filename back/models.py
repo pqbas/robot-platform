@@ -65,6 +65,7 @@ class DetectionModel(Base):
         Text, nullable=False, default="pytorch"
     )
     engine_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    selected_label: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Fundo(Base):
