@@ -9,6 +9,7 @@ import ProtectedRoute from "./components/ProtectedRoute"
 import LoginPage from "./modules/auth/LoginPage"
 import VisionPage from "./modules/vision/VisionPage"
 import MapPage from "./modules/map/MapPage"
+import SessionsPage from "./modules/sessions/SessionsPage"
 import DashboardPage from "./modules/dashboard/DashboardPage"
 import RecordingsPage from "./modules/recordings/RecordingsPage"
 import UsersPage from "./modules/admin/UsersPage"
@@ -37,6 +38,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <ModeRedirect /> },
       { path: "vision", element: <VisionPage /> },
+      { path: "sesiones", element: <SessionsPage /> },
       { path: "mapa", element: <MapPage /> },
       { path: "dashboard", element: <DashboardPage /> },
       { path: "recordings", element: <RecordingsPage /> },
