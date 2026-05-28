@@ -4,7 +4,7 @@ import { MapIcon, List } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Session, Camellon, MapLocation, PolygonPoint } from "@/types"
 import { getCamellones } from "@/api/camellones"
-import { getSessions } from "@/api/sessions"
+import { getSessions, getSessionDevices } from "@/api/sessions"
 import {
   getLocations,
   createLocation,
@@ -22,6 +22,8 @@ export default function MapPage() {
   const [locations, setLocations] = useState<MapLocation[]>([])
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
   const [locationFilter, setLocationFilter] = useState<string>("all")
+  const [deviceFilter, setDeviceFilter] = useState<string>("all")
+  const [devices, setDevices] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [dateFrom, setDateFrom] = useState<string | null>(null)
   const [dateTo, setDateTo] = useState<string | null>(null)
@@ -29,12 +31,14 @@ export default function MapPage() {
 
   const loadBase = useCallback(async () => {
     try {
-      const [camData, locData] = await Promise.all([
+      const [camData, locData, devData] = await Promise.all([
         getCamellones(),
         getLocations(),
+        getSessionDevices(),
       ])
       setCamellones(new Map(camData.map((c) => [c.id, c])))
       setLocations(locData)
+      setDevices(devData)
     } catch (e) {
       console.error("Error loading map data:", e)
     } finally {
@@ -44,15 +48,16 @@ export default function MapPage() {
 
   const loadSessions = useCallback(async () => {
     try {
-      const params: { from?: string; to?: string } = {}
+      const params: { from?: string; to?: string; device_id?: string } = {}
       if (dateFrom) params.from = dateFrom
       if (dateTo) params.to = dateTo
+      if (deviceFilter !== "all") params.device_id = deviceFilter
       const sessData = await getSessions(params)
       setSessions(sessData)
     } catch (e) {
       console.error("Error loading sessions:", e)
     }
-  }, [dateFrom, dateTo])
+  }, [dateFrom, dateTo, deviceFilter])
 
   useEffect(() => {
     loadBase()
@@ -139,6 +144,9 @@ export default function MapPage() {
             setDateFrom(from)
             setDateTo(to)
           }}
+          deviceFilter={deviceFilter}
+          devices={devices}
+          onDeviceFilterChange={setDeviceFilter}
         />
       </div>
     )
@@ -202,6 +210,9 @@ export default function MapPage() {
             setDateFrom(from)
             setDateTo(to)
           }}
+          deviceFilter={deviceFilter}
+          devices={devices}
+          onDeviceFilterChange={setDeviceFilter}
         />
       </div>
     </div>

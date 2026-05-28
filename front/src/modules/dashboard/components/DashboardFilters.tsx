@@ -16,9 +16,10 @@ type Props = {
   onChange: (filters: Filters) => void
   classes: string[]
   camellones: Camellon[]
+  devices: string[]
 }
 
-export default function DashboardFilters({ filters, onChange, classes, camellones }: Props) {
+export default function DashboardFilters({ filters, onChange, classes, camellones, devices }: Props) {
   const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch })
 
   return (
@@ -81,6 +82,27 @@ export default function DashboardFilters({ filters, onChange, classes, camellone
           </SelectContent>
         </Select>
       </div>
+      {devices.length > 1 && (
+        <div className="space-y-1 md:min-w-0 md:flex-1">
+          <Label className="text-xs">Device</Label>
+          <Select
+            value={filters.device_id ?? "__all__"}
+            onValueChange={(v) => set({ device_id: v === "__all__" ? undefined : v })}
+          >
+            <SelectTrigger className="h-9 w-full">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos</SelectItem>
+              {devices.map((d) => (
+                <SelectItem key={d} value={d}>
+                  {d}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <Button
         variant="outline"
         size="sm"

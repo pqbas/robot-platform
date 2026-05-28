@@ -205,15 +205,25 @@ async def list_sessions(
     db: AsyncSession,
     date_from: date | None = None,
     date_to: date | None = None,
+    device_id: str | None = None,
 ) -> list[Session]:
     stmt = select(Session)
     if date_from:
         stmt = stmt.where(Session.start_time >= date_from.isoformat())
     if date_to:
         stmt = stmt.where(Session.start_time <= date_to.isoformat() + "T23:59:59")
+    if device_id:
+        stmt = stmt.where(Session.device_id == device_id)
     stmt = stmt.order_by(Session.id.desc())
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+async def list_session_devices(db: AsyncSession) -> list[str]:
+    result = await db.execute(
+        select(Session.device_id).distinct().order_by(Session.device_id)
+    )
+    return [row[0] for row in result.all() if row[0]]
 
 
 async def get_session(db: AsyncSession, session_id: int) -> Session | None:
@@ -255,6 +265,7 @@ async def get_dashboard_stats(
     date_to: date | None = None,
     target_class: str | None = None,
     camellon_id: int | None = None,
+    device_id: str | None = None,
 ) -> dict:
     """Return KPIs + trend + breakdowns for the dashboard."""
 
@@ -268,6 +279,8 @@ async def get_dashboard_stats(
             stmt = stmt.where(Session.target_class == target_class)
         if camellon_id:
             stmt = stmt.where(Session.camellon_id == camellon_id)
+        if device_id:
+            stmt = stmt.where(Session.device_id == device_id)
         return stmt
 
     # 1) KPIs

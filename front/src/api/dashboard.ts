@@ -6,6 +6,7 @@ export type DashboardFilters = {
   to?: string
   target_class?: string
   camellon_id?: number
+  device_id?: string
 }
 
 export function getDashboardStats(filters?: DashboardFilters): Promise<DashboardStats> {
@@ -14,6 +15,7 @@ export function getDashboardStats(filters?: DashboardFilters): Promise<Dashboard
   if (filters?.to) qs.set("to", filters.to)
   if (filters?.target_class) qs.set("target_class", filters.target_class)
   if (filters?.camellon_id) qs.set("camellon_id", String(filters.camellon_id))
+  if (filters?.device_id) qs.set("device_id", filters.device_id)
   const query = qs.toString()
   return apiFetch(`/api/dashboard/stats${query ? `?${query}` : ""}`)
 }

@@ -23,9 +23,12 @@ type SidePanelProps = {
   selectedSession: Session | null
   dateFrom: string | null
   dateTo: string | null
+  deviceFilter: string
+  devices: string[]
   onSelectSession: (session: Session) => void
   onSessionUpdated: (updated: Session) => void
   onDateChange: (from: string | null, to: string | null) => void
+  onDeviceFilterChange: (value: string) => void
 }
 
 export default function SidePanel({
@@ -37,9 +40,12 @@ export default function SidePanel({
   selectedSession,
   dateFrom,
   dateTo,
+  deviceFilter,
+  devices,
   onSelectSession,
   onSessionUpdated,
   onDateChange,
+  onDeviceFilterChange,
 }: SidePanelProps) {
   const [classFilter, setClassFilter] = useState<string>("all")
 
@@ -79,12 +85,14 @@ export default function SidePanel({
   const hasActiveFilters =
     locationFilter !== "all" ||
     classFilter !== "all" ||
+    deviceFilter !== "all" ||
     dateFrom != null ||
     dateTo != null
 
   function clearAllFilters() {
     onLocationFilterChange("all")
     setClassFilter("all")
+    onDeviceFilterChange("all")
     onDateChange(null, null)
   }
 
@@ -117,7 +125,7 @@ export default function SidePanel({
         </div>
 
         {/* Filters */}
-        <div className="mb-4 grid grid-cols-2 items-end gap-3 landscape:mb-2 landscape:grid-cols-4 landscape:gap-2 md:flex md:gap-4">
+        <div className="mb-8 grid grid-cols-2 items-end gap-3 landscape:mb-4 landscape:grid-cols-4 landscape:gap-2 md:flex md:gap-4">
           <div className="space-y-1 md:min-w-0 md:flex-1">
             <Label className="text-xs">Ubicacion</Label>
             <Select value={locationFilter} onValueChange={onLocationFilterChange}>
@@ -151,6 +159,25 @@ export default function SidePanel({
               </SelectContent>
             </Select>
           </div>
+
+          {devices.length > 1 && (
+            <div className="space-y-1 md:min-w-0 md:flex-1">
+              <Label className="text-xs">Device</Label>
+              <Select value={deviceFilter} onValueChange={onDeviceFilterChange}>
+                <SelectTrigger className="h-9 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {devices.map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-1 md:min-w-0 md:flex-1">
             <Label className="text-xs">Desde</Label>

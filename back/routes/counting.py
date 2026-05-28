@@ -65,13 +65,19 @@ async def counting_status():
 # --- Sessions (DB persistence) ---
 
 
+@router.get("/sessions/devices", response_model=list[str])
+async def list_session_devices(db: AsyncSession = Depends(get_db)):
+    return await storage.list_session_devices(db)
+
+
 @router.get("/sessions", response_model=list[SessionOut])
 async def list_sessions(
     date_from: date | None = Query(None, alias="from"),
     date_to: date | None = Query(None, alias="to"),
+    device_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    return await storage.list_sessions(db, date_from, date_to)
+    return await storage.list_sessions(db, date_from, date_to, device_id)
 
 
 @router.get("/sessions/{session_id}", response_model=SessionOut)

@@ -52,6 +52,7 @@ class SessionStart(BaseModel):
 class SessionOut(BaseModel):
     id: int
     camellon_id: int
+    device_id: str
     start_time: str
     end_time: str | None
     target_class: str
