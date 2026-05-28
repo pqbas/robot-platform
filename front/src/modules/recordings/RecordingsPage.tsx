@@ -125,7 +125,7 @@ export default function RecordingsPage() {
 
       <div className="flex-1 overflow-auto rounded-md border">
         <Table className="min-w-[600px]">
-          <TableHeader className="sticky top-0 bg-background z-10">
+          <TableHeader className="sticky top-0 bg-muted z-10">
             <TableRow>
               <TableHead>Inicio</TableHead>
               <TableHead>Duración</TableHead>
