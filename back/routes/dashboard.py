@@ -19,6 +19,7 @@ async def dashboard_stats(
     date_to: date | None = Query(None, alias="to"),
     target_class: str | None = Query(None),
     camellon_id: int | None = Query(None),
+    device_id: str | None = Query(None),
     _: User = Depends(get_current_user),
 ):
     return await storage.get_dashboard_stats(
@@ -27,4 +28,5 @@ async def dashboard_stats(
         date_to=date_to,
         target_class=target_class,
         camellon_id=camellon_id,
+        device_id=device_id,
     )

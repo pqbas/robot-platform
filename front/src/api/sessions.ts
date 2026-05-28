@@ -32,12 +32,17 @@ export function getCountingStatus(): Promise<CountingStatus> {
 
 // --- Sessions (DB persistence) ---
 
-export function getSessions(params?: { from?: string; to?: string }): Promise<Session[]> {
+export function getSessions(params?: { from?: string; to?: string; device_id?: string }): Promise<Session[]> {
   const qs = new URLSearchParams()
   if (params?.from) qs.set("from", params.from)
   if (params?.to) qs.set("to", params.to)
+  if (params?.device_id) qs.set("device_id", params.device_id)
   const query = qs.toString()
   return apiFetch(`/api/sessions${query ? `?${query}` : ""}`)
+}
+
+export function getSessionDevices(): Promise<string[]> {
+  return apiFetch("/api/sessions/devices")
 }
 
 export function getSession(id: number): Promise<Session> {

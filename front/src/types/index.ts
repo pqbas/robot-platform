@@ -21,6 +21,7 @@ export type FrameData = {
 export type Session = {
   id: number
   camellon_id: number
+  device_id: string
   start_time: string
   end_time: string | null
   target_class: string

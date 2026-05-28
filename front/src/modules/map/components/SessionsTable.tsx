@@ -58,13 +58,14 @@ export default function SessionsTable({
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-auto">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead>Camellon</TableHead>
-              <TableHead>Fecha</TableHead>
-              <TableHead className="hidden md:table-cell">Clase</TableHead>
-              <TableHead className="text-right">Conteo</TableHead>
+              <TableHead className="w-[22%]">Camellon</TableHead>
+              <TableHead className="w-[22%]">Fecha</TableHead>
+              <TableHead className="hidden md:table-cell w-[18%]">Clase</TableHead>
+              <TableHead className="hidden lg:table-cell w-[26%]">Device</TableHead>
+              <TableHead className="w-[8%] text-right">Conteo</TableHead>
               <TableHead className="w-8" />
             </TableRow>
           </TableHeader>
@@ -72,7 +73,7 @@ export default function SessionsTable({
             {paged.map((s) => (
               <TableRow
                 key={s.id}
-                className={s.id === selectedId ? "bg-muted cursor-pointer" : "cursor-pointer"}
+                className={s.id === selectedId ? "bg-muted/50 cursor-pointer" : "cursor-pointer"}
                 onClick={() => onSelect(s)}
               >
                 <TableCell>
@@ -81,6 +82,9 @@ export default function SessionsTable({
                 <TableCell>{formatDate(s.start_time)}</TableCell>
                 <TableCell className="hidden md:table-cell">
                   <Badge variant="outline">{s.target_class}</Badge>
+                </TableCell>
+                <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                  {s.device_id}
                 </TableCell>
                 <TableCell className="text-right">{s.total_count}</TableCell>
                 <TableCell>

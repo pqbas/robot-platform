@@ -16,6 +16,7 @@ import {
   Video,
   Menu,
   X,
+  LogOut,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAppMode } from "@/context/AppModeContext"
@@ -38,7 +39,7 @@ export default function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { mode } = useAppMode()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const [syncing, setSyncing] = useState(false)
 
   const handleSync = async () => {
@@ -57,7 +58,7 @@ export default function Sidebar() {
     if (mode === "robot") {
       const robotItems: NavItem[] = [
         { label: "Vision", path: "/vision", icon: Eye },
-        { label: "Sesiones", path: "/mapa", icon: Map },
+        { label: "Sesiones", path: "/sesiones", icon: Map },
         { label: "Grabaciones", path: "/recordings", icon: Video },
         { label: "Configuración", path: "/settings", icon: Settings },
       ]
@@ -66,7 +67,7 @@ export default function Sidebar() {
 
     const base: NavItem[] = [
       { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
-      { label: "Sesiones", path: "/mapa", icon: Map },
+      { label: "Sesiones", path: "/sesiones", icon: Map },
       { label: "Grabaciones", path: "/recordings", icon: Video },
     ]
 
@@ -194,7 +195,6 @@ export default function Sidebar() {
               )}
             </button>
           )}
-          {mode === "server" && user && <UserMenu collapsed={collapsed} />}
           <button
             onClick={() => setCollapsed(!collapsed)}
             title={collapsed ? "Expandir" : "Colapsar"}
@@ -209,6 +209,18 @@ export default function Sidebar() {
             )}
             {!collapsed && <span className="whitespace-nowrap">Colapsar</span>}
           </button>
+          {user && (
+            <button
+              onClick={logout}
+              title="Cerrar sesion"
+              className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground ${
+                collapsed ? "justify-center" : ""
+              }`}
+            >
+              <LogOut className="size-5 shrink-0" />
+              {!collapsed && <span className="whitespace-nowrap">Cerrar sesion</span>}
+            </button>
+          )}
         </div>
       </aside>
     </>

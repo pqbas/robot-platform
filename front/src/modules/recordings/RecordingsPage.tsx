@@ -111,21 +111,14 @@ export default function RecordingsPage() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden p-4 gap-4">
+    <div className="flex-1 space-y-4 overflow-auto p-4 md:p-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold md:text-2xl">Grabaciones</h1>
-          <p className="text-sm text-muted-foreground">
-            {mode === "robot"
-              ? "Videos guardados localmente — sincronizan al server cuando hay red."
-              : "Videos sincronizados desde los robots."}
-          </p>
-        </div>
+        <h1 className="text-lg font-semibold">Grabaciones</h1>
       </div>
 
-      <div className="flex-1 overflow-auto rounded-md border">
+      <div className="overflow-x-auto rounded-md border">
         <Table className="min-w-[600px]">
-          <TableHeader className="sticky top-0 bg-background z-10">
+          <TableHeader>
             <TableRow>
               <TableHead>Inicio</TableHead>
               <TableHead>Duración</TableHead>

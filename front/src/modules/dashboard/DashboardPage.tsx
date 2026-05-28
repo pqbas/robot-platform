@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { getDashboardStats, type DashboardFilters as Filters } from "@/api/dashboard"
 import { getCamellones } from "@/api/camellones"
+import { getSessionDevices } from "@/api/sessions"
 import type { Camellon, DashboardStats } from "@/types"
 import DashboardFilters from "./components/DashboardFilters"
 import KpiCards from "./components/KpiCards"
@@ -13,6 +14,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [camellones, setCamellones] = useState<Camellon[]>([])
   const [classes, setClasses] = useState<string[]>([])
+  const [devices, setDevices] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchStats = useCallback(async (f: Filters) => {
@@ -31,6 +33,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     getCamellones().then(setCamellones)
+    getSessionDevices().then(setDevices)
     fetchStats(filters)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -39,12 +42,16 @@ export default function DashboardPage() {
   }, [filters, fetchStats])
 
   return (
-    <div className="flex-1 overflow-auto space-y-4 p-4 md:space-y-6 md:p-6">
+    <div className="flex-1 space-y-4 overflow-auto p-4 md:p-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold">Dashboard</h1>
+      </div>
       <DashboardFilters
         filters={filters}
         onChange={setFilters}
         classes={classes}
         camellones={camellones}
+        devices={devices}
       />
 
       {loading && !stats ? (
