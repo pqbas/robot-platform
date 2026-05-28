@@ -101,12 +101,12 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:w-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Editar sesión #{session.id}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 py-2">
-          {mode === "idle" && (
+        <div className="py-2">
+          {mode === "idle" ? (
             <Select value={camellonId} onValueChange={(v) => setCamellonId(v)}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecciona un camellón" />
@@ -119,52 +119,48 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
                 ))}
               </SelectContent>
             </Select>
+          ) : (
+            <Input
+              placeholder={mode === "creating" ? "Nombre del nuevo camellón" : `Renombrar "${selectedCamellon?.nombre}"`}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleConfirm() }}
+              autoFocus
+            />
           )}
-
+        </div>
+        <DialogFooter className="flex-row gap-2 sm:justify-start">
           {mode === "idle" ? (
-            <div className="flex gap-2">
+            <>
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1"
                 onClick={() => { setMode("renaming"); setInputValue(selectedCamellon?.nombre ?? "") }}
                 disabled={!selectedCamellon}
               >
-                Editar nombre
+                Editar
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1 gap-1.5"
+                className="gap-1.5"
                 onClick={() => { setMode("creating"); setInputValue("") }}
               >
                 <Plus className="size-3.5" />
                 Nuevo
               </Button>
-            </div>
+            </>
           ) : (
-            <div className="space-y-2">
-              <Input
-                placeholder={mode === "creating" ? "Nombre del nuevo camellón" : `Renombrar "${selectedCamellon?.nombre}"`}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleConfirm() }}
-                autoFocus
-              />
-              <div className="flex gap-2">
-                <Button size="sm" className="flex-1" onClick={handleConfirm} disabled={saving || !inputValue.trim()}>
-                  Confirmar
-                </Button>
-                <Button size="sm" variant="ghost" className="flex-1" onClick={() => setMode("idle")}>
-                  Cancelar
-                </Button>
-              </div>
-            </div>
+            <>
+              <Button variant="outline" size="sm" onClick={handleConfirm} disabled={saving || !inputValue.trim()}>
+                Confirmar
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setMode("idle")}>
+                Cancelar
+              </Button>
+            </>
           )}
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button variant="outline" size="sm" className="ml-auto" onClick={handleSave} disabled={saving || mode !== "idle"}>
             {saving ? "Guardando..." : "Guardar"}
           </Button>
         </DialogFooter>
