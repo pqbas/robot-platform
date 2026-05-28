@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react"
+import type { Session, Camellon } from "@/types"
+import { patchSession } from "@/api/sessions"
+import { getCamellones, createCamellon, renameCamellon } from "@/api/camellones"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -14,34 +18,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Plus } from "lucide-react"
 import { toast } from "sonner"
-import type { Camellon } from "@/types"
-import { getCamellones, createCamellon, renameCamellon } from "@/api/camellones"
+
+type Props = {
+  session: Session
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSaved: (updated: Session) => void
+}
 
 type Mode = "idle" | "creating" | "renaming"
 
-type SaveDialogProps = {
-  open: boolean
-  totalCount: number
-  duration: string
-  onSave: (camellonNombre: string) => void
-  onDiscard: () => void
-}
-
-export default function SaveDialog({
-  open,
-  totalCount,
-  duration,
-  onSave,
-  onDiscard,
-}: SaveDialogProps) {
+export default function SessionEditDialog({ session, open, onOpenChange, onSaved }: Props) {
   const [camellones, setCamellones] = useState<Camellon[]>([])
-  const [selectedId, setSelectedId] = useState("")
+  const [camellonId, setCamellonId] = useState(String(session.camellon_id))
   const [mode, setMode] = useState<Mode>("idle")
   const [inputValue, setInputValue] = useState("")
   const [saving, setSaving] = useState(false)
@@ -50,11 +41,9 @@ export default function SaveDialog({
     if (!open) return
     getCamellones().then(setCamellones).catch(() => toast.error("Error al cargar camellones"))
     setMode("idle")
-    setSelectedId("")
-    setInputValue("")
   }, [open])
 
-  const selectedCamellon = camellones.find((c) => String(c.id) === selectedId)
+  const selectedCamellon = camellones.find((c) => String(c.id) === camellonId)
 
   async function handleCreate() {
     const nombre = inputValue.trim()
@@ -63,7 +52,7 @@ export default function SaveDialog({
     try {
       const cam = await createCamellon(nombre)
       setCamellones((prev) => [...prev, cam])
-      setSelectedId(String(cam.id))
+      setCamellonId(String(cam.id))
       setInputValue("")
       setMode("idle")
       toast.success(`Camellón "${cam.nombre}" creado`)
@@ -91,38 +80,34 @@ export default function SaveDialog({
     }
   }
 
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const updated = await patchSession(session.id, Number(camellonId))
+      onSaved(updated)
+      onOpenChange(false)
+      toast.success("Sesión actualizada")
+    } catch {
+      toast.error("Error al actualizar la sesión")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   function handleConfirm() {
     if (mode === "creating") handleCreate()
     else if (mode === "renaming") handleRename()
   }
 
-  function handleSave() {
-    if (!selectedCamellon) return
-    onSave(selectedCamellon.nombre)
-  }
-
   return (
-    <Dialog open={open} modal={false} onOpenChange={(v) => { if (!v) onDiscard() }}>
-      <DialogContent
-        className="sm:w-auto sm:max-w-lg"
-        onInteractOutside={(e) => e.preventDefault()}
-      >
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:w-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Resultado del conteo</DialogTitle>
-          <DialogDescription>
-            Selecciona o crea un camellón para guardar la sesión
-          </DialogDescription>
+          <DialogTitle>Editar sesión #{session.id}</DialogTitle>
         </DialogHeader>
-
-        <ul className="space-y-1 text-sm">
-          <li><span className="text-muted-foreground">Conteo:</span> {totalCount}</li>
-          <li><span className="text-muted-foreground">Duración:</span> {duration}</li>
-        </ul>
-
-        <div className="space-y-2">
-          <Label>Camellón</Label>
+        <div className="py-2">
           {mode === "idle" ? (
-            <Select value={selectedId} onValueChange={setSelectedId}>
+            <Select value={camellonId} onValueChange={(v) => setCamellonId(v)}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecciona un camellón" />
               </SelectTrigger>
@@ -144,14 +129,12 @@ export default function SaveDialog({
             />
           )}
         </div>
-
         <DialogFooter className="flex-row gap-2 sm:justify-start">
           {mode === "idle" ? (
             <>
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1"
                 onClick={() => { setMode("renaming"); setInputValue(selectedCamellon?.nombre ?? "") }}
                 disabled={!selectedCamellon}
               >
@@ -160,7 +143,7 @@ export default function SaveDialog({
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1 gap-1.5"
+                className="gap-1.5"
                 onClick={() => { setMode("creating"); setInputValue("") }}
               >
                 <Plus className="size-3.5" />
@@ -169,16 +152,16 @@ export default function SaveDialog({
             </>
           ) : (
             <>
-              <Button variant="outline" size="sm" className="flex-1" onClick={handleConfirm} disabled={saving || !inputValue.trim()}>
+              <Button variant="outline" size="sm" onClick={handleConfirm} disabled={saving || !inputValue.trim()}>
                 Confirmar
               </Button>
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => setMode("idle")}>
+              <Button variant="outline" size="sm" onClick={() => setMode("idle")}>
                 Cancelar
               </Button>
             </>
           )}
-          <Button variant="outline" size="sm" className="flex-1" onClick={handleSave} disabled={saving || !selectedCamellon || mode !== "idle"}>
-            Guardar
+          <Button variant="outline" size="sm" className="ml-auto" onClick={handleSave} disabled={saving || mode !== "idle"}>
+            {saving ? "Guardando..." : "Guardar"}
           </Button>
         </DialogFooter>
       </DialogContent>

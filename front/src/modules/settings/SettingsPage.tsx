@@ -136,8 +136,6 @@ export default function SettingsPage() {
     setSaving(true)
     let anyError = false
 
-    // Label save runs first and independently — counting/camera failures
-    // shouldn't suppress it, and vice versa.
     if (draftKey) {
       const { label, model_filename } = fromSelectKey(draftKey)
       const item = labels.find((l) => l.label === label && l.model_filename === model_filename)

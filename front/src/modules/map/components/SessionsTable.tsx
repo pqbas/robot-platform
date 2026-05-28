@@ -10,6 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Pencil } from "lucide-react"
+import SessionEditDialog from "./SessionEditDialog"
 
 const PAGE_SIZE = 13
 
@@ -18,6 +20,7 @@ type SessionsTableProps = {
   camellones: Map<number, Camellon>
   selectedId: number | null
   onSelect: (session: Session) => void
+  onSessionUpdated: (updated: Session) => void
 }
 
 function formatDate(iso: string): string {
@@ -36,12 +39,14 @@ export default function SessionsTable({
   camellones,
   selectedId,
   onSelect,
+  onSessionUpdated,
 }: SessionsTableProps) {
   const [page, setPage] = useState(0)
+  const [editingSession, setEditingSession] = useState<Session | null>(null)
+
   const totalPages = Math.max(1, Math.ceil(sessions.length / PAGE_SIZE))
   const safeePage = Math.min(page, totalPages - 1)
   const paged = sessions.slice(safeePage * PAGE_SIZE, (safeePage + 1) * PAGE_SIZE)
-
   if (sessions.length === 0) {
     return (
       <p className="py-8 text-center text-muted-foreground">
@@ -60,17 +65,14 @@ export default function SessionsTable({
               <TableHead>Fecha</TableHead>
               <TableHead className="hidden md:table-cell">Clase</TableHead>
               <TableHead className="text-right">Conteo</TableHead>
+              <TableHead className="w-8" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {paged.map((s) => (
               <TableRow
                 key={s.id}
-                className={
-                  s.id === selectedId
-                    ? "bg-muted cursor-pointer"
-                    : "cursor-pointer"
-                }
+                className={s.id === selectedId ? "bg-muted cursor-pointer" : "cursor-pointer"}
                 onClick={() => onSelect(s)}
               >
                 <TableCell>
@@ -81,6 +83,19 @@ export default function SessionsTable({
                   <Badge variant="outline">{s.target_class}</Badge>
                 </TableCell>
                 <TableCell className="text-right">{s.total_count}</TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setEditingSession(s)
+                    }}
+                  >
+                    <Pencil className="size-3.5" />
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -101,6 +116,18 @@ export default function SessionsTable({
             </Button>
           ))}
         </div>
+      )}
+
+      {editingSession && (
+        <SessionEditDialog
+          session={editingSession}
+          open={!!editingSession}
+          onOpenChange={(open) => { if (!open) setEditingSession(null) }}
+          onSaved={(updated) => {
+            onSessionUpdated(updated)
+            setEditingSession(null)
+          }}
+        />
       )}
     </div>
   )

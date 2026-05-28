@@ -12,6 +12,13 @@ export function createCamellon(nombre: string): Promise<Camellon> {
   })
 }
 
+export function renameCamellon(id: number, nombre: string): Promise<Camellon> {
+  return apiFetch(`/api/camellones/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ nombre }),
+  })
+}
+
 export function updateLocation(
   id: number,
   lat: number,

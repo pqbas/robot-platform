@@ -10,6 +10,10 @@ class CamellonCreate(BaseModel):
     nombre: str
 
 
+class CamellonRename(BaseModel):
+    nombre: str
+
+
 class CamellonLocationUpdate(BaseModel):
     lat: float
     lng: float
@@ -66,6 +70,10 @@ class SessionSave(BaseModel):
     camellon_id: int
     target_class: str
     total_count: int
+
+
+class SessionUpdate(BaseModel):
+    camellon_id: int
 
 
 # --- Counting (live) ---

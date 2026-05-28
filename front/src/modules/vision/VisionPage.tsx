@@ -430,7 +430,6 @@ export default function VisionPage() {
         open={counting.state === "SAVING"}
         totalCount={counting.sessionTotal}
         duration={savedDuration}
-        camellones={camellones}
         onSave={handleSave}
         onDiscard={counting.discard}
       />
