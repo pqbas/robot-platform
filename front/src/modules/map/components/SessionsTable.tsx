@@ -73,7 +73,7 @@ export default function SessionsTable({
             {paged.map((s) => (
               <TableRow
                 key={s.id}
-                className={s.id === selectedId ? "bg-muted cursor-pointer" : "cursor-pointer"}
+                className={s.id === selectedId ? "bg-muted/50 cursor-pointer" : "cursor-pointer"}
                 onClick={() => onSelect(s)}
               >
                 <TableCell>

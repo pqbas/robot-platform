@@ -106,9 +106,9 @@ export default function SidePanel({
       <div className="flex min-h-0 flex-1 flex-col p-4">
         {/* Header */}
         <div className="mb-3 flex shrink-0 items-center justify-between">
-          <h3 className="text-sm font-semibold">
+          <h3 className="text-lg font-semibold">
             Sesiones
-            <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+            <span className="ml-1.5 text-sm font-normal text-muted-foreground">
               ({filteredSessions.length})
             </span>
           </h3>
