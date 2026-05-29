@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import type { Detection } from "@/types"
 import type { MediaRef } from "@/types/stream"
-import { getNaturalSize } from "@/lib/streamMedia"
+import { getContentRect, getNaturalSize } from "@/lib/streamMedia"
 
 type DetectionOverlayProps = {
   mediaRef: MediaRef
@@ -39,7 +39,7 @@ export default function DetectionOverlay({
     function draw() {
       if (!media || !canvas || !ctx) return
 
-      const mediaRect = media.getBoundingClientRect()
+      const mediaRect = getContentRect(media)
       const parentRect = canvas.parentElement?.getBoundingClientRect()
       if (!parentRect) {
         rafRef.current = requestAnimationFrame(draw)

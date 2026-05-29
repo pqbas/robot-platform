@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { toast } from "sonner"
 import type { Session, Camellon, MapLocation } from "@/types"
 import { getCamellones } from "@/api/camellones"
 import { getSessions, getSessionDevices } from "@/api/sessions"

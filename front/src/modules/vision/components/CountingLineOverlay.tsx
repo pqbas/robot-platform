@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react"
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from "lucide-react"
 import type { MediaRef } from "@/types/stream"
+import { getContentRect } from "@/lib/streamMedia"
 
 type CountingLineOverlayProps = {
   mediaRef: MediaRef
@@ -43,7 +44,7 @@ export default function CountingLineOverlay({
 
     function position() {
       if (!media || !line || !arrow) return
-      const mediaRect = media.getBoundingClientRect()
+      const mediaRect = getContentRect(media)
       const parentRect = line.parentElement?.getBoundingClientRect()
       if (!parentRect) {
         rafRef.current = requestAnimationFrame(position)

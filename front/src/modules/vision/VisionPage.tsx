@@ -60,7 +60,7 @@ export default function VisionPage() {
   const [labelsLoading, setLabelsLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [durationStr, setDurationStr] = useState("0s")
-  const [camellones, setCamellones] = useState<Camellon[]>([])
+  const [, setCamellones] = useState<Camellon[]>([])
   const [countingConfig, setCountingConfig] = useState<CountingConfig | null>(null)
 
   const loadCamellones = () => {

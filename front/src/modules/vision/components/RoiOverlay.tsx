@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import type { MediaRef } from "@/types/stream"
-import { getNaturalSize } from "@/lib/streamMedia"
+import { getContentRect, getNaturalSize } from "@/lib/streamMedia"
 
 type RoiOverlayProps = {
   mediaRef: MediaRef
@@ -21,7 +21,7 @@ export default function RoiOverlay({ mediaRef, visible }: RoiOverlayProps) {
 
     function position() {
       if (!media || !box) return
-      const mediaRect = media.getBoundingClientRect()
+      const mediaRect = getContentRect(media)
       const parentRect = box.parentElement?.getBoundingClientRect()
       const { w: nw, h: nh } = getNaturalSize(media)
       if (!parentRect || !nw || !nh) {
