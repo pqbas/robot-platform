@@ -22,7 +22,6 @@ import { toast } from "sonner"
 import { useAppMode } from "@/context/AppModeContext"
 import { useAuth } from "@/context/AuthContext"
 import { forceSyncPull, forceSyncPush } from "@/api/sync"
-import UserMenu from "./UserMenu"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 
