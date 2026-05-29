@@ -81,8 +81,25 @@ async def create_camellon(
     return cam
 
 
-async def list_camellones(db: AsyncSession) -> list[Camellon]:
-    result = await db.execute(select(Camellon).order_by(Camellon.id))
+def _scope_by_fundo(stmt, fundo_uuid: str | None):
+    """Restrict a Camellon query to a single fundo. `None` matches the rows
+    with no fundo assigned (legacy / unconfigured robot) — mirroring how
+    create_camellon stamps the current fundo (or None) onto new rows."""
+    if fundo_uuid is None:
+        return stmt.where(Camellon.fundo_uuid.is_(None))
+    return stmt.where(Camellon.fundo_uuid == fundo_uuid)
+
+
+async def list_camellones(
+    db: AsyncSession,
+    *,
+    scope_fundo: bool = False,
+    fundo_uuid: str | None = None,
+) -> list[Camellon]:
+    stmt = select(Camellon).order_by(Camellon.id)
+    if scope_fundo:
+        stmt = _scope_by_fundo(stmt, fundo_uuid)
+    result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
@@ -91,8 +108,17 @@ async def get_camellon(db: AsyncSession, camellon_id: int) -> Camellon | None:
     return result.scalar_one_or_none()
 
 
-async def get_camellon_by_nombre(db: AsyncSession, nombre: str) -> Camellon | None:
-    result = await db.execute(select(Camellon).where(Camellon.nombre == nombre))
+async def get_camellon_by_nombre(
+    db: AsyncSession,
+    nombre: str,
+    *,
+    scope_fundo: bool = False,
+    fundo_uuid: str | None = None,
+) -> Camellon | None:
+    stmt = select(Camellon).where(Camellon.nombre == nombre)
+    if scope_fundo:
+        stmt = _scope_by_fundo(stmt, fundo_uuid)
+    result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
 
