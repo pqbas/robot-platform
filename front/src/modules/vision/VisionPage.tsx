@@ -15,6 +15,7 @@ import { useAppMode } from "@/context/AppModeContext"
 import VideoStream from "./components/VideoStream"
 import CountOverlay from "./components/CountOverlay"
 import SaveDialog from "./components/SaveDialog"
+import RecordingPlaceDialog from "./components/RecordingPlaceDialog"
 import {
   getAvailableLabels,
   selectLabel,
@@ -62,6 +63,7 @@ export default function VisionPage() {
   const [durationStr, setDurationStr] = useState("0s")
   const [, setCamellones] = useState<Camellon[]>([])
   const [countingConfig, setCountingConfig] = useState<CountingConfig | null>(null)
+  const [placeDialogUuid, setPlaceDialogUuid] = useState<string | null>(null)
 
   const loadCamellones = () => {
     getCamellones().then(setCamellones).catch(console.error)
@@ -166,6 +168,7 @@ export default function VisionPage() {
         ? `${(row.file_size_bytes / 1_048_576).toFixed(1)} MB`
         : "—"
       toast.success(`Video guardado — ${dur}, ${size}`)
+      setPlaceDialogUuid(row.uuid)
     } catch (e) {
       toast.error(
         "Error al detener grabación: " +
@@ -434,6 +437,14 @@ export default function VisionPage() {
         deviceContext={deviceContext}
         onSave={handleSave}
         onDiscard={counting.discard}
+      />
+
+      <RecordingPlaceDialog
+        open={placeDialogUuid != null}
+        recordingUuid={placeDialogUuid}
+        deviceContext={deviceContext}
+        onSaved={() => setPlaceDialogUuid(null)}
+        onSkip={() => setPlaceDialogUuid(null)}
       />
     </div>
   )
