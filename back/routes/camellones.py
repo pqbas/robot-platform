@@ -1,6 +1,7 @@
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import AppMode, config
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/api/camellones", tags=["camellones"])
 
 
 def _fundo_scope() -> tuple[bool, str | None]:
-    """On the robot, camellones are scoped to the device's assigned fundo so
+    """On the robot, camellones are scoped to the effective fundo context so
     operators never see/save into another organization's beds. On the server
     (multi-tenant, role-gated elsewhere) the list stays unscoped.
 
@@ -37,18 +38,31 @@ def _fundo_scope() -> tuple[bool, str | None]:
 
 
 @router.get("", response_model=list[CamellonOut])
-async def list_camellones(db: AsyncSession = Depends(get_db)):
-    scope_fundo, fundo_uuid = _fundo_scope()
+async def list_camellones(
+    fundo_uuid: Optional[str] = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    if fundo_uuid is not None:
+        # Explicit fundo_uuid param overrides context scoping
+        return await storage.list_camellones(db, scope_fundo=True, fundo_uuid=fundo_uuid)
+    scope_fundo, ctx_fundo_uuid = _fundo_scope()
     return await storage.list_camellones(
-        db, scope_fundo=scope_fundo, fundo_uuid=fundo_uuid
+        db, scope_fundo=scope_fundo, fundo_uuid=ctx_fundo_uuid
     )
 
 
 @router.post("", response_model=CamellonOut, status_code=201)
 async def create_camellon(body: CamellonCreate, db: AsyncSession = Depends(get_db)):
-    scope_fundo, fundo_uuid = _fundo_scope()
+    # Determine the effective fundo_uuid for this creation:
+    # 1. Use explicitly provided fundo_uuid if given
+    # 2. Fall back to the effective context fundo
+    if body.fundo_uuid is not None:
+        fundo_uuid = body.fundo_uuid
+    else:
+        _, fundo_uuid = _fundo_scope()
+
     existing = await storage.get_camellon_by_nombre(
-        db, body.nombre, scope_fundo=scope_fundo, fundo_uuid=fundo_uuid
+        db, body.nombre, scope_fundo=True, fundo_uuid=fundo_uuid
     )
     if existing is not None:
         raise HTTPException(409, f"Camellon '{body.nombre}' already exists")
@@ -62,9 +76,10 @@ async def rename_camellon(
     cam = await storage.get_camellon(db, camellon_id)
     if cam is None:
         raise HTTPException(404, "Camellon not found")
-    scope_fundo, fundo_uuid = _fundo_scope()
+    # Scope uniqueness check to the row's own fundo_uuid, not the context.
+    # This prevents collision checks bleeding across fundos.
     existing = await storage.get_camellon_by_nombre(
-        db, body.nombre, scope_fundo=scope_fundo, fundo_uuid=fundo_uuid
+        db, body.nombre, scope_fundo=True, fundo_uuid=cam.fundo_uuid
     )
     if existing is not None and existing.id != camellon_id:
         raise HTTPException(409, f"Camellon '{body.nombre}' already exists")

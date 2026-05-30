@@ -1,16 +1,23 @@
-"""Empresa management routes — admin only."""
+"""Empresa management routes.
+
+Server mode: admin-only (require_role("admin")).
+Robot mode: list + create without auth gate (operator can create on-field).
+"""
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from back.config import AppMode, config
 from back.database import get_db
 from back.models import Empresa, Fundo
 from back.services.auth import require_role
 
 router = APIRouter(prefix="/api/empresas", tags=["empresas"])
-admin_dep = require_role("admin")
+
+# In server mode all routes require admin; in robot mode the dep list is empty.
+_admin_dep = [Depends(require_role("admin"))] if config.mode == AppMode.SERVER else []
 
 
 class EmpresaCreate(BaseModel):
@@ -41,14 +48,14 @@ class FundoOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-@router.get("/", response_model=list[EmpresaOut])
-async def list_empresas(db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
+@router.get("/", response_model=list[EmpresaOut], dependencies=_admin_dep)
+async def list_empresas(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Empresa))
     return result.scalars().all()
 
 
-@router.post("/", response_model=EmpresaOut, status_code=201)
-async def create_empresa(body: EmpresaCreate, db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
+@router.post("/", response_model=EmpresaOut, status_code=201, dependencies=_admin_dep)
+async def create_empresa(body: EmpresaCreate, db: AsyncSession = Depends(get_db)):
     empresa = Empresa(name=body.name)
     db.add(empresa)
     await db.commit()
@@ -56,8 +63,8 @@ async def create_empresa(body: EmpresaCreate, db: AsyncSession = Depends(get_db)
     return empresa
 
 
-@router.put("/{uuid}", response_model=EmpresaOut)
-async def update_empresa(uuid: str, body: EmpresaUpdate, db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
+@router.put("/{uuid}", response_model=EmpresaOut, dependencies=_admin_dep)
+async def update_empresa(uuid: str, body: EmpresaUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Empresa).where(Empresa.uuid == uuid))
     empresa = result.scalar_one_or_none()
     if not empresa:
@@ -71,7 +78,7 @@ async def update_empresa(uuid: str, body: EmpresaUpdate, db: AsyncSession = Depe
     return empresa
 
 
-@router.get("/{uuid}/fundos", response_model=list[FundoOut])
-async def list_empresa_fundos(uuid: str, db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
+@router.get("/{uuid}/fundos", response_model=list[FundoOut], dependencies=_admin_dep)
+async def list_empresa_fundos(uuid: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Fundo).where(Fundo.empresa_uuid == uuid))
     return result.scalars().all()

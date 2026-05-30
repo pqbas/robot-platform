@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class CamellonCreate(BaseModel):
     nombre: str
+    fundo_uuid: str | None = None
 
 
 class CamellonRename(BaseModel):
