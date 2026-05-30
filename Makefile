@@ -85,22 +85,22 @@ status:
 	@sudo systemctl status nginx --no-pager
 
 compose-build:
-	docker compose -f docker-compose.server.yml build
+	docker compose --env-file .env.server -f docker-compose.server.yml build
 
 compose-up:
-	docker compose -f docker-compose.server.yml up -d
+	docker compose --env-file .env.server -f docker-compose.server.yml up -d
 
 compose-down:
-	docker compose -f docker-compose.server.yml down
+	docker compose --env-file .env.server -f docker-compose.server.yml down
 
 compose-logs:
-	docker compose -f docker-compose.server.yml logs -f
+	docker compose --env-file .env.server -f docker-compose.server.yml logs -f
 
 compose-migrate:
-	docker compose -f docker-compose.server.yml run --rm back uv run alembic -c back/alembic.ini upgrade head
+	docker compose --env-file .env.server -f docker-compose.server.yml run --rm back uv run alembic -c back/alembic.ini upgrade head
 
 compose-create-admin:
-	docker compose -f docker-compose.server.yml run --rm back uv run python -m back.scripts.create_admin
+	docker compose --env-file .env.server -f docker-compose.server.yml run --rm back uv run python -m back.scripts.create_admin
 
 update:
 	git pull
