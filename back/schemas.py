@@ -168,6 +168,11 @@ class CameraSourceUpdate(BaseModel):
     rtsp_url: str
 
 
+class CameraRestartOut(BaseModel):
+    ok: bool
+    pid: int
+
+
 # --- Counting config ---
 
 class CountingConfigOut(BaseModel):

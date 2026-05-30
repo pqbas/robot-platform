@@ -16,6 +16,7 @@ from back.schemas import (
     CameraConfigOut,
     CameraConfigUpdate,
     CameraDevice,
+    CameraRestartOut,
     CameraResolutionOut,
     CameraResolutionUpdate,
     CameraSourceOut,
@@ -29,6 +30,7 @@ from back.services.camera_control_client import (
     CameraControlClient,
     CameraWorkerUnavailable,
 )
+from back.services.camera_process import CameraRestartError, restart_camera_worker
 from back.services.perception import counter
 from back.services.perception.engine_paths import (
     actual_pt_path_for,
@@ -190,6 +192,34 @@ async def update_camera_source(body: CameraSourceUpdate):
     if not resp.get("ok"):
         raise HTTPException(503, f"Camera worker reload failed: {resp.get('error')}")
     return CameraSourceOut(rtsp_url=body.rtsp_url)
+
+
+@router.post("/camera/restart", response_model=CameraRestartOut)
+async def restart_camera(db: AsyncSession = Depends(get_db)):
+    """Kill the camera-worker so systemd respawns a fresh process.
+
+    Recovery action for a wedged V4L2 device (blocked read / USB
+    re-enumeration) that an in-process reload can't fix. Robot-only.
+
+    Blocked while a recording is in flight — dropping the frames socket would
+    truncate the MP4 mid-write. The operator must stop the recording first.
+    """
+    _require_robot_mode()
+
+    in_flight = await db.execute(
+        select(Recording).where(Recording.ended_at.is_(None))
+    )
+    if in_flight.scalar_one_or_none() is not None:
+        raise HTTPException(
+            409, "Detén la grabación antes de reiniciar la cámara"
+        )
+
+    try:
+        pid = restart_camera_worker()
+    except CameraRestartError as exc:
+        logger.warning("Camera worker restart failed: %s", exc)
+        raise HTTPException(503, f"No se pudo reiniciar la cámara: {exc}")
+    return CameraRestartOut(ok=True, pid=pid)
 
 
 # --- Counting ---
