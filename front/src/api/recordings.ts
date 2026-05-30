@@ -46,3 +46,7 @@ export function deleteRecording(uuid: string): Promise<{ ok: boolean }> {
 export function getRecordingFileUrl(uuid: string): string {
   return `/api/recordings/${uuid}/file`
 }
+
+export function getUploadingUuids(): Promise<{ uuids: string[] }> {
+  return apiFetch("/api/recordings/uploading")
+}

@@ -21,6 +21,7 @@ from back.services.recording_client import (
     RecordingClient,
     RecordingWorkerUnavailable,
 )
+from back.services.sync_recordings_upload import get_uploading_uuids
 
 logger = logging.getLogger("recordings")
 
@@ -244,6 +245,11 @@ async def set_recording_place(
     await db.flush()
     await db.refresh(row)
     return await _build_out(db, row)
+
+
+@router.get("/uploading")
+async def uploading_uuids():
+    return {"uuids": get_uploading_uuids()}
 
 
 @router.get("/{uuid}/file")
