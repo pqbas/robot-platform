@@ -21,6 +21,12 @@ from back.models import Recording, SyncLog
 
 logger = logging.getLogger("sync_recordings_upload")
 
+_uploading_uuids: set[str] = set()
+
+
+def get_uploading_uuids() -> list[str]:
+    return list(_uploading_uuids)
+
 
 async def _is_metadata_synced(db: AsyncSession, uuid: str) -> bool:
     result = await db.execute(
@@ -49,6 +55,7 @@ async def _upload_one(http: aiohttp.ClientSession, row: Recording, base_url: str
     url = f"{base_url}/api/sync/recordings/{row.uuid}/upload"
     headers = {"Authorization": f"Bearer {config.sync.api_key}"}
 
+    _uploading_uuids.add(row.uuid)
     try:
         with open(row.file_path, "rb") as f:
             data = aiohttp.FormData()
@@ -75,6 +82,8 @@ async def _upload_one(http: aiohttp.ClientSession, row: Recording, base_url: str
     except Exception as exc:
         logger.warning("Recording %s upload failed: %s", row.uuid, exc)
         return False
+    finally:
+        _uploading_uuids.discard(row.uuid)
 
 
 async def upload_pending_recordings(db: AsyncSession) -> None:
