@@ -14,7 +14,7 @@ from back.schemas import (
     CamellonSummary,
 )
 from back.services import storage
-from back.services.sync_pull_context import read_cached_context
+from back.services.sync_pull_context import read_effective_context
 
 logger = logging.getLogger("camellones")
 
@@ -30,7 +30,7 @@ def _fundo_scope() -> tuple[bool, str | None]:
     """
     if config.mode != AppMode.ROBOT:
         return False, None
-    ctx = read_cached_context()
+    ctx = read_effective_context()
     fundo = ctx.get("fundo") or {}
     fundo_uuid = fundo.get("uuid") if isinstance(fundo, dict) else None
     return True, fundo_uuid

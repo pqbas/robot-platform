@@ -261,6 +261,17 @@ class SelectLabelRequest(BaseModel):
     model_filename: str
 
 
+# --- Device context ---
+
+
+class ActiveContextSet(BaseModel):
+    empresa_uuid: str
+    empresa_name: str
+    fundo_uuid: str
+    fundo_name: str
+    fundo_region: str | None = None
+
+
 # --- Sync ---
 
 
