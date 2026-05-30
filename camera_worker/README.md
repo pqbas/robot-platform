@@ -27,6 +27,42 @@ never opens `/dev/video*` directly.
 make run-camera                # = cd camera_worker && uv run camera-worker
 ```
 
+## IP camera source (RTSP)
+
+Point the worker at an IP camera instead of a USB V4L2 device by providing an
+RTSP (or HTTP MJPEG) URL. The Unix socket protocol and all downstream consumers
+remain unchanged.
+
+**Via environment variable:**
+
+```bash
+CAMERA_RTSP_URL=rtsp://192.168.0.50:554/stream uv run camera-worker
+```
+
+**Via CLI flag:**
+
+```bash
+uv run camera-worker --rtsp-url rtsp://192.168.0.50:554/stream
+```
+
+**Via `data/robot/camera_settings.json`** (persists across restarts):
+
+```json
+{ "rtsp_url": "rtsp://192.168.0.50:554/stream" }
+```
+
+When `rtsp_url` is set:
+- `--index` / `CAMERA_INDEX` is ignored.
+- Resolution presets (`preset`, `CAMERA_WIDTH/HEIGHT/CROP`) do not apply; the
+  worker accepts whatever resolution the stream negotiates.
+- Crop is forced to 0 (stereo-split only applies to the ZED 2i USB camera).
+- The worker retries every 1 s if the stream is unavailable — same behaviour
+  as a disconnected V4L2 device.
+- The `reload` control command works the same: closes and reopens the stream.
+
+The log reports `Camera opened (rtsp=<url>) — actual <W>x<H> @ <fps>fps` when
+the stream is active.
+
 ## Resolution modes
 
 The active preset lives in `data/robot/camera_settings.json`:
