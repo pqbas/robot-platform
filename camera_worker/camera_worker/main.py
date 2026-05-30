@@ -115,32 +115,55 @@ def _apply_override(args, override: dict | None) -> None:
 
 
 def open_camera(args):
-    while True:
-        cap = cv2.VideoCapture(args.index)
-        # Force YUYV (uncompressed) so the encoder receives clean pixels
-        # instead of a re-encoded MJPEG source. Falls back silently to
-        # whatever the camera negotiates if YUYV is rejected.
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"YUYV"))
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
-        cap.set(cv2.CAP_PROP_FPS, args.fps)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        if cap.isOpened():
-            actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            actual_fps = float(cap.get(cv2.CAP_PROP_FPS)) or args.fps
-            actual_fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
-            fourcc_str = "".join(
-                chr((actual_fourcc >> 8 * i) & 0xFF) for i in range(4)
-            )
-            logger.info(
-                "Camera opened (index=%d) — actual %dx%d @ %.1ffps fourcc=%s",
-                args.index, actual_width, actual_height, actual_fps, fourcc_str,
-            )
-            return cap, actual_width, actual_height, actual_fps
-        cap.release()
-        logger.warning("Camera not available — retrying in 1s")
-        time.sleep(1)
+    rtsp_url = getattr(args, "rtsp_url", "")
+    if rtsp_url:
+        # IP camera path — RTSP or HTTP MJPEG URL.
+        # FOURCC and BUFFERSIZE are silently ignored by OpenCV for network
+        # sources; omitting them avoids confusing log output.
+        # Crop is forced to 0: stereo-split only applies to the ZED 2i USB camera.
+        args.crop = 0
+        while True:
+            cap = cv2.VideoCapture(rtsp_url)
+            if cap.isOpened():
+                actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                actual_fps = float(cap.get(cv2.CAP_PROP_FPS)) or args.fps
+                logger.info(
+                    "Camera opened (rtsp=%s) — actual %dx%d @ %.1ffps",
+                    rtsp_url, actual_width, actual_height, actual_fps,
+                )
+                return cap, actual_width, actual_height, actual_fps
+            cap.release()
+            logger.warning("RTSP stream not available — retrying in 1s")
+            time.sleep(1)
+    else:
+        # V4L2 USB camera path (default).
+        while True:
+            cap = cv2.VideoCapture(args.index)
+            # Force YUYV (uncompressed) so the encoder receives clean pixels
+            # instead of a re-encoded MJPEG source. Falls back silently to
+            # whatever the camera negotiates if YUYV is rejected.
+            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"YUYV"))
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+            cap.set(cv2.CAP_PROP_FPS, args.fps)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            if cap.isOpened():
+                actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                actual_fps = float(cap.get(cv2.CAP_PROP_FPS)) or args.fps
+                actual_fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
+                fourcc_str = "".join(
+                    chr((actual_fourcc >> 8 * i) & 0xFF) for i in range(4)
+                )
+                logger.info(
+                    "Camera opened (index=%d) — actual %dx%d @ %.1ffps fourcc=%s",
+                    args.index, actual_width, actual_height, actual_fps, fourcc_str,
+                )
+                return cap, actual_width, actual_height, actual_fps
+            cap.release()
+            logger.warning("Camera not available — retrying in 1s")
+            time.sleep(1)
 
 
 class FrameBroadcaster:
