@@ -6,12 +6,12 @@ Robot mode: list + create without auth gate (operator can create on-field).
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import AppMode, config
 from back.database import get_db
-from back.models import Fundo
+from back.models import Fundo, SyncLog
 from back.services.auth import require_role
 
 router = APIRouter(prefix="/api/fundos", tags=["fundos"])
@@ -74,6 +74,9 @@ async def update_fundo(uuid: str, body: FundoUpdate, db: AsyncSession = Depends(
         fundo.region = body.region
     if body.is_active is not None:
         fundo.is_active = body.is_active
+    await db.execute(delete(SyncLog).where(
+        (SyncLog.table_name == "fundos") & (SyncLog.record_uuid == uuid)
+    ))
     await db.commit()
     await db.refresh(fundo)
     return fundo
