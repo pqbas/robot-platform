@@ -33,6 +33,7 @@ export type Camellon = {
   nombre: string
   lat: number | null
   lng: number | null
+  fundo_uuid: string | null
 }
 
 export type CamellonGeoSummary = Camellon & {

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import type { Session, Camellon, MapLocation } from "@/types"
-import { getCamellones } from "@/api/camellones"
+import type { Session, Camellon, Empresa, Fundo } from "@/types"
+import { getAllCamellones } from "@/api/camellones"
+import { getEmpresas, getFundos } from "@/api/admin"
 import { getSessions, getSessionDevices } from "@/api/sessions"
-import { getLocations } from "@/api/locations"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,11 +20,13 @@ import SessionDetail from "@/modules/map/components/SessionDetail"
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [camellones, setCamellones] = useState<Map<number, Camellon>>(new Map())
-  const [locations, setLocations] = useState<MapLocation[]>([])
+  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [fundos, setFundos] = useState<Fundo[]>([])
   const [devices, setDevices] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
-  const [locationFilter, setLocationFilter] = useState("all")
+  const [empresaFilter, setEmpresaFilter] = useState("all")
+  const [fundoFilter, setFundoFilter] = useState("all")
   const [classFilter, setClassFilter] = useState("all")
   const [deviceFilter, setDeviceFilter] = useState("all")
   const [dateFrom, setDateFrom] = useState<string | null>(null)
@@ -32,13 +34,15 @@ export default function SessionsPage() {
 
   const loadBase = useCallback(async () => {
     try {
-      const [camData, locData, devData] = await Promise.all([
-        getCamellones(),
-        getLocations(),
+      const [camData, empData, fundoData, devData] = await Promise.all([
+        getAllCamellones(),
+        getEmpresas(),
+        getFundos(),
         getSessionDevices(),
       ])
       setCamellones(new Map(camData.map((c) => [c.id, c])))
-      setLocations(locData)
+      setEmpresas(empData)
+      setFundos(fundoData)
       setDevices(devData)
     } catch (e) {
       console.error(e)
@@ -62,43 +66,84 @@ export default function SessionsPage() {
   useEffect(() => { loadBase() }, [loadBase])
   useEffect(() => { loadSessions() }, [loadSessions])
 
-  const camellonIdsByLocation = useMemo(() => {
-    const map = new Map<string, Set<number>>()
-    for (const [id, cam] of camellones) {
-      const locLabel = locations.find((l) => l.label === cam.nombre)?.label
-      if (locLabel) {
-        if (!map.has(locLabel)) map.set(locLabel, new Set())
-        map.get(locLabel)!.add(id)
-      }
-    }
-    return map
-  }, [camellones, locations])
-
   const targetClasses = useMemo(() => {
     return Array.from(new Set(sessions.map((s) => s.target_class))).sort()
   }, [sessions])
 
+  // session.camellon_id -> fundo_uuid, via camellon.fundo_uuid
+  const fundoByCamellonId = useMemo(() => {
+    const map = new Map<number, string>()
+    for (const [id, cam] of camellones) {
+      if (cam.fundo_uuid) map.set(id, cam.fundo_uuid)
+    }
+    return map
+  }, [camellones])
+
+  // session.camellon_id -> empresa_uuid, via camellon.fundo_uuid -> fundo.empresa_uuid
+  const empresaByCamellonId = useMemo(() => {
+    const fundoToEmpresa = new Map(fundos.map((f) => [f.uuid, f.empresa_uuid]))
+    const map = new Map<number, string>()
+    for (const [id, cam] of camellones) {
+      const empresaUuid = cam.fundo_uuid
+        ? fundoToEmpresa.get(cam.fundo_uuid)
+        : undefined
+      if (empresaUuid) map.set(id, empresaUuid)
+    }
+    return map
+  }, [camellones, fundos])
+
+  // Fundo filter options: the fundos actually referenced by the loaded
+  // sessions, narrowed to the selected empresa. Built from the sessions
+  // themselves so it never lists fundos with no captured sessions.
+  const fundoOptions = useMemo(() => {
+    const fundoById = new Map(fundos.map((f) => [f.uuid, f]))
+    const seen = new Map<string, string>()
+    for (const s of sessions) {
+      const fundoUuid = fundoByCamellonId.get(s.camellon_id)
+      if (!fundoUuid || seen.has(fundoUuid)) continue
+      const f = fundoById.get(fundoUuid)
+      if (empresaFilter !== "all" && f?.empresa_uuid !== empresaFilter) continue
+      seen.set(fundoUuid, f?.name ?? fundoUuid)
+    }
+    return Array.from(seen, ([uuid, name]) => ({ uuid, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )
+  }, [sessions, fundos, fundoByCamellonId, empresaFilter])
+
   const filteredSessions = useMemo(() => {
     let result = sessions
-    if (locationFilter !== "all") {
-      const ids = camellonIdsByLocation.get(locationFilter)
-      result = ids ? result.filter((s) => ids.has(s.camellon_id)) : []
+    if (empresaFilter !== "all") {
+      result = result.filter(
+        (s) => empresaByCamellonId.get(s.camellon_id) === empresaFilter,
+      )
+    }
+    if (fundoFilter !== "all") {
+      result = result.filter((s) => fundoByCamellonId.get(s.camellon_id) === fundoFilter)
     }
     if (classFilter !== "all") {
       result = result.filter((s) => s.target_class === classFilter)
     }
     return result
-  }, [sessions, locationFilter, classFilter, camellonIdsByLocation])
+  }, [
+    sessions,
+    empresaFilter,
+    fundoFilter,
+    classFilter,
+    empresaByCamellonId,
+    fundoByCamellonId,
+  ])
 
   const hasActiveFilters =
-    locationFilter !== "all" ||
+    empresaFilter !== "all" ||
+    fundoFilter !== "all" ||
     classFilter !== "all" ||
     deviceFilter !== "all" ||
     dateFrom != null ||
     dateTo != null
 
   function clearAllFilters() {
-    setLocationFilter("all")
+    setEmpresaFilter("all")
+    setFundoFilter("all")
     setClassFilter("all")
     setDeviceFilter("all")
     setDateFrom(null)
@@ -135,15 +180,30 @@ export default function SessionsPage() {
 
       <div className="grid grid-cols-2 items-end gap-3 md:flex md:gap-4">
         <div className="space-y-1 md:min-w-0 md:flex-1">
-          <Label className="text-xs">Ubicacion</Label>
-          <Select value={locationFilter} onValueChange={setLocationFilter}>
+          <Label className="text-xs">Empresa</Label>
+          <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
             <SelectTrigger className="h-9 w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
-              {locations.map((loc) => (
-                <SelectItem key={loc.id} value={loc.label}>{loc.label}</SelectItem>
+              {empresas.map((emp) => (
+                <SelectItem key={emp.uuid} value={emp.uuid}>{emp.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1 md:min-w-0 md:flex-1">
+          <Label className="text-xs">Fundo</Label>
+          <Select value={fundoFilter} onValueChange={setFundoFilter}>
+            <SelectTrigger className="h-9 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {fundoOptions.map((f) => (
+                <SelectItem key={f.uuid} value={f.uuid}>{f.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -210,7 +270,7 @@ export default function SessionsPage() {
           onSelect={setSelectedSession}
           onSessionUpdated={async (updated) => {
             setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
-            const fresh = await getCamellones()
+            const fresh = await getAllCamellones()
             setCamellones(new Map(fresh.map((c) => [c.id, c])))
           }}
         />

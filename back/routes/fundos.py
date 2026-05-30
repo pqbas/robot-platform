@@ -1,16 +1,23 @@
-"""Fundo management routes — admin only."""
+"""Fundo management routes.
+
+Server mode: admin-only (require_role("admin")).
+Robot mode: list + create without auth gate (operator can create on-field).
+"""
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from back.config import AppMode, config
 from back.database import get_db
 from back.models import Fundo
 from back.services.auth import require_role
 
 router = APIRouter(prefix="/api/fundos", tags=["fundos"])
-admin_dep = require_role("admin")
+
+# In server mode all routes require admin; in robot mode the dep list is empty.
+_admin_dep = [Depends(require_role("admin"))] if config.mode == AppMode.SERVER else []
 
 
 class FundoCreate(BaseModel):
@@ -36,14 +43,14 @@ class FundoOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-@router.get("/", response_model=list[FundoOut])
-async def list_fundos(db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
+@router.get("/", response_model=list[FundoOut], dependencies=_admin_dep)
+async def list_fundos(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Fundo))
     return result.scalars().all()
 
 
-@router.post("/", response_model=FundoOut, status_code=201)
-async def create_fundo(body: FundoCreate, db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
+@router.post("/", response_model=FundoOut, status_code=201, dependencies=_admin_dep)
+async def create_fundo(body: FundoCreate, db: AsyncSession = Depends(get_db)):
     fundo = Fundo(
         empresa_uuid=body.empresa_uuid,
         name=body.name,
@@ -55,8 +62,8 @@ async def create_fundo(body: FundoCreate, db: AsyncSession = Depends(get_db), _=
     return fundo
 
 
-@router.put("/{uuid}", response_model=FundoOut)
-async def update_fundo(uuid: str, body: FundoUpdate, db: AsyncSession = Depends(get_db), _=Depends(admin_dep)):
+@router.put("/{uuid}", response_model=FundoOut, dependencies=_admin_dep)
+async def update_fundo(uuid: str, body: FundoUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Fundo).where(Fundo.uuid == uuid))
     fundo = result.scalar_one_or_none()
     if not fundo:

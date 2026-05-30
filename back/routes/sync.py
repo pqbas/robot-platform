@@ -51,10 +51,37 @@ async def force_pull():
     if config.mode != AppMode.ROBOT:
         return {"ok": False, "reason": "only available in robot mode"}
     from back.services.sync_pull import pull_models
-    from back.services.sync_pull_context import pull_device_context
+    from back.services.sync_pull_context import pull_catalog, pull_device_context
     await pull_models()
     await pull_device_context()
+    await pull_catalog()
     return {"ok": True}
+
+
+@router.get("/catalog", dependencies=_device_dep)
+async def get_catalog(db: AsyncSession = Depends(get_db)):
+    """Return all empresas and fundos for catalog population on robots.
+
+    Protected by device API key in server mode. Robots call this to
+    populate their local catalog so operators can select org hierarchy
+    even when offline.
+    """
+    empresas_result = await db.execute(select(Empresa).where(Empresa.is_active == True))  # noqa: E712
+    fundos_result = await db.execute(select(Fundo).where(Fundo.is_active == True))  # noqa: E712
+    empresas = empresas_result.scalars().all()
+    fundos = fundos_result.scalars().all()
+    return {
+        "empresas": [{"uuid": e.uuid, "name": e.name} for e in empresas],
+        "fundos": [
+            {
+                "uuid": f.uuid,
+                "empresa_uuid": f.empresa_uuid,
+                "name": f.name,
+                "region": f.region,
+            }
+            for f in fundos
+        ],
+    }
 
 
 @router.post("/push", dependencies=_device_dep)

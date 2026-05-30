@@ -38,7 +38,7 @@ async def _sync_cycle() -> None:
         return
 
     from back.services.sync_pull import pull_models
-    from back.services.sync_pull_context import pull_device_context
+    from back.services.sync_pull_context import pull_catalog, pull_device_context
     from back.services.sync_push import push_all
     from back.services.sync_recordings_upload import upload_pending_recordings
 
@@ -48,6 +48,7 @@ async def _sync_cycle() -> None:
 
     await pull_models()
     await pull_device_context()
+    await pull_catalog()
 
     # Future: execute commands (feature/sync-commands)
     logger.info("Sync: cycle complete")

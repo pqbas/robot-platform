@@ -51,7 +51,7 @@ export default function VisionPage() {
   const counting = useCounting()
   const recording = useRecording()
   const { mode } = useAppMode()
-  const { context: deviceContext } = useDeviceContext(mode === "robot")
+  const { context: deviceContext, refetch: refetchDeviceContext } = useDeviceContext(mode === "robot")
   const resolution = useCameraResolution(mode === "robot")
 
   const [selectedClass, setSelectedClass] = useState("")
@@ -239,11 +239,12 @@ export default function VisionPage() {
     }
   }
 
-  const handleSave = async (camellon: string) => {
+  const handleSave = async (camellonId: number) => {
     try {
-      await counting.save(camellon)
+      await counting.save(camellonId)
       toast.success("Sesion guardada")
       loadCamellones()
+      refetchDeviceContext()
     } catch (e) {
       toast.error("Error al guardar: " + (e instanceof Error ? e.message : "desconocido"))
     }
@@ -430,6 +431,7 @@ export default function VisionPage() {
         open={counting.state === "SAVING"}
         totalCount={counting.sessionTotal}
         duration={savedDuration}
+        deviceContext={deviceContext}
         onSave={handleSave}
         onDiscard={counting.discard}
       />

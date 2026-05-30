@@ -40,6 +40,9 @@ class StorageConfig:
     device_context_path: str = os.getenv(
         "DEVICE_CONTEXT_PATH", "data/robot/device_context.json"
     )
+    active_context_path: str = os.getenv(
+        "ACTIVE_CONTEXT_PATH", "data/robot/active_context.json"
+    )
     recordings_dir: str = os.getenv("RECORDINGS_DIR", "data/robot/recordings")
     camera_settings_path: str = os.getenv(
         "CAMERA_SETTINGS_PATH", "data/robot/camera_settings.json"

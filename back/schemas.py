@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class CamellonCreate(BaseModel):
     nombre: str
+    fundo_uuid: str | None = None
 
 
 class CamellonRename(BaseModel):
@@ -24,6 +25,7 @@ class CamellonOut(BaseModel):
     nombre: str
     lat: float | None
     lng: float | None
+    fundo_uuid: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -259,6 +261,17 @@ class AvailableLabelItem(BaseModel):
 class SelectLabelRequest(BaseModel):
     label: str
     model_filename: str
+
+
+# --- Device context ---
+
+
+class ActiveContextSet(BaseModel):
+    empresa_uuid: str
+    empresa_name: str
+    fundo_uuid: str
+    fundo_name: str
+    fundo_region: str | None = None
 
 
 # --- Sync ---

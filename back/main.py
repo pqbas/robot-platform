@@ -20,6 +20,8 @@ from back.routes.config_routes import router as config_router
 from back.routes.counting import router as counting_router
 from back.routes.dashboard import router as dashboard_router
 from back.routes.device_context import router as device_context_router
+from back.routes.empresas import router as empresas_router
+from back.routes.fundos import router as fundos_router
 from back.routes.locations import router as locations_router
 from back.routes.recordings import router as recordings_router
 from back.routes.stream import router as stream_router
@@ -130,6 +132,12 @@ app.include_router(sync_router)
 app.include_router(setup_router)
 app.include_router(auth_router)
 
+# Empresa and fundo catalogs — available in both modes.
+# In server mode the routes gate on admin role; in robot mode they are open
+# so operators can create on-field without an admin account.
+app.include_router(empresas_router)
+app.include_router(fundos_router)
+
 # Robot-only routes
 if app_config.mode == AppMode.ROBOT:
     from back.routes.models_local import router as models_local_router
@@ -140,15 +148,10 @@ if app_config.mode == AppMode.ROBOT:
 # Admin CRUD routes — server mode only
 if app_config.mode == AppMode.SERVER:
     from back.routes.admin_models import router as admin_models_router
-    from back.routes.empresas import router as empresas_router
-    from back.routes.fundos import router as fundos_router
     from back.routes.users import router as users_router
-
     from back.routes.devices import router as devices_router
 
     app.include_router(users_router)
-    app.include_router(empresas_router)
-    app.include_router(fundos_router)
     app.include_router(admin_models_router)
     app.include_router(devices_router)
 
