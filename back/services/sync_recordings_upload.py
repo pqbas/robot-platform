@@ -31,14 +31,22 @@ async def _is_metadata_synced(db: AsyncSession, uuid: str) -> bool:
     return result.scalar_one_or_none() is not None
 
 
-async def _upload_one(http: aiohttp.ClientSession, row: Recording) -> bool:
+async def _probe_lan(http: aiohttp.ClientSession, lan_url: str) -> bool:
+    try:
+        async with http.get(f"{lan_url}/api/sync/health", timeout=aiohttp.ClientTimeout(total=2)) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+async def _upload_one(http: aiohttp.ClientSession, row: Recording, base_url: str) -> bool:
     if not os.path.isfile(row.file_path):
         logger.warning(
             "Recording %s: local file %s missing — skip", row.uuid, row.file_path
         )
         return False
 
-    url = f"{config.sync.server_url}/api/sync/recordings/{row.uuid}/upload"
+    url = f"{base_url}/api/sync/recordings/{row.uuid}/upload"
     headers = {"Authorization": f"Bearer {config.sync.api_key}"}
 
     try:
@@ -73,6 +81,9 @@ async def upload_pending_recordings(db: AsyncSession) -> None:
     if not config.sync.server_url:
         return
 
+    if not config.sync.lan_url:
+        return
+
     result = await db.execute(
         select(Recording).where(
             Recording.uploaded_at.is_(None) & Recording.ended_at.is_not(None)
@@ -84,11 +95,14 @@ async def upload_pending_recordings(db: AsyncSession) -> None:
 
     timeout = aiohttp.ClientTimeout(total=600, connect=15)
     async with aiohttp.ClientSession(timeout=timeout) as http:
+        if not await _probe_lan(http, config.sync.lan_url):
+            logger.warning("LAN no alcanzable (%s) — upload omitido", config.sync.lan_url)
+            return
         for row in rows:
             if not await _is_metadata_synced(db, row.uuid):
                 # Wait for the metadata push (next cycle) before uploading.
                 continue
-            ok = await _upload_one(http, row)
+            ok = await _upload_one(http, row, config.sync.lan_url)
             if ok:
                 row.uploaded_at = datetime.now(timezone.utc).strftime(
                     "%Y-%m-%dT%H:%M:%SZ"

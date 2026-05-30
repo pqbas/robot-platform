@@ -88,6 +88,7 @@ class EncoderConfig:
 @dataclass
 class SyncConfig:
     server_url: str = os.getenv("SYNC_SERVER_URL", "")
+    lan_url: str = os.getenv("SYNC_LAN_URL", "")
     api_key: str = os.getenv("SYNC_API_KEY", "")
     interval_seconds: int = int(os.getenv("SYNC_INTERVAL", "300"))
 
