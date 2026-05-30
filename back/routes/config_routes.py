@@ -19,6 +19,8 @@ from back.schemas import (
     CameraRestartOut,
     CameraResolutionOut,
     CameraResolutionUpdate,
+    CameraSourceOut,
+    CameraSourceUpdate,
     CountingConfigOut,
     CountingConfigUpdate,
     SelectLabelRequest,
@@ -169,6 +171,27 @@ async def update_camera_resolution(
         raise HTTPException(503, f"Camera worker reload failed: {resp.get('error')}")
 
     return CameraResolutionOut(preset=body.preset)
+
+
+@router.get("/camera/source", response_model=CameraSourceOut)
+async def get_camera_source():
+    _require_robot_mode()
+    return CameraSourceOut(rtsp_url=camera_settings.read_rtsp_url())
+
+
+@router.put("/camera/source", response_model=CameraSourceOut)
+async def update_camera_source(body: CameraSourceUpdate):
+    _require_robot_mode()
+    camera_settings.write_rtsp_url(body.rtsp_url)
+    client = CameraControlClient(config.camera.control_socket_path)
+    try:
+        resp = client.reload()
+    except CameraWorkerUnavailable as exc:
+        logger.warning("Camera worker control socket unavailable: %s", exc)
+        raise HTTPException(503, "Camera worker no responde; revisa el servicio.")
+    if not resp.get("ok"):
+        raise HTTPException(503, f"Camera worker reload failed: {resp.get('error')}")
+    return CameraSourceOut(rtsp_url=body.rtsp_url)
 
 
 @router.post("/camera/restart", response_model=CameraRestartOut)

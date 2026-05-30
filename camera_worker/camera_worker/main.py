@@ -57,14 +57,20 @@ def parse_args():
     parser.add_argument("--height", type=int, default=int(os.getenv("CAMERA_HEIGHT", "720")))
     parser.add_argument("--crop", type=int, default=int(os.getenv("CAMERA_CROP", "1280")))
     parser.add_argument("--fps", type=float, default=float(os.getenv("CAMERA_FPS", "30")))
+    parser.add_argument(
+        "--rtsp-url",
+        default=os.getenv("CAMERA_RTSP_URL", ""),
+        help="RTSP/HTTP URL for IP camera. If set, ignores --index.",
+    )
     return parser.parse_args()
 
 
 def _load_preset_override(settings_path: str | None) -> dict | None:
-    """Return preset override (width/height/crop) from the settings JSON.
+    """Return override dict from the settings JSON.
 
-    None means "no JSON / unreadable / unknown preset" — caller keeps the
-    width/height/crop already on `args` (env vars or CLI flags).
+    May contain width/height/crop (from preset) and/or rtsp_url.
+    None means "no JSON / unreadable" — caller keeps the values already on
+    `args` (env vars or CLI flags).
     """
     if not settings_path or not os.path.exists(settings_path):
         return None
@@ -77,52 +83,87 @@ def _load_preset_override(settings_path: str | None) -> dict | None:
             settings_path, exc,
         )
         return None
+    override: dict = {}
     preset = data.get("preset")
-    if preset not in PRESETS:
-        logger.warning(
-            "Camera settings file %s has invalid preset=%r — falling back",
-            settings_path, preset,
-        )
-        return None
-    logger.info("Camera settings: applying preset=%s from %s", preset, settings_path)
-    return PRESETS[preset]
+    if preset is not None:
+        if preset not in PRESETS:
+            logger.warning(
+                "Camera settings file %s has invalid preset=%r — ignoring preset",
+                settings_path, preset,
+            )
+        else:
+            logger.info("Camera settings: applying preset=%s from %s", preset, settings_path)
+            override.update(PRESETS[preset])
+    rtsp_url = data.get("rtsp_url")
+    if rtsp_url:
+        logger.info("Camera settings: applying rtsp_url from %s", settings_path)
+        override["rtsp_url"] = rtsp_url
+    return override if override else None
 
 
 def _apply_override(args, override: dict | None) -> None:
     if override is None:
         return
-    args.width = override["width"]
-    args.height = override["height"]
-    args.crop = override["crop"]
+    if "width" in override:
+        args.width = override["width"]
+    if "height" in override:
+        args.height = override["height"]
+    if "crop" in override:
+        args.crop = override["crop"]
+    if "rtsp_url" in override:
+        args.rtsp_url = override["rtsp_url"]
 
 
 def open_camera(args):
-    while True:
-        cap = cv2.VideoCapture(args.index)
-        # Force YUYV (uncompressed) so the encoder receives clean pixels
-        # instead of a re-encoded MJPEG source. Falls back silently to
-        # whatever the camera negotiates if YUYV is rejected.
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"YUYV"))
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
-        cap.set(cv2.CAP_PROP_FPS, args.fps)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        if cap.isOpened():
-            actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            actual_fps = float(cap.get(cv2.CAP_PROP_FPS)) or args.fps
-            actual_fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
-            fourcc_str = "".join(
-                chr((actual_fourcc >> 8 * i) & 0xFF) for i in range(4)
-            )
-            logger.info(
-                "Camera opened (index=%d) — actual %dx%d @ %.1ffps fourcc=%s",
-                args.index, actual_width, actual_height, actual_fps, fourcc_str,
-            )
-            return cap, actual_width, actual_height, actual_fps
-        cap.release()
-        logger.warning("Camera not available — retrying in 1s")
-        time.sleep(1)
+    rtsp_url = getattr(args, "rtsp_url", "")
+    if rtsp_url:
+        # IP camera path — RTSP or HTTP MJPEG URL.
+        # FOURCC and BUFFERSIZE are silently ignored by OpenCV for network
+        # sources; omitting them avoids confusing log output.
+        # Crop is forced to 0: stereo-split only applies to the ZED 2i USB camera.
+        args.crop = 0
+        while True:
+            cap = cv2.VideoCapture(rtsp_url)
+            if cap.isOpened():
+                actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                actual_fps = float(cap.get(cv2.CAP_PROP_FPS)) or args.fps
+                logger.info(
+                    "Camera opened (rtsp=%s) — actual %dx%d @ %.1ffps",
+                    rtsp_url, actual_width, actual_height, actual_fps,
+                )
+                return cap, actual_width, actual_height, actual_fps
+            cap.release()
+            logger.warning("RTSP stream not available — retrying in 1s")
+            time.sleep(1)
+    else:
+        # V4L2 USB camera path (default).
+        while True:
+            cap = cv2.VideoCapture(args.index)
+            # Force YUYV (uncompressed) so the encoder receives clean pixels
+            # instead of a re-encoded MJPEG source. Falls back silently to
+            # whatever the camera negotiates if YUYV is rejected.
+            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"YUYV"))
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+            cap.set(cv2.CAP_PROP_FPS, args.fps)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            if cap.isOpened():
+                actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                actual_fps = float(cap.get(cv2.CAP_PROP_FPS)) or args.fps
+                actual_fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
+                fourcc_str = "".join(
+                    chr((actual_fourcc >> 8 * i) & 0xFF) for i in range(4)
+                )
+                logger.info(
+                    "Camera opened (index=%d) — actual %dx%d @ %.1ffps fourcc=%s",
+                    args.index, actual_width, actual_height, actual_fps, fourcc_str,
+                )
+                return cap, actual_width, actual_height, actual_fps
+            cap.release()
+            logger.warning("Camera not available — retrying in 1s")
+            time.sleep(1)
 
 
 class FrameBroadcaster:
