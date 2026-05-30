@@ -4,11 +4,81 @@ services:
     environment:
       POSTGRES_DB: robot_platform
       POSTGRES_USER: platform
-      POSTGRES_PASSWORD: dev-password
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-dev-password}"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform -d robot_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  back:
+    build:
+      context: .
+      dockerfile: back/Dockerfile
+    env_file:
+      - path: .env.server
+        required: false
+    environment:
+      ENV_FILE: .env.server
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - models:/app/data/robot/models
+      - frames:/app/data/server/frames
+      - recordings:/app/data/robot/recordings
+    restart: unless-stopped
+
+  front:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+      target: build
+    command: ["sh", "-c", "cp -r /app/dist/. /usr/share/nginx/html/"]
+    volumes:
+      - front-dist:/usr/share/nginx/html
+    restart: "no"
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    depends_on:
+      - back
+      - front
+    environment:
+      SERVER_NAME: "${TS_HOSTNAME:-_}"
+      BACKEND_HOST: back
+      BACKEND_PORT: "9090"
+    volumes:
+      - ./deploy/nginx.compose.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - front-dist:/usr/share/nginx/html:ro
+    restart: unless-stopped
+
+  tailscale:
+    image: tailscale/tailscale:stable
+    hostname: "${TS_HOSTNAME:-robot-platform}"
+    environment:
+      TS_AUTHKEY: "${TS_AUTHKEY}"
+      TS_HOSTNAME: "${TS_HOSTNAME:-robot-platform}"
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+      TS_EXTRA_ARGS: "--ssh=false"
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ts-state:/var/lib/tailscale
+      - ./deploy/tailscale.serve.json:/config/serve.json:ro
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
 
 volumes:
   pgdata:
+  models:
+  frames:
+  recordings:
+  front-dist:
+  ts-state:
