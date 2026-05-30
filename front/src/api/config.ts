@@ -53,6 +53,22 @@ export function setCameraResolution(
   })
 }
 
+// --- Camera source (RTSP URL) ---
+
+export type CameraSource = { rtsp_url: string }
+
+export function getCameraSource(): Promise<CameraSource> {
+  return apiFetch("/api/config/camera/source")
+}
+
+export function setCameraSource(rtsp_url: string): Promise<CameraSource> {
+  return apiFetch("/api/config/camera/source", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rtsp_url }),
+  })
+}
+
 // --- Counting ---
 
 export type RoiMode = "square" | "full"

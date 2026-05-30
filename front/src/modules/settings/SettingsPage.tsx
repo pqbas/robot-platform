@@ -19,8 +19,10 @@ import {
   type CameraPreset,
   type CountingConfig,
   getCameraConfig,
+  getCameraSource,
   getCountingConfig,
   listCameras,
+  setCameraSource,
   updateCameraConfig,
   updateCountingConfig,
 } from "@/api/config"
@@ -83,6 +85,8 @@ export default function SettingsPage() {
     () => localStorage.getItem(SELECTED_LABEL_KEY) ?? "",
   )
   const [draftResolution, setDraftResolution] = useState<CameraPreset | null>(null)
+  const [draftRtspUrl, setDraftRtspUrl] = useState<string>("")
+  const [loadedRtspUrl, setLoadedRtspUrl] = useState<string>("")
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
 
@@ -117,6 +121,11 @@ export default function SettingsPage() {
         }
       })
       .catch(() => {})
+    if (mode === "robot") {
+      getCameraSource()
+        .then((s) => { setDraftRtspUrl(s.rtsp_url); setLoadedRtspUrl(s.rtsp_url) })
+        .catch(() => {})
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -166,6 +175,14 @@ export default function SettingsPage() {
     if (draftResolution && draftResolution !== resolution.preset) {
       try {
         await resolution.change(draftResolution)
+      } catch {
+        anyError = true
+      }
+    }
+    if (draftRtspUrl !== loadedRtspUrl) {
+      try {
+        await setCameraSource(draftRtspUrl)
+        setLoadedRtspUrl(draftRtspUrl)
       } catch {
         anyError = true
       }
@@ -245,6 +262,21 @@ export default function SettingsPage() {
                       <SelectItem value="720p">720p</SelectItem>
                     </SelectContent>
                   </Select>
+                </Field>
+              )}
+
+              {mode === "robot" && (
+                <Field
+                  label="Fuente de video"
+                  htmlFor="rtsp-url-input"
+                  hint="Deja en blanco para usar la cámara USB."
+                >
+                  <Input
+                    id="rtsp-url-input"
+                    value={draftRtspUrl}
+                    onChange={(e) => setDraftRtspUrl(e.target.value)}
+                    placeholder="rtsp://192.168.0.x:554/stream"
+                  />
                 </Field>
               )}
 
