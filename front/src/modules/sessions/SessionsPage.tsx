@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import type { Session, Camellon, MapLocation } from "@/types"
+import type { Session, Camellon, MapLocation, Empresa, Fundo } from "@/types"
 import { getAllCamellones } from "@/api/camellones"
+import { getEmpresas, getFundos } from "@/api/admin"
 import { getSessions, getSessionDevices } from "@/api/sessions"
 import { getLocations } from "@/api/locations"
 import { Button } from "@/components/ui/button"
@@ -20,10 +21,13 @@ import SessionDetail from "@/modules/map/components/SessionDetail"
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [camellones, setCamellones] = useState<Map<number, Camellon>>(new Map())
+  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [fundos, setFundos] = useState<Fundo[]>([])
   const [locations, setLocations] = useState<MapLocation[]>([])
   const [devices, setDevices] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
+  const [empresaFilter, setEmpresaFilter] = useState("all")
   const [locationFilter, setLocationFilter] = useState("all")
   const [classFilter, setClassFilter] = useState("all")
   const [deviceFilter, setDeviceFilter] = useState("all")
@@ -32,12 +36,16 @@ export default function SessionsPage() {
 
   const loadBase = useCallback(async () => {
     try {
-      const [camData, locData, devData] = await Promise.all([
+      const [camData, empData, fundoData, locData, devData] = await Promise.all([
         getAllCamellones(),
+        getEmpresas(),
+        getFundos(),
         getLocations(),
         getSessionDevices(),
       ])
       setCamellones(new Map(camData.map((c) => [c.id, c])))
+      setEmpresas(empData)
+      setFundos(fundoData)
       setLocations(locData)
       setDevices(devData)
     } catch (e) {
@@ -78,8 +86,26 @@ export default function SessionsPage() {
     return Array.from(new Set(sessions.map((s) => s.target_class))).sort()
   }, [sessions])
 
+  // session.camellon_id -> empresa_uuid, via camellon.fundo_uuid -> fundo.empresa_uuid
+  const empresaByCamellonId = useMemo(() => {
+    const fundoToEmpresa = new Map(fundos.map((f) => [f.uuid, f.empresa_uuid]))
+    const map = new Map<number, string>()
+    for (const [id, cam] of camellones) {
+      const empresaUuid = cam.fundo_uuid
+        ? fundoToEmpresa.get(cam.fundo_uuid)
+        : undefined
+      if (empresaUuid) map.set(id, empresaUuid)
+    }
+    return map
+  }, [camellones, fundos])
+
   const filteredSessions = useMemo(() => {
     let result = sessions
+    if (empresaFilter !== "all") {
+      result = result.filter(
+        (s) => empresaByCamellonId.get(s.camellon_id) === empresaFilter,
+      )
+    }
     if (locationFilter !== "all") {
       const ids = camellonIdsByLocation.get(locationFilter)
       result = ids ? result.filter((s) => ids.has(s.camellon_id)) : []
@@ -88,9 +114,17 @@ export default function SessionsPage() {
       result = result.filter((s) => s.target_class === classFilter)
     }
     return result
-  }, [sessions, locationFilter, classFilter, camellonIdsByLocation])
+  }, [
+    sessions,
+    empresaFilter,
+    locationFilter,
+    classFilter,
+    camellonIdsByLocation,
+    empresaByCamellonId,
+  ])
 
   const hasActiveFilters =
+    empresaFilter !== "all" ||
     locationFilter !== "all" ||
     classFilter !== "all" ||
     deviceFilter !== "all" ||
@@ -98,6 +132,7 @@ export default function SessionsPage() {
     dateTo != null
 
   function clearAllFilters() {
+    setEmpresaFilter("all")
     setLocationFilter("all")
     setClassFilter("all")
     setDeviceFilter("all")
@@ -134,6 +169,21 @@ export default function SessionsPage() {
       </div>
 
       <div className="grid grid-cols-2 items-end gap-3 md:flex md:gap-4">
+        <div className="space-y-1 md:min-w-0 md:flex-1">
+          <Label className="text-xs">Empresa</Label>
+          <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
+            <SelectTrigger className="h-9 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              {empresas.map((emp) => (
+                <SelectItem key={emp.uuid} value={emp.uuid}>{emp.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="space-y-1 md:min-w-0 md:flex-1">
           <Label className="text-xs">Ubicacion</Label>
           <Select value={locationFilter} onValueChange={setLocationFilter}>

@@ -25,6 +25,7 @@ class CamellonOut(BaseModel):
     nombre: str
     lat: float | None
     lng: float | None
+    fundo_uuid: str | None = None
 
     model_config = {"from_attributes": True}
 
