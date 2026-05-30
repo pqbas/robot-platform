@@ -34,8 +34,6 @@ def upgrade() -> None:
 
     if dialect == "sqlite":
         if not _table_exists_sqlite(conn, "recordings"):
-            # Fresh DB that never ran migration 008 (e.g. counting.db dev DB).
-            # Create the table with camellon_id already present.
             conn.execute(sa.text("""
                 CREATE TABLE recordings (
                     uuid TEXT NOT NULL,
@@ -51,46 +49,14 @@ def upgrade() -> None:
                     height INTEGER,
                     fps FLOAT,
                     uploaded_at TEXT,
-                    PRIMARY KEY (uuid),
-                    FOREIGN KEY (camellon_id) REFERENCES camellones (id)
+                    PRIMARY KEY (uuid)
                 )
             """))
             return
         if _has_column_sqlite(conn, "recordings", "camellon_id"):
             return
-        conn.execute(sa.text("ALTER TABLE recordings RENAME TO _recordings_old"))
-        conn.execute(sa.text("""
-            CREATE TABLE recordings (
-                uuid TEXT NOT NULL,
-                device_id TEXT NOT NULL,
-                session_uuid TEXT,
-                camellon_id INTEGER,
-                started_at TEXT NOT NULL,
-                ended_at TEXT,
-                duration_seconds FLOAT,
-                file_path TEXT NOT NULL,
-                file_size_bytes INTEGER,
-                width INTEGER,
-                height INTEGER,
-                fps FLOAT,
-                uploaded_at TEXT,
-                PRIMARY KEY (uuid),
-                FOREIGN KEY (camellon_id) REFERENCES camellones (id)
-            )
-        """))
-        conn.execute(sa.text("""
-            INSERT INTO recordings (
-                uuid, device_id, session_uuid, started_at, ended_at,
-                duration_seconds, file_path, file_size_bytes, width, height, fps, uploaded_at
-            )
-            SELECT
-                uuid, device_id, session_uuid, started_at, ended_at,
-                duration_seconds, file_path, file_size_bytes, width, height, fps, uploaded_at
-            FROM _recordings_old
-        """))
-        conn.execute(sa.text("DROP TABLE _recordings_old"))
+        conn.execute(sa.text("ALTER TABLE recordings ADD COLUMN camellon_id INTEGER"))
     else:
-        # PostgreSQL: check column exists then add if needed
         row = conn.execute(sa.text(
             "SELECT 1 FROM information_schema.columns "
             "WHERE table_name = 'recordings' AND column_name = 'camellon_id'"
@@ -110,6 +76,9 @@ def downgrade() -> None:
     conn = op.get_bind()
     dialect = conn.dialect.name
     if dialect == "sqlite":
+        # SQLite does not support DROP COLUMN before 3.35; use rename-copy
+        if not _has_column_sqlite(conn, "recordings", "camellon_id"):
+            return
         conn.execute(sa.text("ALTER TABLE recordings RENAME TO _recordings_old"))
         conn.execute(sa.text("""
             CREATE TABLE recordings (
