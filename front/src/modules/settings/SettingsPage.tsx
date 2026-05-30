@@ -104,6 +104,10 @@ export default function SettingsPage() {
   const [draftResolution, setDraftResolution] = useState<CameraPreset | null>(null)
   const [draftRtspUrl, setDraftRtspUrl] = useState<string>("")
   const [loadedRtspUrl, setLoadedRtspUrl] = useState<string>("")
+  // "usb" = V4L2 device; "ip" = RTSP/HTTP URL. The backend derives the source
+  // from whether rtsp_url is empty, so this toggle just drives the UI and what
+  // we persist on save (empty url for usb, the url for ip).
+  const [videoSource, setVideoSource] = useState<"usb" | "ip">("usb")
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [restartingCamera, setRestartingCamera] = useState(false)
@@ -141,7 +145,11 @@ export default function SettingsPage() {
       .catch(() => {})
     if (mode === "robot") {
       getCameraSource()
-        .then((s) => { setDraftRtspUrl(s.rtsp_url); setLoadedRtspUrl(s.rtsp_url) })
+        .then((s) => {
+          setDraftRtspUrl(s.rtsp_url)
+          setLoadedRtspUrl(s.rtsp_url)
+          setVideoSource(s.rtsp_url ? "ip" : "usb")
+        })
         .catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,17 +198,24 @@ export default function SettingsPage() {
         anyError = true
       }
     }
-    if (draftResolution && draftResolution !== resolution.preset) {
+    // Resolution only applies to the USB camera; skip it for an IP source.
+    if (
+      videoSource === "usb" &&
+      draftResolution &&
+      draftResolution !== resolution.preset
+    ) {
       try {
         await resolution.change(draftResolution)
       } catch {
         anyError = true
       }
     }
-    if (draftRtspUrl !== loadedRtspUrl) {
+    // USB persists an empty url (worker falls back to V4L2); IP persists the url.
+    const effectiveRtspUrl = videoSource === "ip" ? draftRtspUrl : ""
+    if (effectiveRtspUrl !== loadedRtspUrl) {
       try {
-        await setCameraSource(draftRtspUrl)
-        setLoadedRtspUrl(draftRtspUrl)
+        await setCameraSource(effectiveRtspUrl)
+        setLoadedRtspUrl(effectiveRtspUrl)
       } catch {
         anyError = true
       }
@@ -238,6 +253,12 @@ export default function SettingsPage() {
   const directions =
     config && (directionsByMode[config.count_mode] ?? directionsByMode.vertical)
 
+  // The source toggle only exists on the robot. In server mode there is no
+  // camera worker, so the USB device fields show as before.
+  const isRobot = mode === "robot"
+  const showUsbFields = !isRobot || videoSource === "usb"
+  const showIpField = isRobot && videoSource === "ip"
+
   return (
     <div className="mx-auto h-full w-full max-w-5xl overflow-y-auto p-4 md:p-6">
       <h1 className="mb-6 text-xl font-semibold md:text-2xl">Configuración</h1>
@@ -252,7 +273,28 @@ export default function SettingsPage() {
         <div className="min-w-0 flex-1">
           {activeId === "camera" && (
             <SectionPanel title="Cámara" description="Dispositivo de captura y resolución de la imagen">
-              {cameras.length > 0 && cameraConfig && (
+              {isRobot && (
+                <Field
+                  label="Fuente de video"
+                  htmlFor="video-source-select"
+                  hint="USB: cámara conectada por cable. IP: cámara por red (RTSP/HTTP)."
+                >
+                  <Select
+                    value={videoSource}
+                    onValueChange={(v) => setVideoSource(v as "usb" | "ip")}
+                  >
+                    <SelectTrigger id="video-source-select" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="usb">Cámara USB</SelectItem>
+                      <SelectItem value="ip">Cámara IP (RTSP)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+
+              {showUsbFields && cameras.length > 0 && cameraConfig && (
                 <Field label="Cámara" htmlFor="camera-select" hint="El cambio se aplica en la próxima conexión.">
                   <Select
                     value={String(cameraConfig.index)}
@@ -274,7 +316,7 @@ export default function SettingsPage() {
                 </Field>
               )}
 
-              {resolution.preset && (
+              {showUsbFields && resolution.preset && (
                 <Field
                   label="Resolución de captura"
                   htmlFor="resolution-select"
@@ -295,11 +337,11 @@ export default function SettingsPage() {
                 </Field>
               )}
 
-              {mode === "robot" && (
+              {showIpField && (
                 <Field
-                  label="Fuente de video"
+                  label="Dirección del stream"
                   htmlFor="rtsp-url-input"
-                  hint="Deja en blanco para usar la cámara USB."
+                  hint="URL RTSP o HTTP de la cámara IP. El cambio reinicia la cámara; detén conteo y grabación antes."
                 >
                   <Input
                     id="rtsp-url-input"
@@ -310,7 +352,7 @@ export default function SettingsPage() {
                 </Field>
               )}
 
-              {mode === "robot" && (
+              {isRobot && (
                 <Field
                   label="Reiniciar cámara"
                   htmlFor="restart-camera"
