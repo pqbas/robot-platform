@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { Session, Camellon, MapLocation } from "@/types"
-import { getCamellones } from "@/api/camellones"
+import { getAllCamellones } from "@/api/camellones"
 import { getSessions, getSessionDevices } from "@/api/sessions"
 import { getLocations } from "@/api/locations"
 import { Button } from "@/components/ui/button"
@@ -33,7 +33,7 @@ export default function SessionsPage() {
   const loadBase = useCallback(async () => {
     try {
       const [camData, locData, devData] = await Promise.all([
-        getCamellones(),
+        getAllCamellones(),
         getLocations(),
         getSessionDevices(),
       ])
@@ -210,7 +210,7 @@ export default function SessionsPage() {
           onSelect={setSelectedSession}
           onSessionUpdated={async (updated) => {
             setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
-            const fresh = await getCamellones()
+            const fresh = await getAllCamellones()
             setCamellones(new Map(fresh.map((c) => [c.id, c])))
           }}
         />

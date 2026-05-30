@@ -6,6 +6,13 @@ export function getCamellones(fundoUuid?: string): Promise<Camellon[]> {
   return apiFetch(`/api/camellones${qs}`)
 }
 
+// All camellones this device knows about, ignoring the active fundo scope.
+// Used by the sessions history so beds from other fundos/empresas captured by
+// this robot still resolve to their name (not a bare #id).
+export function getAllCamellones(): Promise<Camellon[]> {
+  return apiFetch(`/api/camellones?all_fundos=true`)
+}
+
 export function createCamellon(nombre: string, fundoUuid?: string): Promise<Camellon> {
   return apiFetch("/api/camellones", {
     method: "POST",

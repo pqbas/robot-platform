@@ -40,8 +40,14 @@ def _fundo_scope() -> tuple[bool, str | None]:
 @router.get("", response_model=list[CamellonOut])
 async def list_camellones(
     fundo_uuid: Optional[str] = Query(default=None),
+    all_fundos: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
 ):
+    if all_fundos:
+        # Unscoped: every camellon this device knows about. Used by cross-fundo
+        # views like the sessions history, where the robot legitimately shows
+        # every session it captured regardless of the currently selected fundo.
+        return await storage.list_camellones(db)
     if fundo_uuid is not None:
         # Explicit fundo_uuid param overrides context scoping
         return await storage.list_camellones(db, scope_fundo=True, fundo_uuid=fundo_uuid)
