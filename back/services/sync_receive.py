@@ -98,7 +98,11 @@ async def receive_camellones(db: AsyncSession, items: list[SyncCamellon]) -> Syn
     ok: list[str] = []
     for item in items:
         existing = await db.execute(select(Camellon).where(Camellon.uuid == item.uuid))
-        if existing.scalar_one_or_none():
+        camellon = existing.scalar_one_or_none()
+        if camellon:
+            camellon.nombre = item.nombre
+            if item.fundo_uuid is not None:
+                camellon.fundo_uuid = item.fundo_uuid
             skipped += 1
             ok.append(item.uuid)
             continue

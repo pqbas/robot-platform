@@ -14,6 +14,8 @@ from back.schemas import (
     CamellonRename,
     CamellonSummary,
 )
+from sqlalchemy import delete
+from back.models import SyncLog
 from back.services import storage
 from back.services.sync_pull_context import read_effective_context
 
@@ -90,6 +92,9 @@ async def rename_camellon(
     if existing is not None and existing.id != camellon_id:
         raise HTTPException(409, f"Camellon '{body.nombre}' already exists")
     cam.nombre = body.nombre
+    await db.execute(delete(SyncLog).where(
+        (SyncLog.table_name == "camellones") & (SyncLog.record_uuid == cam.uuid)
+    ))
     await db.commit()
     await db.refresh(cam)
     return cam
