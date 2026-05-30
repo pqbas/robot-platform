@@ -53,6 +53,17 @@ export function setCameraResolution(
   })
 }
 
+// --- Camera process restart (robot-only) ---
+
+export type CameraRestart = {
+  ok: boolean
+  pid: number
+}
+
+export function restartCamera(): Promise<CameraRestart> {
+  return apiFetch("/api/config/camera/restart", { method: "POST" })
+}
+
 // --- Counting ---
 
 export type RoiMode = "square" | "full"

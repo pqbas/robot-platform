@@ -21,6 +21,7 @@ import {
   getCameraConfig,
   getCountingConfig,
   listCameras,
+  restartCamera,
   updateCameraConfig,
   updateCountingConfig,
 } from "@/api/config"
@@ -44,6 +45,22 @@ function fromSelectKey(key: string) {
   const idx = key.indexOf("::")
   if (idx === -1) return { label: key, model_filename: "" }
   return { label: key.slice(0, idx), model_filename: key.slice(idx + 2) }
+}
+
+// ApiError.message carries the raw response body; FastAPI HTTPException bodies
+// are {"detail": "..."}. Surface that detail when present so guards like
+// "Detén la grabación..." reach the toast instead of a generic message.
+function extractApiMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) {
+    try {
+      const parsed = JSON.parse(err.message)
+      if (parsed && typeof parsed.detail === "string") return parsed.detail
+    } catch {
+      // not JSON — use the raw message below
+    }
+    return err.message
+  }
+  return fallback
 }
 
 const directionsByMode: Record<string, { value: string; label: string }[]> = {
@@ -85,6 +102,7 @@ export default function SettingsPage() {
   const [draftResolution, setDraftResolution] = useState<CameraPreset | null>(null)
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [restartingCamera, setRestartingCamera] = useState(false)
 
   const sections = useMemo<Section[]>(() => {
     const all: Section[] = [
@@ -176,6 +194,18 @@ export default function SettingsPage() {
     setSaving(false)
   }
 
+  async function handleRestartCamera() {
+    setRestartingCamera(true)
+    try {
+      await restartCamera()
+      toast.success("Cámara reiniciada — se reconectará en unos segundos")
+    } catch (err) {
+      toast.error(extractApiMessage(err, "No se pudo reiniciar la cámara"))
+    } finally {
+      setRestartingCamera(false)
+    }
+  }
+
   async function handleSync() {
     setSyncing(true)
     try {
@@ -245,6 +275,27 @@ export default function SettingsPage() {
                       <SelectItem value="720p">720p</SelectItem>
                     </SelectContent>
                   </Select>
+                </Field>
+              )}
+
+              {mode === "robot" && (
+                <Field
+                  label="Reiniciar cámara"
+                  htmlFor="restart-camera"
+                  hint="Reinicia el proceso de la cámara si se queda congelada o no reconecta tras desconectar/conectar el cable. El video se corta unos segundos."
+                >
+                  <Button
+                    id="restart-camera"
+                    variant="outline"
+                    onClick={handleRestartCamera}
+                    disabled={restartingCamera}
+                    className="w-fit gap-2"
+                  >
+                    <RefreshCw
+                      className={`size-4 ${restartingCamera ? "animate-spin" : ""}`}
+                    />
+                    {restartingCamera ? "Reiniciando..." : "Reiniciar cámara"}
+                  </Button>
                 </Field>
               )}
 

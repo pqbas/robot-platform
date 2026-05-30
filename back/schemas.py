@@ -160,6 +160,11 @@ class CameraResolutionUpdate(BaseModel):
     preset: Literal["1080p", "720p"]
 
 
+class CameraRestartOut(BaseModel):
+    ok: bool
+    pid: int
+
+
 # --- Counting config ---
 
 class CountingConfigOut(BaseModel):
