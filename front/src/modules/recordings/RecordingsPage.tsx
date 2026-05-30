@@ -95,6 +95,7 @@ export default function RecordingsPage() {
   const [deleting, setDeleting] = useState<Recording | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [editingUuid, setEditingUuid] = useState<string | null>(null)
+  const [editingRec, setEditingRec] = useState<Recording | null>(null)
 
   // Empresa/Fundo filter cascade
   const [empresas, setEmpresas] = useState<Empresa[]>([])
@@ -326,7 +327,7 @@ export default function RecordingsPage() {
                           size="sm"
                           variant="ghost"
                           title="Editar lugar"
-                          onClick={() => setEditingUuid(r.uuid)}
+                          onClick={() => { setEditingUuid(r.uuid); setEditingRec(r) }}
                         >
                           <Pencil className="size-4" />
                         </Button>
@@ -390,11 +391,14 @@ export default function RecordingsPage() {
         open={editingUuid != null}
         recordingUuid={editingUuid}
         deviceContext={null}
+        currentFundoUuid={editingRec?.fundo_uuid}
+        currentCamellonId={editingRec?.camellon_id}
         onSaved={() => {
           setEditingUuid(null)
+          setEditingRec(null)
           load()
         }}
-        onSkip={() => setEditingUuid(null)}
+        onSkip={() => { setEditingUuid(null); setEditingRec(null) }}
       />
     </div>
   )

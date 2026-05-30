@@ -27,6 +27,9 @@ type RecordingPlaceDialogProps = {
   open: boolean
   recordingUuid: string | null
   deviceContext: DeviceContext | null
+  // For pre-selecting existing place when editing a tagged recording
+  currentFundoUuid?: string | null
+  currentCamellonId?: number | null
   onSaved: () => void
   onSkip: () => void
 }
@@ -35,6 +38,8 @@ export default function RecordingPlaceDialog({
   open,
   recordingUuid,
   deviceContext,
+  currentFundoUuid,
+  currentCamellonId,
   onSaved,
   onSkip,
 }: RecordingPlaceDialogProps) {
@@ -51,22 +56,31 @@ export default function RecordingPlaceDialog({
     if (!open) return
     setSelectedCamellonId("")
 
-    getEmpresas()
-      .then((items) => {
-        setEmpresas(items)
-        const def = deviceContext?.empresa
-          ? items.find((e) => e.uuid === deviceContext.empresa!.uuid)
+    Promise.all([getEmpresas(), getFundos()])
+      .then(([empItems, fundoItems]) => {
+        setEmpresas(empItems)
+        // Prefer current fundo > device context fundo > first empresa
+        const targetFundoUuid = currentFundoUuid ?? deviceContext?.fundo?.uuid ?? null
+        if (targetFundoUuid) {
+          const fundo = fundoItems.find((f) => f.uuid === targetFundoUuid)
+          if (fundo) {
+            setSelectedEmpresaUuid(fundo.empresa_uuid)
+            return
+          }
+        }
+        const defEmpresa = deviceContext?.empresa
+          ? empItems.find((e) => e.uuid === deviceContext.empresa!.uuid)
           : null
-        if (def) {
-          setSelectedEmpresaUuid(def.uuid)
-        } else if (items.length > 0) {
-          setSelectedEmpresaUuid(items[0].uuid)
+        if (defEmpresa) {
+          setSelectedEmpresaUuid(defEmpresa.uuid)
+        } else if (empItems.length > 0) {
+          setSelectedEmpresaUuid(empItems[0].uuid)
         } else {
           setSelectedEmpresaUuid("")
         }
       })
       .catch(() => toast.error("Error al cargar empresas"))
-  }, [open, deviceContext])
+  }, [open, deviceContext, currentFundoUuid])
 
   useEffect(() => {
     if (!selectedEmpresaUuid) {
@@ -82,11 +96,13 @@ export default function RecordingPlaceDialog({
       .then((all) => {
         const filtered = all.filter((f) => f.empresa_uuid === selectedEmpresaUuid)
         setFundos(filtered)
-        const def = deviceContext?.fundo
-          ? filtered.find((f) => f.uuid === deviceContext.fundo!.uuid)
-          : null
-        if (def) {
-          setSelectedFundoUuid(def.uuid)
+        // Prefer currentFundoUuid > device context fundo > first fundo
+        const targetUuid =
+          (currentFundoUuid && filtered.find((f) => f.uuid === currentFundoUuid)?.uuid) ??
+          (deviceContext?.fundo && filtered.find((f) => f.uuid === deviceContext.fundo!.uuid)?.uuid) ??
+          null
+        if (targetUuid) {
+          setSelectedFundoUuid(targetUuid)
         } else if (filtered.length > 0) {
           setSelectedFundoUuid(filtered[0].uuid)
         } else {
@@ -94,7 +110,7 @@ export default function RecordingPlaceDialog({
         }
       })
       .catch(() => toast.error("Error al cargar fundos"))
-  }, [selectedEmpresaUuid, deviceContext])
+  }, [selectedEmpresaUuid, deviceContext, currentFundoUuid])
 
   useEffect(() => {
     if (!selectedFundoUuid) {
@@ -102,11 +118,17 @@ export default function RecordingPlaceDialog({
       setSelectedCamellonId("")
       return
     }
-    setSelectedCamellonId("")
     getCamellones(selectedFundoUuid)
-      .then(setCamellones)
+      .then((items) => {
+        setCamellones(items)
+        if (currentCamellonId != null && items.some((c) => c.id === currentCamellonId)) {
+          setSelectedCamellonId(String(currentCamellonId))
+        } else {
+          setSelectedCamellonId("")
+        }
+      })
       .catch(() => toast.error("Error al cargar camellones"))
-  }, [selectedFundoUuid])
+  }, [selectedFundoUuid, currentCamellonId])
 
   async function handleSave() {
     if (!recordingUuid || !selectedCamellonId) return
