@@ -160,6 +160,14 @@ class CameraResolutionUpdate(BaseModel):
     preset: Literal["1080p", "720p"]
 
 
+class CameraSourceOut(BaseModel):
+    rtsp_url: str
+
+
+class CameraSourceUpdate(BaseModel):
+    rtsp_url: str
+
+
 # --- Counting config ---
 
 class CountingConfigOut(BaseModel):
