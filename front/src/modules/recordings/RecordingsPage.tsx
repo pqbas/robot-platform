@@ -6,6 +6,7 @@ import {
   deleteRecording,
   getRecordingFileUrl,
   getRecordings,
+  getUploadingUuids,
 } from "@/api/recordings"
 import { getEmpresas, getFundos } from "@/api/admin"
 import { Badge } from "@/components/ui/badge"
@@ -57,10 +58,11 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleString()
 }
 
-type RowStatus = "active" | "uploaded" | "pending" | "missing"
+type RowStatus = "active" | "uploaded" | "uploading" | "pending" | "missing"
 
-function rowStatus(rec: Recording): RowStatus {
+function rowStatus(rec: Recording, uploadingSet: Set<string>): RowStatus {
   if (rec.ended_at == null) return "active"
+  if (rec.uploaded_at == null && uploadingSet.has(rec.uuid)) return "uploading"
   return rec.uploaded_at ? "uploaded" : "pending"
 }
 
@@ -70,6 +72,8 @@ function StatusBadge({ status }: { status: RowStatus }) {
       return <Badge variant="destructive">grabando</Badge>
     case "uploaded":
       return <Badge variant="default">subido</Badge>
+    case "uploading":
+      return <Badge variant="outline">subiendo</Badge>
     case "pending":
       return <Badge variant="secondary">pendiente</Badge>
     case "missing":
@@ -96,6 +100,7 @@ export default function RecordingsPage() {
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [editingUuid, setEditingUuid] = useState<string | null>(null)
   const [editingRec, setEditingRec] = useState<Recording | null>(null)
+  const [uploadingUuids, setUploadingUuids] = useState<Set<string>>(new Set())
 
   // Empresa/Fundo filter cascade
   const [empresas, setEmpresas] = useState<Empresa[]>([])
@@ -143,6 +148,26 @@ export default function RecordingsPage() {
       window.clearInterval(id)
     }
   }, [load])
+
+  useEffect(() => {
+    let cancelled = false
+    const pollUploading = async () => {
+      try {
+        const { uuids } = await getUploadingUuids()
+        if (!cancelled) setUploadingUuids(new Set(uuids))
+      } catch {
+        // silently ignore — uploading indicator is best-effort
+      }
+    }
+    pollUploading()
+    const id = window.setInterval(() => {
+      if (!cancelled) pollUploading()
+    }, 3_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [])
 
   // Build lookup maps for fundo_uuid → empresa_uuid
   const fundoToEmpresa = useMemo(
@@ -303,7 +328,7 @@ export default function RecordingsPage() {
               </TableRow>
             ) : (
               filteredRows.map((r) => {
-                const status = rowStatus(r)
+                const status = rowStatus(r, uploadingUuids)
                 const canDownload = mode === "robot" || r.uploaded_at != null
                 return (
                   <TableRow key={r.uuid}>
