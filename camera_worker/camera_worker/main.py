@@ -57,14 +57,20 @@ def parse_args():
     parser.add_argument("--height", type=int, default=int(os.getenv("CAMERA_HEIGHT", "720")))
     parser.add_argument("--crop", type=int, default=int(os.getenv("CAMERA_CROP", "1280")))
     parser.add_argument("--fps", type=float, default=float(os.getenv("CAMERA_FPS", "30")))
+    parser.add_argument(
+        "--rtsp-url",
+        default=os.getenv("CAMERA_RTSP_URL", ""),
+        help="RTSP/HTTP URL for IP camera. If set, ignores --index.",
+    )
     return parser.parse_args()
 
 
 def _load_preset_override(settings_path: str | None) -> dict | None:
-    """Return preset override (width/height/crop) from the settings JSON.
+    """Return override dict from the settings JSON.
 
-    None means "no JSON / unreadable / unknown preset" — caller keeps the
-    width/height/crop already on `args` (env vars or CLI flags).
+    May contain width/height/crop (from preset) and/or rtsp_url.
+    None means "no JSON / unreadable" — caller keeps the values already on
+    `args` (env vars or CLI flags).
     """
     if not settings_path or not os.path.exists(settings_path):
         return None
@@ -77,23 +83,35 @@ def _load_preset_override(settings_path: str | None) -> dict | None:
             settings_path, exc,
         )
         return None
+    override: dict = {}
     preset = data.get("preset")
-    if preset not in PRESETS:
-        logger.warning(
-            "Camera settings file %s has invalid preset=%r — falling back",
-            settings_path, preset,
-        )
-        return None
-    logger.info("Camera settings: applying preset=%s from %s", preset, settings_path)
-    return PRESETS[preset]
+    if preset is not None:
+        if preset not in PRESETS:
+            logger.warning(
+                "Camera settings file %s has invalid preset=%r — ignoring preset",
+                settings_path, preset,
+            )
+        else:
+            logger.info("Camera settings: applying preset=%s from %s", preset, settings_path)
+            override.update(PRESETS[preset])
+    rtsp_url = data.get("rtsp_url")
+    if rtsp_url:
+        logger.info("Camera settings: applying rtsp_url from %s", settings_path)
+        override["rtsp_url"] = rtsp_url
+    return override if override else None
 
 
 def _apply_override(args, override: dict | None) -> None:
     if override is None:
         return
-    args.width = override["width"]
-    args.height = override["height"]
-    args.crop = override["crop"]
+    if "width" in override:
+        args.width = override["width"]
+    if "height" in override:
+        args.height = override["height"]
+    if "crop" in override:
+        args.crop = override["crop"]
+    if "rtsp_url" in override:
+        args.rtsp_url = override["rtsp_url"]
 
 
 def open_camera(args):
