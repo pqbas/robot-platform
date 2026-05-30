@@ -359,6 +359,9 @@ class RecordingOut(BaseModel):
     uuid: str
     device_id: str
     session_uuid: str | None
+    camellon_id: int | None
+    camellon_nombre: str | None
+    fundo_uuid: str | None
     started_at: str
     ended_at: str | None
     duration_seconds: float | None
@@ -372,10 +375,15 @@ class RecordingOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RecordingPlaceUpdate(BaseModel):
+    camellon_id: int | None
+
+
 class SyncRecording(BaseModel):
     uuid: str
     device_id: str | None = None
     session_uuid: str | None = None
+    camellon_uuid: str | None = None
     started_at: str
     ended_at: str | None = None
     duration_seconds: float | None = None

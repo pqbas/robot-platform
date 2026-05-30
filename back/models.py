@@ -231,6 +231,7 @@ class Recording(Base):
     uuid: Mapped[str] = mapped_column(Text, primary_key=True, default=_new_uuid)
     device_id: Mapped[str] = mapped_column(Text, default=get_device_id)
     session_uuid: Mapped[str | None] = mapped_column(Text, nullable=True)
+    camellon_id: Mapped[int | None] = mapped_column(ForeignKey("camellones.id"), nullable=True)
     started_at: Mapped[str] = mapped_column(Text, nullable=False)
     ended_at: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -240,6 +241,7 @@ class Recording(Base):
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fps: Mapped[float | None] = mapped_column(Float, nullable=True)
     uploaded_at: Mapped[str | None] = mapped_column(Text, nullable=True)
+    camellon: Mapped["Camellon | None"] = relationship()
 
 
 class FruitCrop(Base):
