@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, ForeignKey, Float, Integer, Text
+from sqlalchemy import Boolean, ForeignKey, Float, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from back.config import get_device_id
@@ -131,6 +131,9 @@ class Location(Base):
 
 class Camellon(Base):
     __tablename__ = "camellones"
+    __table_args__ = (
+        UniqueConstraint("fundo_uuid", "nombre", name="uq_camellones_fundo_nombre"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     uuid: Mapped[str] = mapped_column(Text, unique=True, default=_new_uuid)
@@ -138,7 +141,7 @@ class Camellon(Base):
     fundo_uuid: Mapped[str | None] = mapped_column(
         ForeignKey("fundos.uuid"), nullable=True
     )
-    nombre: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    nombre: Mapped[str] = mapped_column(Text, nullable=False)
     lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     lng: Mapped[float | None] = mapped_column(Float, nullable=True)
     fundo: Mapped["Fundo | None"] = relationship()
