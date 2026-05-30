@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label"
 import { Loader2, Plus } from "lucide-react"
 import { toast } from "sonner"
 import type { Camellon, DeviceContext, Empresa, Fundo } from "@/types"
-import { getCamellones, createCamellon } from "@/api/camellones"
+import { getCamellones, createCamellon, renameCamellon } from "@/api/camellones"
 import { getEmpresas, createEmpresa, getFundos, createFundo } from "@/api/admin"
 import { setRecordingPlace } from "@/api/recordings"
 
@@ -56,7 +56,7 @@ export default function RecordingPlaceDialog({
   const [empInput, setEmpInput] = useState("")
   const [fundoMode, setFundoMode] = useState<"idle" | "creating">("idle")
   const [fundoInput, setFundoInput] = useState("")
-  const [camMode, setCamMode] = useState<"idle" | "creating">("idle")
+  const [camMode, setCamMode] = useState<"idle" | "creating" | "renaming">("idle")
   const [camInput, setCamInput] = useState("")
 
   useEffect(() => {
@@ -167,6 +167,8 @@ export default function RecordingPlaceDialog({
     }
   }
 
+  const selectedCamellon = camellones.find((c) => String(c.id) === selectedCamellonId)
+
   async function handleCreateCamellon() {
     const nombre = camInput.trim()
     if (!nombre || !selectedFundoUuid) return
@@ -183,6 +185,28 @@ export default function RecordingPlaceDialog({
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleRenameCamellon() {
+    const nombre = camInput.trim()
+    if (!nombre || !selectedCamellon) return
+    setSaving(true)
+    try {
+      const updated = await renameCamellon(selectedCamellon.id, nombre)
+      setCamellones((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
+      setCamInput("")
+      setCamMode("idle")
+      toast.success("Camellón renombrado")
+    } catch {
+      toast.error("Error al renombrar el camellón")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function handleCamConfirm() {
+    if (camMode === "creating") handleCreateCamellon()
+    else if (camMode === "renaming") handleRenameCamellon()
   }
 
   async function handleSave() {
@@ -344,20 +368,34 @@ export default function RecordingPlaceDialog({
             ) : (
               <div className="flex gap-2">
                 <Input
-                  placeholder="Nombre del nuevo camellón"
+                  placeholder={
+                    camMode === "creating"
+                      ? "Nombre del nuevo camellón"
+                      : `Renombrar "${selectedCamellon?.nombre}"`
+                  }
                   value={camInput}
                   onChange={(e) => setCamInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleCreateCamellon() }}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleCamConfirm() }}
                   autoFocus
                   className="flex-1"
                 />
-                <Button variant="outline" size="sm" onClick={handleCreateCamellon} disabled={saving || !camInput.trim()}>
-                  Crear
+                <Button variant="outline" size="sm" onClick={handleCamConfirm} disabled={saving || !camInput.trim()}>
+                  Confirmar
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setCamMode("idle")}>
                   Cancelar
                 </Button>
               </div>
+            )}
+            {camMode === "idle" && selectedCamellon && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto py-0 text-xs text-muted-foreground"
+                onClick={() => { setCamMode("renaming"); setCamInput(selectedCamellon.nombre) }}
+              >
+                Renombrar seleccionado
+              </Button>
             )}
           </div>
         </div>
