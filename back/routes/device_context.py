@@ -1,11 +1,9 @@
 """Robot-side endpoints for device context (empresa/fundo) selection."""
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
 
 from back.config import AppMode, config
 from back.database import AsyncSessionLocal
-from back.models import Empresa, Fundo
 from back.schemas import ActiveContextSet
 from back.services.sync_pull_context import (
     read_effective_context,
