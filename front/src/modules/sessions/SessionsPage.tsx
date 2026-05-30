@@ -66,10 +66,6 @@ export default function SessionsPage() {
   useEffect(() => { loadBase() }, [loadBase])
   useEffect(() => { loadSessions() }, [loadSessions])
 
-  const targetClasses = useMemo(() => {
-    return Array.from(new Set(sessions.map((s) => s.target_class))).sort()
-  }, [sessions])
-
   // session.camellon_id -> fundo_uuid, via camellon.fundo_uuid
   const fundoByCamellonId = useMemo(() => {
     const map = new Map<number, string>()
@@ -92,46 +88,88 @@ export default function SessionsPage() {
     return map
   }, [camellones, fundos])
 
-  // Fundo filter options: the fundos actually referenced by the loaded
-  // sessions, narrowed to the selected empresa. Built from the sessions
-  // themselves so it never lists fundos with no captured sessions.
+  // Cascade Empresa → Fundo → Clase: each level's options derive from the
+  // session set already narrowed by the parent filters, so a filter can never
+  // offer a value that yields zero results. Empresa is the top level, so its
+  // options come from all sessions (not the synced catalog, which may list
+  // empresas with no captured sessions).
+  const empresaOptions = useMemo(() => {
+    const empresaById = new Map(empresas.map((e) => [e.uuid, e]))
+    const seen = new Map<string, string>()
+    for (const s of sessions) {
+      const empresaUuid = empresaByCamellonId.get(s.camellon_id)
+      if (!empresaUuid || seen.has(empresaUuid)) continue
+      const e = empresaById.get(empresaUuid)
+      seen.set(empresaUuid, e?.name ?? empresaUuid)
+    }
+    return Array.from(seen, ([uuid, name]) => ({ uuid, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )
+  }, [sessions, empresas, empresaByCamellonId])
+
+  const sessionsByEmpresa = useMemo(() => {
+    if (empresaFilter === "all") return sessions
+    return sessions.filter(
+      (s) => empresaByCamellonId.get(s.camellon_id) === empresaFilter,
+    )
+  }, [sessions, empresaFilter, empresaByCamellonId])
+
+  // Fundos referenced by the empresa-narrowed sessions (built from the
+  // sessions so it never lists fundos with no captured sessions).
   const fundoOptions = useMemo(() => {
     const fundoById = new Map(fundos.map((f) => [f.uuid, f]))
     const seen = new Map<string, string>()
-    for (const s of sessions) {
+    for (const s of sessionsByEmpresa) {
       const fundoUuid = fundoByCamellonId.get(s.camellon_id)
       if (!fundoUuid || seen.has(fundoUuid)) continue
       const f = fundoById.get(fundoUuid)
-      if (empresaFilter !== "all" && f?.empresa_uuid !== empresaFilter) continue
       seen.set(fundoUuid, f?.name ?? fundoUuid)
     }
     return Array.from(seen, ([uuid, name]) => ({ uuid, name })).sort((a, b) =>
       a.name.localeCompare(b.name),
     )
-  }, [sessions, fundos, fundoByCamellonId, empresaFilter])
+  }, [sessionsByEmpresa, fundos, fundoByCamellonId])
+
+  const sessionsByFundo = useMemo(() => {
+    if (fundoFilter === "all") return sessionsByEmpresa
+    return sessionsByEmpresa.filter(
+      (s) => fundoByCamellonId.get(s.camellon_id) === fundoFilter,
+    )
+  }, [sessionsByEmpresa, fundoFilter, fundoByCamellonId])
+
+  // Classes present in the empresa+fundo-narrowed sessions.
+  const targetClasses = useMemo(() => {
+    return Array.from(new Set(sessionsByFundo.map((s) => s.target_class))).sort()
+  }, [sessionsByFundo])
 
   const filteredSessions = useMemo(() => {
-    let result = sessions
-    if (empresaFilter !== "all") {
-      result = result.filter(
-        (s) => empresaByCamellonId.get(s.camellon_id) === empresaFilter,
-      )
+    if (classFilter === "all") return sessionsByFundo
+    return sessionsByFundo.filter((s) => s.target_class === classFilter)
+  }, [sessionsByFundo, classFilter])
+
+  // When a parent filter changes and the current child selection is no longer
+  // among its options, reset the child to "all" so the list never goes empty
+  // from a stale selection (e.g. fundo of another empresa).
+  useEffect(() => {
+    if (
+      empresaFilter !== "all" &&
+      !empresaOptions.some((e) => e.uuid === empresaFilter)
+    ) {
+      setEmpresaFilter("all")
     }
-    if (fundoFilter !== "all") {
-      result = result.filter((s) => fundoByCamellonId.get(s.camellon_id) === fundoFilter)
+  }, [empresaOptions, empresaFilter])
+
+  useEffect(() => {
+    if (fundoFilter !== "all" && !fundoOptions.some((f) => f.uuid === fundoFilter)) {
+      setFundoFilter("all")
     }
-    if (classFilter !== "all") {
-      result = result.filter((s) => s.target_class === classFilter)
+  }, [fundoOptions, fundoFilter])
+
+  useEffect(() => {
+    if (classFilter !== "all" && !targetClasses.includes(classFilter)) {
+      setClassFilter("all")
     }
-    return result
-  }, [
-    sessions,
-    empresaFilter,
-    fundoFilter,
-    classFilter,
-    empresaByCamellonId,
-    fundoByCamellonId,
-  ])
+  }, [targetClasses, classFilter])
 
   const hasActiveFilters =
     empresaFilter !== "all" ||
@@ -187,7 +225,7 @@ export default function SessionsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
-              {empresas.map((emp) => (
+              {empresaOptions.map((emp) => (
                 <SelectItem key={emp.uuid} value={emp.uuid}>{emp.name}</SelectItem>
               ))}
             </SelectContent>
