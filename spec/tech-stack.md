@@ -5,7 +5,7 @@
 - Cloud provider? None — self-hosted en hardware propio
 - IaC? None
 - Compute model? Bare metal — servicios systemd
-- Container orchestration? None — Docker solo para PostgreSQL en servidor
+- Container orchestration? Docker Compose (server) — back + front + nginx + postgres + tailscale sidecar; robot sigue en bare metal con systemd
 - Deployment targets? Jetson Xavier NX (robot, SQLite) + PC laboratorio (servidor, PostgreSQL)
 
 ## Backend

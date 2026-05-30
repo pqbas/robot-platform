@@ -1,4 +1,4 @@
-.PHONY: start run-robot run-server run-front run-inference run-conversion logs-conversion db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update create-admin
+.PHONY: start run-robot run-server run-front run-inference run-conversion logs-conversion db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update create-admin compose-build compose-up compose-down compose-logs compose-migrate compose-create-admin
 
 start:
 	uv run uvicorn back.main:app --host 0.0.0.0 --port 8080 --reload
@@ -83,6 +83,24 @@ status:
 	@-sudo systemctl status inference-worker --no-pager
 	@echo "---"
 	@sudo systemctl status nginx --no-pager
+
+compose-build:
+	docker compose -f docker-compose.server.yml build
+
+compose-up:
+	docker compose -f docker-compose.server.yml up -d
+
+compose-down:
+	docker compose -f docker-compose.server.yml down
+
+compose-logs:
+	docker compose -f docker-compose.server.yml logs -f
+
+compose-migrate:
+	docker compose -f docker-compose.server.yml run --rm back uv run alembic -c back/alembic.ini upgrade head
+
+compose-create-admin:
+	docker compose -f docker-compose.server.yml run --rm back uv run python -m back.scripts.create_admin
 
 update:
 	git pull
