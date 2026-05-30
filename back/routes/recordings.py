@@ -8,15 +8,15 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import AppMode, config
 from back.database import get_db
-from back.models import Recording
-from back.schemas import RecordingOut
+from back.models import Camellon, Recording, SyncLog
+from back.schemas import RecordingOut, RecordingPlaceUpdate
 from back.services.recording_client import (
     RecordingClient,
     RecordingWorkerUnavailable,
@@ -39,6 +39,37 @@ def _new_uuid() -> str:
 
 def _client() -> RecordingClient:
     return RecordingClient(config.recording.control_socket_path)
+
+
+async def _build_out(db: AsyncSession, row: Recording) -> RecordingOut:
+    """Build RecordingOut with resolved camellon_nombre and fundo_uuid."""
+    camellon_nombre: str | None = None
+    fundo_uuid: str | None = None
+    if row.camellon_id is not None:
+        cam_result = await db.execute(
+            select(Camellon).where(Camellon.id == row.camellon_id)
+        )
+        camellon = cam_result.scalar_one_or_none()
+        if camellon:
+            camellon_nombre = camellon.nombre
+            fundo_uuid = camellon.fundo_uuid
+    return RecordingOut(
+        uuid=row.uuid,
+        device_id=row.device_id,
+        session_uuid=row.session_uuid,
+        camellon_id=row.camellon_id,
+        camellon_nombre=camellon_nombre,
+        fundo_uuid=fundo_uuid,
+        started_at=row.started_at,
+        ended_at=row.ended_at,
+        duration_seconds=row.duration_seconds,
+        file_path=row.file_path,
+        file_size_bytes=row.file_size_bytes,
+        width=row.width,
+        height=row.height,
+        fps=row.fps,
+        uploaded_at=row.uploaded_at,
+    )
 
 
 @router.post("/start", response_model=RecordingOut)
@@ -98,7 +129,7 @@ async def start_recording(db: AsyncSession = Depends(get_db)):
     db.add(row)
     await db.flush()
     await db.refresh(row)
-    return row
+    return await _build_out(db, row)
 
 
 @router.post("/stop", response_model=RecordingOut)
@@ -143,7 +174,7 @@ async def stop_recording(db: AsyncSession = Depends(get_db)):
                 row.file_size_bytes = 0
         await db.flush()
         await db.refresh(row)
-        return row
+        return await _build_out(db, row)
 
     row.ended_at = _now_iso()
     row.duration_seconds = worker_resp.get("duration_seconds")
@@ -153,15 +184,66 @@ async def stop_recording(db: AsyncSession = Depends(get_db)):
     row.fps = worker_resp.get("fps")
     await db.flush()
     await db.refresh(row)
-    return row
+    return await _build_out(db, row)
 
 
 @router.get("/", response_model=list[RecordingOut])
-async def list_recordings(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(Recording).order_by(Recording.started_at.desc())
+async def list_recordings(
+    db: AsyncSession = Depends(get_db),
+    camellon_id: int | None = Query(default=None),
+    fundo_uuid: str | None = Query(default=None),
+    device_id: str | None = Query(default=None),
+    from_: str | None = Query(default=None, alias="from"),
+    to: str | None = Query(default=None),
+):
+    stmt = select(Recording)
+    if camellon_id is not None:
+        stmt = stmt.where(Recording.camellon_id == camellon_id)
+    if fundo_uuid is not None:
+        # Resolve camellon ids for this fundo
+        cam_result = await db.execute(
+            select(Camellon.id).where(Camellon.fundo_uuid == fundo_uuid)
+        )
+        cam_ids = [r[0] for r in cam_result.fetchall()]
+        stmt = stmt.where(Recording.camellon_id.in_(cam_ids))
+    if device_id is not None:
+        stmt = stmt.where(Recording.device_id == device_id)
+    if from_ is not None:
+        stmt = stmt.where(Recording.started_at >= from_)
+    if to is not None:
+        stmt = stmt.where(Recording.started_at <= to)
+    stmt = stmt.order_by(Recording.started_at.desc())
+    result = await db.execute(stmt)
+    rows = result.scalars().all()
+    return [await _build_out(db, row) for row in rows]
+
+
+@router.put("/{uuid}/place", response_model=RecordingOut)
+async def set_recording_place(
+    uuid: str,
+    body: RecordingPlaceUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Recording).where(Recording.uuid == uuid))
+    row = result.scalar_one_or_none()
+    if row is None:
+        raise HTTPException(404, "Recording not found")
+    if body.camellon_id is not None:
+        cam_result = await db.execute(
+            select(Camellon).where(Camellon.id == body.camellon_id)
+        )
+        if cam_result.scalar_one_or_none() is None:
+            raise HTTPException(422, f"camellon_id {body.camellon_id} not found")
+    row.camellon_id = body.camellon_id
+    # Re-mark for sync: delete sync_log entry so next push re-sends this row
+    await db.execute(
+        delete(SyncLog).where(
+            (SyncLog.table_name == "recordings") & (SyncLog.record_uuid == uuid)
+        )
     )
-    return result.scalars().all()
+    await db.flush()
+    await db.refresh(row)
+    return await _build_out(db, row)
 
 
 @router.get("/{uuid}/file")

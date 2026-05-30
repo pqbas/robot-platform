@@ -138,6 +138,9 @@ export type Recording = {
   uuid: string
   device_id: string
   session_uuid: string | null
+  camellon_id: number | null
+  camellon_nombre: string | null
+  fundo_uuid: string | null
   started_at: string
   ended_at: string | null
   duration_seconds: number | null

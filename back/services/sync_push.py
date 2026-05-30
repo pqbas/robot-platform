@@ -167,15 +167,24 @@ async def push_all(db: AsyncSession) -> None:
         unsynced = await _get_unsynced_uuids(db, "recordings", Recording)
         unsynced = [r for r in unsynced if r.ended_at is not None]
         if unsynced:
-            data = [{
-                "uuid": r.uuid, "device_id": r.device_id,
-                "session_uuid": r.session_uuid,
-                "started_at": r.started_at, "ended_at": r.ended_at,
-                "duration_seconds": r.duration_seconds,
-                "file_path": r.file_path,
-                "file_size_bytes": r.file_size_bytes,
-                "width": r.width, "height": r.height, "fps": r.fps,
-            } for r in unsynced]
+            data = []
+            for r in unsynced:
+                camellon_uuid: str | None = None
+                if r.camellon_id is not None:
+                    cam = await db.execute(select(Camellon).where(Camellon.id == r.camellon_id))
+                    camellon = cam.scalar_one_or_none()
+                    if camellon:
+                        camellon_uuid = camellon.uuid
+                data.append({
+                    "uuid": r.uuid, "device_id": r.device_id,
+                    "session_uuid": r.session_uuid,
+                    "camellon_uuid": camellon_uuid,
+                    "started_at": r.started_at, "ended_at": r.ended_at,
+                    "duration_seconds": r.duration_seconds,
+                    "file_path": r.file_path,
+                    "file_size_bytes": r.file_size_bytes,
+                    "width": r.width, "height": r.height, "fps": r.fps,
+                })
             result = await _post_batch(http, "recordings", data)
             if result and result.get("successful_uuids"):
                 await _mark_synced(db, "recordings", result["successful_uuids"])
