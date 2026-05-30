@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { CountingState, FrameData } from "@/types"
-import { findOrCreateCamellon } from "@/api/camellones"
 import {
   getCountingStatus,
   startCounting as apiStart,
@@ -16,7 +15,7 @@ export type UseCountingReturn = {
   targetClass: string | null
   startCounting: (targetClass: string) => Promise<void>
   stopCounting: () => Promise<void>
-  save: (camellon: string) => Promise<void>
+  save: (camellonId: number) => Promise<void>
   discard: () => void
   updateFrame: (data: FrameData) => void
 }
@@ -69,12 +68,11 @@ export function useCounting(): UseCountingReturn {
   }, [])
 
   const save = useCallback(
-    async (camellon: string) => {
-      const cam = await findOrCreateCamellon(camellon)
+    async (camellonId: number) => {
       const result = stopResultRef.current
       const cls = result?.target_class ?? targetClassRef.current ?? "person"
       const total = result?.total_count ?? 0
-      await saveSession(cam.id, cls, total)
+      await saveSession(camellonId, cls, total)
       stopResultRef.current = null
       setState("IDLE")
       setStartTime(null)

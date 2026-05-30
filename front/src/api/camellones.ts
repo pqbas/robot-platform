@@ -1,14 +1,15 @@
 import type { Camellon, CamellonGeoSummary } from "@/types"
 import { ApiError, apiFetch } from "./client"
 
-export function getCamellones(): Promise<Camellon[]> {
-  return apiFetch("/api/camellones")
+export function getCamellones(fundoUuid?: string): Promise<Camellon[]> {
+  const qs = fundoUuid ? `?fundo_uuid=${encodeURIComponent(fundoUuid)}` : ""
+  return apiFetch(`/api/camellones${qs}`)
 }
 
-export function createCamellon(nombre: string): Promise<Camellon> {
+export function createCamellon(nombre: string, fundoUuid?: string): Promise<Camellon> {
   return apiFetch("/api/camellones", {
     method: "POST",
-    body: JSON.stringify({ nombre }),
+    body: JSON.stringify({ nombre, fundo_uuid: fundoUuid ?? null }),
   })
 }
 
@@ -34,12 +35,17 @@ export function getGeoSummary(): Promise<CamellonGeoSummary[]> {
   return apiFetch("/api/camellones/geo-summary")
 }
 
-export async function findOrCreateCamellon(nombre: string): Promise<Camellon> {
+export async function findOrCreateCamellon(
+  nombre: string,
+  fundoUuid?: string,
+): Promise<Camellon> {
   try {
-    return await createCamellon(nombre)
+    return await createCamellon(nombre, fundoUuid)
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) {
-      const all = await getCamellones()
+      // Scope the lookup to the same fundo so we don't resolve the wrong one
+      // under composite (fundo_uuid, nombre) uniqueness.
+      const all = await getCamellones(fundoUuid)
       const found = all.find(
         (c) => c.nombre.toLowerCase() === nombre.toLowerCase(),
       )
