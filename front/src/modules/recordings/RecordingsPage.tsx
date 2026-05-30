@@ -151,10 +151,15 @@ export default function RecordingsPage() {
 
   useEffect(() => {
     let cancelled = false
+    let wasUploading = false
     const pollUploading = async () => {
       try {
         const { uuids } = await getUploadingUuids()
-        if (!cancelled) setUploadingUuids(new Set(uuids))
+        if (cancelled) return
+        const nowUploading = uuids.length > 0
+        setUploadingUuids(new Set(uuids))
+        if (wasUploading && !nowUploading) load()
+        wasUploading = nowUploading
       } catch {
         // silently ignore — uploading indicator is best-effort
       }
@@ -167,7 +172,7 @@ export default function RecordingsPage() {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [])
+  }, [load])
 
   // Build lookup maps for fundo_uuid → empresa_uuid
   const fundoToEmpresa = useMemo(
