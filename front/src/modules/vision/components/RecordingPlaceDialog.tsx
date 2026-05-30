@@ -15,19 +15,19 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2 } from "lucide-react"
+import { Loader2, Plus } from "lucide-react"
 import { toast } from "sonner"
 import type { Camellon, DeviceContext, Empresa, Fundo } from "@/types"
-import { getCamellones } from "@/api/camellones"
-import { getEmpresas, getFundos } from "@/api/admin"
+import { getCamellones, createCamellon } from "@/api/camellones"
+import { getEmpresas, createEmpresa, getFundos, createFundo } from "@/api/admin"
 import { setRecordingPlace } from "@/api/recordings"
 
 type RecordingPlaceDialogProps = {
   open: boolean
   recordingUuid: string | null
   deviceContext: DeviceContext | null
-  // For pre-selecting existing place when editing a tagged recording
   currentFundoUuid?: string | null
   currentCamellonId?: number | null
   onSaved: () => void
@@ -52,32 +52,38 @@ export default function RecordingPlaceDialog({
   const [selectedCamellonId, setSelectedCamellonId] = useState("")
   const [saving, setSaving] = useState(false)
 
+  const [empMode, setEmpMode] = useState<"idle" | "creating">("idle")
+  const [empInput, setEmpInput] = useState("")
+  const [fundoMode, setFundoMode] = useState<"idle" | "creating">("idle")
+  const [fundoInput, setFundoInput] = useState("")
+  const [camMode, setCamMode] = useState<"idle" | "creating">("idle")
+  const [camInput, setCamInput] = useState("")
+
   useEffect(() => {
     if (!open) return
+    setEmpMode("idle")
+    setFundoMode("idle")
+    setCamMode("idle")
     setSelectedCamellonId("")
 
+    const targetFundoUuid = currentFundoUuid ?? deviceContext?.fundo?.uuid ?? null
+
     Promise.all([getEmpresas(), getFundos()])
-      .then(([empItems, fundoItems]) => {
+      .then(([empItems, allFundos]) => {
         setEmpresas(empItems)
-        // Prefer current fundo > device context fundo > first empresa
-        const targetFundoUuid = currentFundoUuid ?? deviceContext?.fundo?.uuid ?? null
         if (targetFundoUuid) {
-          const fundo = fundoItems.find((f) => f.uuid === targetFundoUuid)
-          if (fundo) {
-            setSelectedEmpresaUuid(fundo.empresa_uuid)
+          const f = allFundos.find((x) => x.uuid === targetFundoUuid)
+          if (f) {
+            setSelectedEmpresaUuid(f.empresa_uuid)
             return
           }
         }
-        const defEmpresa = deviceContext?.empresa
-          ? empItems.find((e) => e.uuid === deviceContext.empresa!.uuid)
+        const def = deviceContext?.empresa
+          ? empItems.find((e) => e.uuid === deviceContext!.empresa!.uuid)
           : null
-        if (defEmpresa) {
-          setSelectedEmpresaUuid(defEmpresa.uuid)
-        } else if (empItems.length > 0) {
-          setSelectedEmpresaUuid(empItems[0].uuid)
-        } else {
-          setSelectedEmpresaUuid("")
-        }
+        if (def) setSelectedEmpresaUuid(def.uuid)
+        else if (empItems.length > 0) setSelectedEmpresaUuid(empItems[0].uuid)
+        else setSelectedEmpresaUuid("")
       })
       .catch(() => toast.error("Error al cargar empresas"))
   }, [open, deviceContext, currentFundoUuid])
@@ -96,18 +102,13 @@ export default function RecordingPlaceDialog({
       .then((all) => {
         const filtered = all.filter((f) => f.empresa_uuid === selectedEmpresaUuid)
         setFundos(filtered)
-        // Prefer currentFundoUuid > device context fundo > first fundo
         const targetUuid =
           (currentFundoUuid && filtered.find((f) => f.uuid === currentFundoUuid)?.uuid) ??
           (deviceContext?.fundo && filtered.find((f) => f.uuid === deviceContext.fundo!.uuid)?.uuid) ??
           null
-        if (targetUuid) {
-          setSelectedFundoUuid(targetUuid)
-        } else if (filtered.length > 0) {
-          setSelectedFundoUuid(filtered[0].uuid)
-        } else {
-          setSelectedFundoUuid("")
-        }
+        if (targetUuid) setSelectedFundoUuid(targetUuid)
+        else if (filtered.length > 0) setSelectedFundoUuid(filtered[0].uuid)
+        else setSelectedFundoUuid("")
       })
       .catch(() => toast.error("Error al cargar fundos"))
   }, [selectedEmpresaUuid, deviceContext, currentFundoUuid])
@@ -130,6 +131,60 @@ export default function RecordingPlaceDialog({
       .catch(() => toast.error("Error al cargar camellones"))
   }, [selectedFundoUuid, currentCamellonId])
 
+  async function handleCreateEmpresa() {
+    const name = empInput.trim()
+    if (!name) return
+    setSaving(true)
+    try {
+      const emp = await createEmpresa({ name })
+      setEmpresas((prev) => [...prev, emp])
+      setSelectedEmpresaUuid(emp.uuid)
+      setEmpInput("")
+      setEmpMode("idle")
+      toast.success(`Empresa "${emp.name}" creada`)
+    } catch {
+      toast.error("Error al crear la empresa")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleCreateFundo() {
+    const name = fundoInput.trim()
+    if (!name || !selectedEmpresaUuid) return
+    setSaving(true)
+    try {
+      const fundo = await createFundo({ empresa_uuid: selectedEmpresaUuid, name })
+      setFundos((prev) => [...prev, fundo])
+      setSelectedFundoUuid(fundo.uuid)
+      setFundoInput("")
+      setFundoMode("idle")
+      toast.success(`Fundo "${fundo.name}" creado`)
+    } catch {
+      toast.error("Error al crear el fundo")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleCreateCamellon() {
+    const nombre = camInput.trim()
+    if (!nombre || !selectedFundoUuid) return
+    setSaving(true)
+    try {
+      const cam = await createCamellon(nombre, selectedFundoUuid)
+      setCamellones((prev) => [...prev, cam])
+      setSelectedCamellonId(String(cam.id))
+      setCamInput("")
+      setCamMode("idle")
+      toast.success(`Camellón "${cam.nombre}" creado`)
+    } catch {
+      toast.error("Error al crear el camellón")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function handleSave() {
     if (!recordingUuid || !selectedCamellonId) return
     setSaving(true)
@@ -143,7 +198,12 @@ export default function RecordingPlaceDialog({
     }
   }
 
-  const canSave = !saving && !!selectedCamellonId
+  const canSave =
+    !saving &&
+    !!selectedCamellonId &&
+    empMode === "idle" &&
+    fundoMode === "idle" &&
+    camMode === "idle"
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onSkip() }}>
@@ -155,55 +215,150 @@ export default function RecordingPlaceDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs">Empresa</Label>
-            <Select value={selectedEmpresaUuid} onValueChange={setSelectedEmpresaUuid}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona empresa" />
-              </SelectTrigger>
-              <SelectContent>
-                {empresas.map((e) => (
-                  <SelectItem key={e.uuid} value={e.uuid}>{e.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="space-y-4">
+          {/* Empresa */}
+          <div className="space-y-2">
+            <Label>Empresa</Label>
+            {empMode === "idle" ? (
+              <div className="flex gap-2">
+                <Select value={selectedEmpresaUuid} onValueChange={setSelectedEmpresaUuid}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Selecciona empresa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {empresas.map((e) => (
+                      <SelectItem key={e.uuid} value={e.uuid}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => { setEmpMode("creating"); setEmpInput("") }}
+                >
+                  <Plus className="size-3.5" />
+                  Nuevo
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nombre de la nueva empresa"
+                  value={empInput}
+                  onChange={(e) => setEmpInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleCreateEmpresa() }}
+                  autoFocus
+                  className="flex-1"
+                />
+                <Button variant="outline" size="sm" onClick={handleCreateEmpresa} disabled={saving || !empInput.trim()}>
+                  Crear
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setEmpMode("idle")}>
+                  Cancelar
+                </Button>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-1">
-            <Label className="text-xs">Fundo</Label>
-            <Select
-              value={selectedFundoUuid}
-              onValueChange={setSelectedFundoUuid}
-              disabled={!selectedEmpresaUuid}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona fundo" />
-              </SelectTrigger>
-              <SelectContent>
-                {fundos.map((f) => (
-                  <SelectItem key={f.uuid} value={f.uuid}>{f.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Fundo */}
+          <div className="space-y-2">
+            <Label>Fundo</Label>
+            {fundoMode === "idle" ? (
+              <div className="flex gap-2">
+                <Select
+                  value={selectedFundoUuid}
+                  onValueChange={setSelectedFundoUuid}
+                  disabled={!selectedEmpresaUuid}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Selecciona fundo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fundos.map((f) => (
+                      <SelectItem key={f.uuid} value={f.uuid}>{f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  disabled={!selectedEmpresaUuid}
+                  onClick={() => { setFundoMode("creating"); setFundoInput("") }}
+                >
+                  <Plus className="size-3.5" />
+                  Nuevo
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nombre del nuevo fundo"
+                  value={fundoInput}
+                  onChange={(e) => setFundoInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleCreateFundo() }}
+                  autoFocus
+                  className="flex-1"
+                />
+                <Button variant="outline" size="sm" onClick={handleCreateFundo} disabled={saving || !fundoInput.trim()}>
+                  Crear
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setFundoMode("idle")}>
+                  Cancelar
+                </Button>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-1">
-            <Label className="text-xs">Camellón</Label>
-            <Select
-              value={selectedCamellonId}
-              onValueChange={setSelectedCamellonId}
-              disabled={!selectedFundoUuid}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona camellón" />
-              </SelectTrigger>
-              <SelectContent>
-                {camellones.map((c) => (
-                  <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Camellón */}
+          <div className="space-y-2">
+            <Label>Camellón</Label>
+            {camMode === "idle" ? (
+              <div className="flex gap-2">
+                <Select
+                  value={selectedCamellonId}
+                  onValueChange={setSelectedCamellonId}
+                  disabled={!selectedFundoUuid}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Selecciona camellón" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {camellones.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  disabled={!selectedFundoUuid}
+                  onClick={() => { setCamMode("creating"); setCamInput("") }}
+                >
+                  <Plus className="size-3.5" />
+                  Nuevo
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nombre del nuevo camellón"
+                  value={camInput}
+                  onChange={(e) => setCamInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleCreateCamellon() }}
+                  autoFocus
+                  className="flex-1"
+                />
+                <Button variant="outline" size="sm" onClick={handleCreateCamellon} disabled={saving || !camInput.trim()}>
+                  Crear
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setCamMode("idle")}>
+                  Cancelar
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
