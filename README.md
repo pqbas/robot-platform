@@ -1,159 +1,97 @@
 <h1 align="center">Robot Platform</h1>
 
+<p align="center">Software platform for agricultural mobile robots to detect, count, and classify fruits in real time.</p>
+
 <p align="center">
   <img src="assets/2026-05-06-20-56-02.png" alt="Robot Platform en operación">
 </p>
 
-Plataforma de software para un robot móvil agrícola que detecta, cuenta y clasifica frutos en tiempo real. Se ejecuta sobre una NVIDIA Jetson Xavier embebida en el robot y se opera desde cualquier dispositivo conectado a su red WiFi.
+## Features
 
-## Arquitectura
+- Camera source support: USB/V4L2 devices and IP cameras via RTSP URL.
+- Real-time fruit detection and counting using YOLO + BoT-SORT tracking,
+  accelerated with TensorRT FP16 on Jetson.
+- Live video streaming over WebRTC (H.264 NVENC) to any device on the local WiFi
+  network.
+- Session recording with H.264 video and per-frame detection overlays,
+  replayable from the web UI.
+- Configurable counting lines and ROI zones; per-session statistics synced to
+  the lab server.
+- Two-mode architecture: embedded robot (Jetson + SQLite) and lab server
+  (Docker + PostgreSQL), kept in sync automatically.
+- Model management: upload `.pt` weights on the server, convert to TensorRT
+  engine on the robot.
 
-![Arquitectura del sistema en modo robot](docs/diagrams/arquitectura_actual.png)
+## Development
 
-El sistema se compone de un backend FastAPI que coordina cuatro workers independientes que se comunican por sockets Unix:
+The platform has two main components that run independently:
 
-- **camera-worker:** captura V4L2 sobre cámara ZED 2i, fan-out a múltiples consumidores.
-- **inference-worker:** detección YOLO con seguimiento BoT-SORT, soporta TensorRT FP16.
-- **recording-worker:** codificación H.264 con NVENC sobre Jetson.
-- **conversion-worker:** construcción de engines TensorRT FP16 a partir de modelos `.pt`.
-
-El frontend (React + TypeScript + Vite) se sirve estático por nginx y se entrega al operador a través de un celular o tablet.
-
-El sistema opera en dos modos seleccionables por la variable `ROBOT_MODE`:
-
-- **`robot`:** corre en la Jetson embebida, ejecuta captura, inferencia, grabación y sincronización.
-- **`server`:** corre en una computadora del laboratorio, administra usuarios, modelos y dispositivos, y recibe la sincronización de los robots.
-
-## Hardware
-
-- **Robot:** NVIDIA Jetson Xavier (JetPack 5.1), cámara estéreo ZED 2i.
-- **Servidor:** PC con Linux, PostgreSQL 16.
-
-## Desarrollo local
-
-### Solo modo robot
+**Server** runs on a lab PC, manages users, models, and devices, and receives
+sync from robots.
 
 ```bash
-# terminal 1: inference worker
-make run-inference-dev
-
-# terminal 2: backend → localhost:8080
-make run-robot
-
-# terminal 3: frontend → localhost:5173
-make run-front
+make compose-build
+make compose-up      # start server (Docker Compose)
+make compose-logs    # follow logs
+make compose-down    # stop
 ```
 
-### Robot y servidor en paralelo
+**Mobile robot** runs on the embedded NVIDIA Jetson Xavier, captures video, runs
+inference, and records sessions.
 
 ```bash
-make run-inference-dev   # terminal 1
-make run-robot           # terminal 2 → :8080
-make run-server          # terminal 3 → :9090 (levanta PostgreSQL)
-make run-front           # terminal 4 → :5173
-make run-front-server    # terminal 5 → :5174
+make run-robot       # backend → :8080
+make run-camera      # camera worker
+make run-recording   # recording worker
+make run-inference   # inference worker
+make run-front       # frontend → :5173
 ```
 
-> Primera vez con el servidor: ejecutar `make db-migrate` antes de `make run-server`.
+## Installation
 
-## Despliegue en producción
+### Server
+
+Requirements: Docker, Docker Compose, Git.
 
 ```bash
-make deploy-robot    # nginx + systemd, SQLite, puerto 8080
-make deploy-server   # nginx + systemd + PostgreSQL, puerto 9090
+cp .env.server.example .env.server   # set SECRET_KEY, DB credentials, etc.
+make compose-build
+make compose-up
+make compose-migrate
+make compose-create-admin
 ```
 
-Operación:
+### Robot (Jetson Xavier, JetPack 5.1)
+
+Requirements: Python 3.10+, `uv`, GStreamer with `nvv4l2h264enc`, ZED SDK.
 
 ```bash
-make status          # estado de los servicios
-make logs            # logs del backend
-make logs-inference  # logs del inference-worker
-make restart         # reiniciar servicios
-make update          # git pull + rebuild + restart
+cp .env.robot.example .env.robot   # set camera, server URL, etc.
+make deploy-robot                  # installs nginx + systemd services
 ```
 
-## Exponer el server a internet (Tailscale Funnel)
-
-El backend en modo `server` corre por defecto en `127.0.0.1:9090`. Para que sea alcanzable desde fuera de la red del laboratorio sin comprar dominio ni configurar firewall, se usa Tailscale Funnel.
-
-### Requisitos previos (una vez por máquina)
+Subsequent updates:
 
 ```bash
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
+make update   # git pull + rebuild + restart
 ```
 
-El segundo comando imprime una URL de autenticación. Abrirla en el navegador y autenticar con la cuenta del laboratorio.
+## Docs
 
-En el panel https://login.tailscale.com/admin/dns activar:
-- **MagicDNS**
-- **HTTPS Certificates**
+- [Architecture](docs/architecture.md): system design, workers, modes, Unix
+  sockets.
+- [Local development](docs/development.md): running robot and server locally.
+- [Tailscale Funnel](docs/tailscale.md): exposing the server to the internet.
+- [Roadmap](spec/roadmap.md): active and upcoming phases.
+- [Backlog](spec/backlog.md): improvements without a phase yet.
 
-Verificar el hostname asignado:
+## Acknowledgements
 
-```bash
-tailscale status --json | python3 -c "import json,sys; print(json.load(sys.stdin)['Self']['DNSName'])"
-```
+This work is funded by the National Program for Scientific Research and Advanced
+Studies (**PROCIENCIA**) under project **PE5010-86701-2024-PROCIENCIA**:
+_"Development and implementation of a mechanically reconfigurable
+multifunctional mobile robot to adapt to agricultural farms with different
+ridges and variable inter-row spacing in the La Libertad region, Peru"_.
 
-### Compilar el frontend
-
-Antes de levantar el server, compilar el frontend para que la UI quede disponible:
-
-```bash
-make build-front
-```
-
-Sin este paso el server arranca igual, pero `https://<host>.ts.net/` devuelve 503 hasta que `front/dist/` exista.
-
-### Configurar la URL pública (CORS)
-
-Antes de levantar el server, exportar la URL pública en `.env.server` para que CORS solo acepte peticiones de ese origen:
-
-```bash
-# en .env.server
-SERVER_PUBLIC_URL=https://<host>.<tailnet>.ts.net
-```
-
-Si esta variable no está definida, el server arranca con CORS abierto (`*`) y lo indica en el log de arranque como advertencia.
-
-### Activar el acceso público
-
-Con el backend corriendo (`make run-server` o `make deploy-server`):
-
-```bash
-sudo tailscale funnel --bg 9090
-```
-
-`tailscale funnel status` muestra la URL pública (formato `https://<host>.<tailnet>.ts.net`).
-
-`make deploy-server` automatiza este paso: detecta el hostname, renderiza nginx con TLS sobre los certificados de Tailscale, y activa el funnel.
-
-### Crear el primer admin
-
-El server arranca sin usuarios por defecto. Crear el primer admin con:
-
-```bash
-make create-admin
-```
-
-El script pide username y password por stdin (no se persisten en `.env` ni en logs).
-
-### Apagar el acceso público
-
-```bash
-sudo tailscale funnel --https=443 off
-```
-
-Más detalles y troubleshooting en [`deploy/README.md`](deploy/README.md).
-
-## Planificación
-
-- Fases en curso y futuras: [`spec/roadmap.md`](spec/roadmap.md).
-- Observaciones y mejoras pendientes (aún sin fase): [`spec/backlog.md`](spec/backlog.md).
-
-## Agradecimientos
-
-Este trabajo es financiado por el Programa Nacional de Investigación Científica y Estudios Avanzados (**PROCIENCIA**) en el marco del proyecto **PE5010-86701-2024-PROCIENCIA**: *"Desarrollo e implementación de un robot móvil multifuncional reconfigurable mecánicamente para adaptarse a fundos agrícolas con diferentes camellones y entre surcos variables de la Región La Libertad-Perú"*.
-
-Se agradece al fundo Danper por facilitar el acceso a sus campos para la recolección de datos y a la Universidad Privada Antenor Orrego (UPAO) por el respaldo institucional al proyecto.
+We thank Danper farm for providing field access for data collection, and
+Universidad Privada Antenor Orrego (UPAO) for institutional support.
