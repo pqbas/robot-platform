@@ -29,10 +29,19 @@ router = APIRouter(prefix="/api", tags=["sessions"])
 
 
 @router.post("/counting/start", response_model=CountingStatusOut)
-async def start_counting(body: CountingStartRequest):
+async def start_counting(body: CountingStartRequest, db: AsyncSession = Depends(get_db)):
     if counter.is_session_active():
         raise HTTPException(409, "Counting is already active")
     sess = counter.start_counting(body.target_class)
+    # Auto-start a recording so every counting session is backed by a video +
+    # detection log. Reuses recordings.start_recording; a 409 (recording
+    # already active) or any other error must not abort the counting session.
+    from back.routes.recordings import start_recording
+
+    try:
+        await start_recording(db)
+    except HTTPException as exc:
+        logger.info("Auto-start recording skipped: %s", exc.detail)
     return CountingStatusOut(
         active=True,
         target_class=body.target_class,
@@ -42,10 +51,17 @@ async def start_counting(body: CountingStartRequest):
 
 
 @router.post("/counting/stop", response_model=CountingStopOut)
-async def stop_counting():
+async def stop_counting(db: AsyncSession = Depends(get_db)):
     if not counter.is_session_active():
         raise HTTPException(409, "No counting is active")
     total_count, target_class = counter.stop_counting()
+    # Stop the recording started alongside this counting session.
+    from back.routes.recordings import stop_recording
+
+    try:
+        await stop_recording(db)
+    except HTTPException as exc:
+        logger.info("Auto-stop recording skipped: %s", exc.detail)
     return CountingStopOut(total_count=total_count, target_class=target_class)
 
 
