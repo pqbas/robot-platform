@@ -106,7 +106,7 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
               src={getRecordingFileUrl(session.recording_uuid)}
               controls
               controlsList="nofullscreen"
-              className={isFullscreen ? "max-h-screen w-auto max-w-full" : "w-full"}
+              className={isFullscreen ? "h-full w-full object-contain" : "w-full"}
               onTimeUpdate={onTimeUpdate}
             />
           )}
