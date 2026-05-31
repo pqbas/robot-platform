@@ -321,6 +321,11 @@ class PyAvEncoder(Encoder):
         import av
 
         av_frame = av.VideoFrame.from_ndarray(frame, format="bgr24")
+        # Explicit PTS from real arrival time; without it PyAV assigns
+        # 0,1,2,... in the stream time_base (1/fps), playing back at the
+        # declared fps rather than the real capture rate.
+        elapsed = time.monotonic() - self._started_at
+        av_frame.pts = int(elapsed / float(self._stream.time_base))
         for packet in self._stream.encode(av_frame):
             self._container.mux(packet)
         self._frame_count += 1
