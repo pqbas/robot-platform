@@ -86,6 +86,38 @@ async def _upload_one(http: aiohttp.ClientSession, row: Recording, base_url: str
         _uploading_uuids.discard(row.uuid)
 
 
+async def _upload_detections(http: aiohttp.ClientSession, row: Recording, base_url: str) -> None:
+    """Best-effort upload of the {uuid}.jsonl detection log next to the MP4.
+
+    No retry: a failure here is logged but does not block marking the
+    recording uploaded. The MP4 is the primary artifact.
+    """
+    det_path = os.path.join(os.path.dirname(row.file_path), f"{row.uuid}.jsonl")
+    if not os.path.isfile(det_path):
+        return
+
+    url = f"{base_url}/api/sync/recordings/{row.uuid}/detections/upload"
+    headers = {"Authorization": f"Bearer {config.sync.api_key}"}
+    try:
+        with open(det_path, "rb") as f:
+            data = aiohttp.FormData()
+            data.add_field(
+                "file",
+                f,
+                filename=f"{row.uuid}.jsonl",
+                content_type="application/x-ndjson",
+            )
+            async with http.post(url, data=data, headers=headers) as resp:
+                if resp.status == 200:
+                    logger.info("Detection log %s uploaded", row.uuid)
+                else:
+                    logger.warning(
+                        "Detection log %s: server returned %d", row.uuid, resp.status
+                    )
+    except Exception as exc:
+        logger.warning("Detection log %s upload failed: %s", row.uuid, exc)
+
+
 async def upload_pending_recordings(db: AsyncSession) -> None:
     if not config.sync.server_url:
         return
@@ -113,6 +145,7 @@ async def upload_pending_recordings(db: AsyncSession) -> None:
                 continue
             ok = await _upload_one(http, row, config.sync.lan_url)
             if ok:
+                await _upload_detections(http, row, config.sync.lan_url)
                 row.uploaded_at = datetime.now(timezone.utc).strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
                 )

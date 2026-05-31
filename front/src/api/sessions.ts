@@ -30,6 +30,10 @@ export function getCountingStatus(): Promise<CountingStatus> {
   return apiFetch("/api/counting/status")
 }
 
+export function discardCounting(): Promise<{ ok: boolean; discarded: string | null }> {
+  return apiFetch("/api/counting/discard", { method: "POST" })
+}
+
 // --- Sessions (DB persistence) ---
 
 export function getSessions(params?: { from?: string; to?: string; device_id?: string }): Promise<Session[]> {

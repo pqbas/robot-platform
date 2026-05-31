@@ -17,6 +17,7 @@ from back.config import AppMode, config
 from back.database import get_db
 from back.models import Camellon, Recording, SyncLog
 from back.schemas import RecordingOut, RecordingPlaceUpdate
+from back.services import detection_recorder
 from back.services.recording_client import (
     RecordingClient,
     RecordingWorkerUnavailable,
@@ -120,6 +121,8 @@ async def start_recording(db: AsyncSession = Depends(get_db)):
             raise HTTPException(503, "Camera worker is not available")
         raise HTTPException(500, f"Recording worker error: {err}")
 
+    detection_recorder.start(uuid, config.storage.recordings_dir)
+
     row = Recording(
         uuid=uuid,
         device_id=device_id,
@@ -155,6 +158,8 @@ async def stop_recording(db: AsyncSession = Depends(get_db)):
     except RecordingWorkerUnavailable as exc:
         logger.warning("Recording worker not available on stop: %s", exc)
         raise HTTPException(503, "Recording worker is not available")
+
+    detection_recorder.stop()
 
     if not worker_resp.get("ok"):
         err = worker_resp.get("error", "unknown")

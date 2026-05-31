@@ -1,13 +1,17 @@
 import csv
 import io
 import logging
+import os
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from back.config import config
 from back.database import get_db
+from back.models import Recording
 from back.schemas import (
     CountingStartRequest,
     CountingStatusOut,
@@ -29,10 +33,20 @@ router = APIRouter(prefix="/api", tags=["sessions"])
 
 
 @router.post("/counting/start", response_model=CountingStatusOut)
-async def start_counting(body: CountingStartRequest):
+async def start_counting(body: CountingStartRequest, db: AsyncSession = Depends(get_db)):
     if counter.is_session_active():
         raise HTTPException(409, "Counting is already active")
     sess = counter.start_counting(body.target_class)
+    # Auto-start a recording so every counting session is backed by a video +
+    # detection log. Reuses recordings.start_recording; a 409 (recording
+    # already active) or any other error must not abort the counting session.
+    from back.routes.recordings import start_recording
+
+    try:
+        rec = await start_recording(db)
+        sess.recording_uuid = rec.uuid
+    except HTTPException as exc:
+        logger.info("Auto-start recording skipped: %s", exc.detail)
     return CountingStatusOut(
         active=True,
         target_class=body.target_class,
@@ -42,11 +56,49 @@ async def start_counting(body: CountingStartRequest):
 
 
 @router.post("/counting/stop", response_model=CountingStopOut)
-async def stop_counting():
+async def stop_counting(db: AsyncSession = Depends(get_db)):
     if not counter.is_session_active():
         raise HTTPException(409, "No counting is active")
     total_count, target_class = counter.stop_counting()
+    # Stop the recording started alongside this counting session.
+    from back.routes.recordings import stop_recording
+
+    try:
+        await stop_recording(db)
+    except HTTPException as exc:
+        logger.info("Auto-stop recording skipped: %s", exc.detail)
     return CountingStopOut(total_count=total_count, target_class=target_class)
+
+
+@router.post("/counting/discard")
+async def discard_counting(db: AsyncSession = Depends(get_db)):
+    """Drop the recording auto-started with the last counting session.
+
+    Deletes the Recording row and its {uuid}.mp4 / {uuid}.jsonl files. Idempotent:
+    returns discarded=None when there is no last recording to drop.
+    """
+    uuid = counter.get_last_recording_uuid()
+    if uuid is None:
+        return {"ok": True, "discarded": None}
+
+    result = await db.execute(select(Recording).where(Recording.uuid == uuid))
+    row = result.scalar_one_or_none()
+    mp4_path = row.file_path if row else os.path.join(
+        config.storage.recordings_dir, f"{uuid}.mp4"
+    )
+    if row is not None:
+        await db.delete(row)
+        await db.flush()
+
+    base_dir = os.path.dirname(mp4_path)
+    for path in (mp4_path, os.path.join(base_dir, f"{uuid}.jsonl")):
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+
+    counter.clear_last_recording_uuid()
+    return {"ok": True, "discarded": uuid}
 
 
 @router.get("/counting/status", response_model=CountingStatusOut)
@@ -60,6 +112,26 @@ async def counting_status():
         start_time=sess.start_time,
         total_count=sess.last_frame_count,
     )
+
+
+async def _link_recording_camellon(db: AsyncSession, camellon_id: int) -> None:
+    """Assign camellon_id to the Recording auto-started with the active session.
+
+    No-op if there is no active counting session or it has no recording_uuid.
+    """
+    sess = counter.get_active_session()
+    recording_uuid = sess.recording_uuid if sess else None
+    if recording_uuid is None:
+        # Session already stopped: fall back to the last stopped session's uuid.
+        recording_uuid = counter.get_last_recording_uuid()
+    if recording_uuid is None:
+        return
+    result = await db.execute(
+        select(Recording).where(Recording.uuid == recording_uuid)
+    )
+    rec = result.scalar_one_or_none()
+    if rec is not None:
+        rec.camellon_id = camellon_id
 
 
 # --- Sessions (DB persistence) ---
@@ -128,6 +200,7 @@ async def update_session(
     if cam is None:
         raise HTTPException(404, "Camellon not found")
     sess.camellon_id = body.camellon_id
+    await _link_recording_camellon(db, body.camellon_id)
     await db.commit()
     await db.refresh(sess)
     return sess
@@ -142,4 +215,5 @@ async def save_session(body: SessionSave, db: AsyncSession = Depends(get_db)):
     sess = await storage.create_completed_session(
         db, body.camellon_id, body.target_class, body.total_count
     )
+    await _link_recording_camellon(db, body.camellon_id)
     return sess

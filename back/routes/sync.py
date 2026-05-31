@@ -289,3 +289,27 @@ if config.mode == AppMode.SERVER:
         row.file_size_bytes = size
         await db.commit()
         return {"ok": True, "uuid": uuid, "size_bytes": size}
+
+    @router.post("/recordings/{uuid}/detections/upload")
+    async def upload_recording_detections(
+        uuid: str,
+        file: UploadFile = File(...),
+        db: AsyncSession = Depends(get_db),
+        device: Device = Depends(verify_device_key),
+    ):
+        result = await db.execute(select(Recording).where(Recording.uuid == uuid))
+        row = result.scalar_one_or_none()
+        if row is None:
+            raise HTTPException(404, "Recording not found")
+        if row.device_id != device.id:
+            raise HTTPException(404, "Recording not found")
+
+        os.makedirs(config.storage.recordings_dir, exist_ok=True)
+        out_path = os.path.join(config.storage.recordings_dir, f"{uuid}.jsonl")
+
+        size = 0
+        with open(out_path, "wb") as out:
+            while chunk := await file.read(1_048_576):
+                out.write(chunk)
+                size += len(chunk)
+        return {"ok": True, "uuid": uuid, "size_bytes": size}

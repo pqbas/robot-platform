@@ -8,6 +8,7 @@ from aiortc import VideoStreamTrack
 
 from back.config import config
 from back.schemas import DetectionItem, FrameDetectionPayload
+from back.services import detection_recorder
 from back.services.camera_client import CameraClient
 from back.services.perception import counter
 from back.services.perception.inference_client import InferenceClient
@@ -80,11 +81,14 @@ class _InferenceWorker:
                 continue
 
             session = counter.get_active_session()
-            if not processing_enabled or session is None:
+            recording_active = detection_recorder.is_active()
+            if not processing_enabled or (session is None and not recording_active):
                 continue
 
             try:
-                target_class = session.target_class
+                # Recording-only mode has no session: detect all classes
+                # (target_class=None) so the log captures every object.
+                target_class = session.target_class if session else None
                 conf = config.counting.confidence_threshold
                 response = self._client.detect(
                     frame,
@@ -101,29 +105,37 @@ class _InferenceWorker:
                 count = response.get("count", 0)
 
                 counter.update(tracking_data)
+                detection_recorder.record(detections)
                 logger.debug("Inference: %d detections, count=%d", len(detections), count)
 
-                payload = FrameDetectionPayload(
-                    count=count,
-                    target_class=target_class,
-                    detections=[DetectionItem(**d) for d in detections],
-                    session_active=True,
-                    session_total=session.last_frame_count,
-                )
-                with self._result_lock:
-                    self._result = payload
+                # Only emit a data-channel payload when a counting session is
+                # active, preserving the existing stream/UI behavior. With only
+                # a recording active we still log detections but send nothing.
+                if session is not None:
+                    payload = FrameDetectionPayload(
+                        count=count,
+                        target_class=session.target_class,
+                        detections=[DetectionItem(**d) for d in detections],
+                        session_active=True,
+                        session_total=session.last_frame_count,
+                    )
+                    with self._result_lock:
+                        self._result = payload
 
             except Exception:
                 logger.warning("Inference failed, stream continues", exc_info=True)
-                error_payload = FrameDetectionPayload(
-                    count=0,
-                    target_class="",
-                    detections=[],
-                    session_active=True,
-                    error="inference error",
-                )
-                with self._result_lock:
-                    self._result = error_payload
+                # Keep the frame index continuous even when inference fails.
+                detection_recorder.record([])
+                if session is not None:
+                    error_payload = FrameDetectionPayload(
+                        count=0,
+                        target_class="",
+                        detections=[],
+                        session_active=True,
+                        error="inference error",
+                    )
+                    with self._result_lock:
+                        self._result = error_payload
 
 
 class CameraStreamTrack(VideoStreamTrack):
@@ -155,10 +167,15 @@ class CameraStreamTrack(VideoStreamTrack):
             self._first_frame = False
             self._worker.start()
 
-        # Skip the frame copy + inference dispatch when no counting session
-        # is active. submit_frame would copy ~6 MB at 1080p — wasted CPU + ~5
-        # ms of dead time per frame when nobody is counting.
-        if processing_enabled and counter.get_active_session() is not None:
+        # Skip the frame copy + inference dispatch when neither a counting
+        # session nor a recording is active. submit_frame would copy ~6 MB at
+        # 1080p — wasted CPU + ~5 ms of dead time per frame when nobody needs
+        # inference. A recording needs it to populate the detection log.
+        needs_inference = (
+            counter.get_active_session() is not None
+            or detection_recorder.is_active()
+        )
+        if processing_enabled and needs_inference:
             self._worker.submit_frame(frame.copy())
 
         # Send latest detection result over data channel
