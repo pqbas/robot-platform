@@ -289,6 +289,7 @@ class PyAvEncoder(Encoder):
         fps: float,
     ) -> None:
         import av
+        import fractions
 
         self._bitrate = self._bitrate_override or _bitrate_for_height(
             height, hw_accelerated=False
@@ -300,6 +301,11 @@ class PyAvEncoder(Encoder):
         framerate = max(1, int(round(fps)))
         self._container = av.open(output_path, mode="w")
         self._stream = self._container.add_stream(self._codec, rate=framerate)
+        # The stream's time_base is None until the muxer is opened; pin it so
+        # write_frame() can express per-frame PTS in known units. 1/fps matches
+        # the declared rate and is fine: PTS still tracks real elapsed time,
+        # just quantised to the frame interval.
+        self._stream.time_base = fractions.Fraction(1, framerate)
         self._stream.width = width
         self._stream.height = height
         self._stream.pix_fmt = "yuv420p"
