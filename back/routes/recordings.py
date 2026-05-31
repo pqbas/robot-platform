@@ -4,6 +4,7 @@ Server mode also serves the listing + downloads for recordings synced from
 robots; only the start/stop/delete endpoints are robot-only.
 """
 
+import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -276,6 +277,33 @@ async def download_recording(uuid: str, db: AsyncSession = Depends(get_db)):
         "Content-Length": str(os.path.getsize(row.file_path)),
     }
     return StreamingResponse(stream(), media_type="video/mp4", headers=headers)
+
+
+@router.get("/{uuid}/detections")
+async def get_recording_detections(uuid: str, db: AsyncSession = Depends(get_db)):
+    """Per-frame detections logged alongside a recording.
+
+    Returns {"fps": <Recording.fps>, "frames": [...]} where each frame is the
+    parsed JSONL line {"frame", "t", "dets"}. If the .jsonl is missing (recording
+    without logged detections) returns an empty frame list. Available in robot
+    and server mode so the operator can replay synced recordings from the server.
+    """
+    result = await db.execute(select(Recording).where(Recording.uuid == uuid))
+    row = result.scalar_one_or_none()
+    if row is None:
+        raise HTTPException(404, "Recording not found")
+
+    jsonl_path = os.path.join(os.path.dirname(row.file_path), f"{uuid}.jsonl")
+    if not os.path.isfile(jsonl_path):
+        return {"fps": row.fps, "frames": []}
+
+    frames = []
+    with open(jsonl_path) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                frames.append(json.loads(line))
+    return {"fps": row.fps, "frames": frames}
 
 
 @router.delete("/{uuid}")
