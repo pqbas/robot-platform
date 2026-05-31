@@ -455,6 +455,23 @@ Shipped en PR #79 (merge pendiente).
 
 ---
 
+## Phase 32: Session Detection Replay — reproduccion de video con bboxes superpuestos (Complete)
+
+**Goal:** El operador puede reproducir el video de una sesion con los bounding boxes pintados encima, sincronizados frame a frame desde el archivo JSONL.
+
+- [x] Migracion `017_session_recording_uuid`: columna `recording_uuid` en tabla `sessions`
+- [x] `Session` model + `SessionOut` schema exponen `recording_uuid`
+- [x] `save_session` setea `sess.recording_uuid` desde `_last_recording_uuid`
+- [x] Endpoint `GET /api/recordings/{uuid}/detections` devuelve `{fps, frames[]}`
+- [x] `front/src/types/index.ts`: campo `recording_uuid` en `Session`, tipos `DetectionFrame` y `RecordingDetections`
+- [x] `front/src/api/recordings.ts`: funcion `getRecordingDetections`
+- [x] `SessionsTable`: icono de video en filas con `recording_uuid` no nulo
+- [x] `DetectionReplayDialog`: video + canvas overlay, sincronizacion por timestamp `t`
+
+Notas: la sincronizacion se hizo por timestamp `t` (no por frameIdx) porque el campo `frame` del JSONL es el contador de inferencias, no el indice de frame del video; se agrego sync wiring de `recording_uuid` (push/receive), `FileResponse` para soportar HTTP Range, y fullscreen sobre el contenedor. Diferido a nueva fase: el recording-worker codifica el MP4 con un framerate mayor al real de captura, asi que el video se reproduce acelerado (~5x).
+
+---
+
 ## Pendiente (sin fecha)
 
 - Clasificación offline de frutos (crops por track_id + modelo de calidad/madurez)
