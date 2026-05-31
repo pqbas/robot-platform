@@ -149,16 +149,17 @@ class GstMp4Encoder(Encoder):
             "GStreamer encoder — %dx%d @ %.1ffps bitrate=%d (auto)",
             width, height, fps, self._bitrate,
         )
-        framerate_n = max(1, int(round(fps)))
         # nvv4l2h264enc only accepts NVMM-tagged buffers; bridge system memory
         # (BGR from the camera worker) → NV12 in NVMM via videoconvert + nvvidconv.
         # Without nvvidconv the encoder silently drops every buffer and mp4mux
-        # writes a 0-byte file. do-timestamp=true lets GStreamer stamp PTS from
-        # the pipeline clock, so playback speed reflects actual capture rate.
+        # writes a 0-byte file. PTS is set explicitly per buffer in write_frame()
+        # from time.monotonic(); do-timestamp=true is removed and framerate=0/1
+        # marks variable framerate so downstream honours the buffer PTS instead
+        # of the encoder's declared-fps timer.
         pipeline_str = (
-            "appsrc name=src is-live=true do-timestamp=true format=time "
+            "appsrc name=src is-live=true format=time "
             f"caps=video/x-raw,format=BGR,width={width},height={height},"
-            f"framerate={framerate_n}/1 "
+            f"framerate=0/1 "
             "! queue "
             "! videoconvert "
             "! video/x-raw,format=NV12 "
@@ -204,7 +205,12 @@ class GstMp4Encoder(Encoder):
         raw = frame.tobytes()
         buf = Gst.Buffer.new_allocate(None, len(raw), None)
         buf.fill(0, raw)
-        # PTS is set by appsrc (do-timestamp=true) using the pipeline clock.
+        # Explicit PTS from real arrival time so playback speed matches capture
+        # rate even when the actual fps differs from the declared handshake fps.
+        pts_ns = int((time.monotonic() - self._started_at) * Gst.SECOND)
+        buf.pts = pts_ns
+        buf.dts = pts_ns
+        buf.duration = Gst.CLOCK_TIME_NONE
         self._frame_count += 1
         ret = self._appsrc.emit("push-buffer", buf)
         if ret != Gst.FlowReturn.OK:
