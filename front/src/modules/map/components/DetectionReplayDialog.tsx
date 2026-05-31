@@ -34,16 +34,31 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
   function onTimeUpdate() {
     const video = videoRef.current
     if (!video || !detData) return
-    const fps = detData.fps ?? 0
-    if (fps <= 0) return
-    const frameIdx = Math.floor(video.currentTime * fps)
-    const frame = detData.frames[frameIdx]
-    if (!frame) {
+    const frames = detData.frames
+    if (frames.length === 0) return
+    // El campo `frame` del JSONL es el contador de inferencias, no el índice
+    // de frame del video, y la inferencia corre más lento que el video. El
+    // único eje común es el timestamp `t`: ubicamos la última detección cuyo
+    // t no supera el tiempo de reproducción transcurrido desde el inicio.
+    const target = frames[0].t + video.currentTime
+    let lo = 0
+    let hi = frames.length - 1
+    let idx = -1
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      if (frames[mid].t <= target) {
+        idx = mid
+        lo = mid + 1
+      } else {
+        hi = mid - 1
+      }
+    }
+    if (idx < 0) {
       setCurrentDets([])
       return
     }
     setCurrentDets(
-      frame.dets.map((d) => ({
+      frames[idx].dets.map((d) => ({
         class_name: d.cls,
         confidence: d.conf,
         bbox: d.bbox,

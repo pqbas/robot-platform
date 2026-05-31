@@ -10,7 +10,7 @@ import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -267,16 +267,13 @@ async def download_recording(uuid: str, db: AsyncSession = Depends(get_db)):
     if not os.path.isfile(row.file_path):
         raise HTTPException(404, "Recording file is missing on disk")
 
-    def stream():
-        with open(row.file_path, "rb") as f:
-            while chunk := f.read(1_048_576):
-                yield chunk
-
-    headers = {
-        "Content-Disposition": f'attachment; filename="{uuid}.mp4"',
-        "Content-Length": str(os.path.getsize(row.file_path)),
-    }
-    return StreamingResponse(stream(), media_type="video/mp4", headers=headers)
+    # FileResponse honors HTTP Range requests (sets Accept-Ranges), which the
+    # video element needs to seek/scrub to unbuffered regions during replay.
+    return FileResponse(
+        row.file_path,
+        media_type="video/mp4",
+        filename=f"{uuid}.mp4",
+    )
 
 
 @router.get("/{uuid}/detections")
