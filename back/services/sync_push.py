@@ -138,6 +138,7 @@ async def push_all(db: AsyncSession) -> None:
                     "camellon_uuid": camellon.uuid,
                     "start_time": r.start_time, "end_time": r.end_time,
                     "target_class": r.target_class, "total_count": r.total_count,
+                    "recording_uuid": r.recording_uuid,
                 })
             result = await _post_batch(http, "sessions", data)
             if result and result.get("successful_uuids"):

@@ -10,8 +10,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Pencil } from "lucide-react"
+import { Pencil, Video } from "lucide-react"
 import SessionEditDialog from "./SessionEditDialog"
+import DetectionReplayDialog from "./DetectionReplayDialog"
 
 const PAGE_SIZE = 13
 
@@ -43,6 +44,7 @@ export default function SessionsTable({
 }: SessionsTableProps) {
   const [page, setPage] = useState(0)
   const [editingSession, setEditingSession] = useState<Session | null>(null)
+  const [replaySession, setReplaySession] = useState<Session | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(sessions.length / PAGE_SIZE))
   const safeePage = Math.min(page, totalPages - 1)
@@ -67,6 +69,7 @@ export default function SessionsTable({
               <TableHead className="hidden lg:table-cell w-[26%]">Device</TableHead>
               <TableHead className="w-[8%] text-right">Conteo</TableHead>
               <TableHead className="w-8" />
+              <TableHead className="w-8" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -87,6 +90,21 @@ export default function SessionsTable({
                   {s.device_id}
                 </TableCell>
                 <TableCell className="text-right">{s.total_count}</TableCell>
+                <TableCell>
+                  {s.recording_uuid != null && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setReplaySession(s)
+                      }}
+                    >
+                      <Video className="size-3.5" />
+                    </Button>
+                  )}
+                </TableCell>
                 <TableCell>
                   <Button
                     variant="ghost"
@@ -131,6 +149,14 @@ export default function SessionsTable({
             onSessionUpdated(updated)
             setEditingSession(null)
           }}
+        />
+      )}
+
+      {replaySession && (
+        <DetectionReplayDialog
+          session={replaySession}
+          open={!!replaySession}
+          onOpenChange={(open) => { if (!open) setReplaySession(null) }}
         />
       )}
     </div>
