@@ -1,4 +1,4 @@
-import type { Recording } from "@/types"
+import type { Recording, RecordingDetections } from "@/types"
 import { apiFetch } from "./client"
 
 export function startRecording(): Promise<Recording> {
@@ -49,4 +49,8 @@ export function getRecordingFileUrl(uuid: string): string {
 
 export function getUploadingUuids(): Promise<{ uuids: string[] }> {
   return apiFetch("/api/recordings/uploading")
+}
+
+export function getRecordingDetections(uuid: string): Promise<RecordingDetections> {
+  return apiFetch(`/api/recordings/${uuid}/detections`)
 }

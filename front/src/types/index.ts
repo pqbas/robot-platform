@@ -26,6 +26,18 @@ export type Session = {
   end_time: string | null
   target_class: string
   total_count: number
+  recording_uuid: string | null
+}
+
+export type DetectionFrame = {
+  frame: number
+  t: number
+  dets: { cls: string; conf: number; bbox: [number, number, number, number]; track_id: number | null }[]
+}
+
+export type RecordingDetections = {
+  fps: number | null
+  frames: DetectionFrame[]
 }
 
 export type Camellon = {
