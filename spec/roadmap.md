@@ -437,6 +437,24 @@ Ver futuro `spec/14-05-26-recordings-lan-only/`.
 
 ---
 
+## Phase 31: Detection Log — grabaciones vinculadas a detecciones JSONL (Complete)
+
+**Goal:** Cada grabación activa genera un archivo JSONL con bounding boxes por frame, sincronizado al servidor junto con el MP4.
+
+- [x] Nuevo módulo `back/services/detection_recorder.py` (JSONL por frame, thread-safe)
+- [x] Inferencia corre cuando hay grabación activa aunque no haya sesión de conteo
+- [x] `POST /counting/start` auto-arranca grabación; `POST /counting/stop` la detiene
+- [x] `POST /counting/discard` elimina grabación, MP4 y JSONL del disco
+- [x] `_last_recording_uuid` persiste en `counter.py` para enlazar camellon tras `stop`
+- [x] `save_session`/`update_session` propagan `camellon_id` a la grabación asociada
+- [x] `sync_recordings_upload.py` sube también el `.jsonl` al servidor
+- [x] Endpoint servidor `POST /api/sync/recordings/{uuid}/detections/upload`
+- [x] Frontend: `discard()` llama `POST /api/counting/discard`
+
+Shipped en PR #79 (merge pendiente).
+
+---
+
 ## Pendiente (sin fecha)
 
 - Clasificación offline de frutos (crops por track_id + modelo de calidad/madurez)
