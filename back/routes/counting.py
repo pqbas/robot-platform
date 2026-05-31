@@ -87,10 +87,14 @@ async def _link_recording_camellon(db: AsyncSession, camellon_id: int) -> None:
     No-op if there is no active counting session or it has no recording_uuid.
     """
     sess = counter.get_active_session()
-    if sess is None or sess.recording_uuid is None:
+    recording_uuid = sess.recording_uuid if sess else None
+    if recording_uuid is None:
+        # Session already stopped: fall back to the last stopped session's uuid.
+        recording_uuid = counter.get_last_recording_uuid()
+    if recording_uuid is None:
         return
     result = await db.execute(
-        select(Recording).where(Recording.uuid == sess.recording_uuid)
+        select(Recording).where(Recording.uuid == recording_uuid)
     )
     rec = result.scalar_one_or_none()
     if rec is not None:

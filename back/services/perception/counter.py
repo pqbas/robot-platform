@@ -19,6 +19,9 @@ class CountingSession:
 _active: CountingSession | None = None
 _object_counter: ObjectCounter | None = None
 _last_results: list | None = None
+# recording_uuid of the last stopped session, so save/update can still link
+# the recording after the session is cleared.
+_last_recording_uuid: str | None = None
 
 
 def start_counting(target_class: str) -> CountingSession:
@@ -42,7 +45,7 @@ def start_counting(target_class: str) -> CountingSession:
 
 def stop_counting() -> tuple[int, str]:
     """Stop live counting. Returns (total_count, target_class)."""
-    global _active, _object_counter, _last_results
+    global _active, _object_counter, _last_results, _last_recording_uuid
     if _active is None or _object_counter is None:
         raise RuntimeError("No counting session is active")
 
@@ -50,6 +53,7 @@ def stop_counting() -> tuple[int, str]:
 
     target_class = _active.target_class
     logger.info("Counting stopped (target=%s, count=%d)", target_class, total)
+    _last_recording_uuid = _active.recording_uuid
     _active = None
     _object_counter = None
     _last_results = None
@@ -58,6 +62,10 @@ def stop_counting() -> tuple[int, str]:
 
 def get_active_session() -> CountingSession | None:
     return _active
+
+
+def get_last_recording_uuid() -> str | None:
+    return _last_recording_uuid
 
 
 def is_session_active() -> bool:
