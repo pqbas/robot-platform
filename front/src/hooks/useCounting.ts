@@ -5,6 +5,7 @@ import {
   startCounting as apiStart,
   stopCounting as apiStop,
   saveSession,
+  discardCounting,
 } from "@/api/sessions"
 
 export type UseCountingReturn = {
@@ -16,7 +17,7 @@ export type UseCountingReturn = {
   startCounting: (targetClass: string) => Promise<void>
   stopCounting: () => Promise<void>
   save: (camellonId: number) => Promise<void>
-  discard: () => void
+  discard: () => Promise<void>
   updateFrame: (data: FrameData) => void
 }
 
@@ -81,7 +82,14 @@ export function useCounting(): UseCountingReturn {
     [],
   )
 
-  const discard = useCallback(() => {
+  const discard = useCallback(async () => {
+    // Drop the auto-started recording on the backend before clearing local
+    // state. Best-effort: a failure must not leave the UI stuck.
+    try {
+      await discardCounting()
+    } catch {
+      // ignore: clearing local state below still returns the user to IDLE
+    }
     stopResultRef.current = null
     setState("IDLE")
     setStartTime(null)
