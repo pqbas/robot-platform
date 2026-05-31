@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZED 2i WebRTC Stream</title>
+    <style>
+        body {
+            margin: 0;
+            background: #1a1a1a;
+            color: #fff;
+            font-family: system-ui, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        h1 {
+            margin-bottom: 16px;
+            font-size: 1.4rem;
+        }
+        video {
+            max-width: 90vw;
+            max-height: 70vh;
+            background: #000;
+            border-radius: 4px;
+        }
+        .controls {
+            margin-top: 16px;
+            display: flex;
+            gap: 12px;
+        }
+        button {
+            padding: 8px 24px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #startBtn {
+            background: #2563eb;
+            color: #fff;
+        }
+        #stopBtn {
+            background: #dc2626;
+            color: #fff;
+        }
+        #processBtn {
+            background: #16a34a;
+            color: #fff;
+        }
+        #processBtn.off {
+            background: #6b7280;
+        }
+        button:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+    </style>
+</head>
+<body>
+    <h1>ZED 2i - WebRTC Stream</h1>
+    <video id="video" autoplay playsinline></video>
+    <div class="controls">
+        <button id="startBtn" onclick="start()">Start</button>
+        <button id="stopBtn" onclick="stop()" disabled>Stop</button>
+        <button id="processBtn" onclick="toggleProcessing()">Processing: ON</button>
+    </div>
+
+    <p id="status" style="color:#888; margin-top:8px; font-size:0.9rem;"></p>
+
+    <script>
+        let pc = null;
+        const status = document.getElementById('status');
+
+        async function start() {
+            document.getElementById('startBtn').disabled = true;
+            status.textContent = 'Connecting...';
+
+            pc = new RTCPeerConnection();
+
+            pc.addTransceiver('video', { direction: 'recvonly' });
+
+            pc.oniceconnectionstatechange = () => {
+                status.textContent = 'ICE: ' + pc.iceConnectionState;
+                console.log('ICE state:', pc.iceConnectionState);
+            };
+
+            pc.onconnectionstatechange = () => {
+                status.textContent = 'Connection: ' + pc.connectionState;
+                console.log('Connection state:', pc.connectionState);
+            };
+
+            pc.ontrack = (event) => {
+                console.log('Track received:', event.track.kind);
+                const video = document.getElementById('video');
+                video.srcObject = event.streams[0];
+                video.play().catch(e => console.error('Play error:', e));
+            };
+
+            try {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+
+                const response = await fetch('/offer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sdp: pc.localDescription.sdp,
+                        type: pc.localDescription.type
+                    })
+                });
+
+                const answer = await response.json();
+                await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+                document.getElementById('stopBtn').disabled = false;
+            } catch (e) {
+                status.textContent = 'Error: ' + e.message;
+                console.error(e);
+                document.getElementById('startBtn').disabled = false;
+            }
+        }
+
+        async function toggleProcessing() {
+            const res = await fetch('/toggle_processing', { method: 'POST' });
+            const data = await res.json();
+            const btn = document.getElementById('processBtn');
+            btn.textContent = 'Processing: ' + (data.processing ? 'ON' : 'OFF');
+            btn.classList.toggle('off', !data.processing);
+        }
+
+        function stop() {
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            document.getElementById('video').srcObject = null;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            status.textContent = '';
+        }
+    </script>
+</body>
+</html>

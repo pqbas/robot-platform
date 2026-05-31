@@ -17,7 +17,7 @@ services:
   back:
     build:
       context: .
-      dockerfile: back/Dockerfile
+      dockerfile: src/back/Dockerfile
     env_file:
       - path: .env.server
         required: false
@@ -34,7 +34,7 @@ services:
 
   front:
     build:
-      context: ./front
+      context: ./src/front
       dockerfile: Dockerfile
       target: build
     command: ["sh", "-c", "cp -r /app/dist/. /usr/share/nginx/html/"]
