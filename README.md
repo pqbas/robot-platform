@@ -1,6 +1,6 @@
 <h1 align="center">Robot Platform</h1>
 
-<p align="center">Software platform for agricultural mobile robots to detect and count objects in real time.</p>
+<p align="center">Software platform for mobile robots to detect and count objects in real time.</p>
 
 <p align="center">
   <img src="assets/2026-05-06-20-56-02.png" alt="Robot Platform en operación">
