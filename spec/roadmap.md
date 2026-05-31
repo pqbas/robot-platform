@@ -472,6 +472,18 @@ Notas: la sincronizacion se hizo por timestamp `t` (no por frameIdx) porque el c
 
 ---
 
+## Phase 33: Recording FPS Fix — video a velocidad real (Complete)
+
+**Goal:** el MP4 grabado dura lo mismo que la sesion real; actualmente se reproduce ~5x acelerado porque los encoders usan el fps declarado del handshake en vez del tiempo real de llegada de frames.
+
+- [x] `GstMp4Encoder`: PTS explicito por buffer (`buf.pts = ns_desde_start`), remover `do-timestamp=true`, caps `framerate=0/1`
+- [x] `PyAvEncoder`: PTS explicito por frame (`av_frame.pts = elapsed / time_base`)
+- [x] Test de integracion `recording_worker/tests/test_encoder_pts.py`
+
+Shipped en PR #<n> (merge `<short-sha>`).
+
+---
+
 ## Pendiente (sin fecha)
 
 - Clasificación offline de frutos (crops por track_id + modelo de calidad/madurez)
