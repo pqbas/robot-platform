@@ -161,6 +161,7 @@ class Session(Base):
     end_time: Mapped[str | None] = mapped_column(Text, nullable=True)
     target_class: Mapped[str] = mapped_column(Text, nullable=False)
     total_count: Mapped[int] = mapped_column(Integer, default=0)
+    recording_uuid: Mapped[str | None] = mapped_column(Text, nullable=True)
     camellon: Mapped["Camellon"] = relationship(back_populates="sessions")
     events: Mapped[list["Event"]] = relationship(back_populates="session")
 

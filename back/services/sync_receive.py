@@ -137,6 +137,7 @@ async def receive_sessions(db: AsyncSession, items: list[SyncSession]) -> SyncRe
             uuid=item.uuid, device_id=item.device_id, camellon_id=camellon.id,
             start_time=item.start_time, end_time=item.end_time,
             target_class=item.target_class, total_count=item.total_count,
+            recording_uuid=item.recording_uuid,
         ))
         inserted += 1
         ok.append(item.uuid)

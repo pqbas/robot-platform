@@ -59,6 +59,7 @@ class SessionOut(BaseModel):
     end_time: str | None
     target_class: str
     total_count: int
+    recording_uuid: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -333,6 +334,7 @@ class SyncSession(BaseModel):
     end_time: str | None = None
     target_class: str
     total_count: int = 0
+    recording_uuid: str | None = None
 
 
 class SyncEvent(BaseModel):

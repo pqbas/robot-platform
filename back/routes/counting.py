@@ -216,4 +216,7 @@ async def save_session(body: SessionSave, db: AsyncSession = Depends(get_db)):
         db, body.camellon_id, body.target_class, body.total_count
     )
     await _link_recording_camellon(db, body.camellon_id)
+    rec_uuid = counter.get_last_recording_uuid()
+    if rec_uuid:
+        sess.recording_uuid = rec_uuid
     return sess
