@@ -1,6 +1,6 @@
 <h1 align="center">Robot Platform</h1>
 
-<p align="center">Software platform for mobile robots to detect and count objects in real time.</p>
+<p align="center">Software platform for mobile robots running computer vision applications.</p>
 
 <p align="center">
   <img src="assets/2026-05-06-20-56-02.png" alt="Robot Platform en operación">
@@ -8,9 +8,9 @@
 
 ## Features
 
+- Supported tasks: object detection and counting.
 - Camera source support: USB/V4L2 devices and IP cameras via RTSP URL.
-- Real-time fruit detection and counting using YOLO + BoT-SORT tracking,
-  accelerated with TensorRT FP16 on Jetson.
+- YOLO + BoT-SORT tracking accelerated with TensorRT FP16 on Jetson.
 - Live video streaming over WebRTC (H.264 NVENC) to any device on the local WiFi
   network.
 - Session recording with H.264 video and per-frame detection overlays,
