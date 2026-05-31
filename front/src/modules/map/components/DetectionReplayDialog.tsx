@@ -9,6 +9,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import DetectionOverlay from "@/modules/vision/components/DetectionOverlay"
+import { Button } from "@/components/ui/button"
+import { Maximize, Minimize } from "lucide-react"
 import { toast } from "sonner"
 
 type Props = {
@@ -20,7 +22,25 @@ type Props = {
 export default function DetectionReplayDialog({ session, open, onOpenChange }: Props) {
   const [detData, setDetData] = useState<RecordingDetections | null>(null)
   const [currentDets, setCurrentDets] = useState<Detection[]>([])
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onFsChange() {
+      setIsFullscreen(document.fullscreenElement === containerRef.current)
+    }
+    document.addEventListener("fullscreenchange", onFsChange)
+    return () => document.removeEventListener("fullscreenchange", onFsChange)
+  }, [])
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen()
+    } else {
+      containerRef.current?.requestFullscreen()
+    }
+  }
 
   useEffect(() => {
     if (!open || !session.recording_uuid) return
@@ -73,13 +93,20 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
         <DialogHeader>
           <DialogTitle>Replay de sesión #{session.id}</DialogTitle>
         </DialogHeader>
-        <div className="relative">
+        {/* El overlay es hermano del video, así que el fullscreen nativo del
+            <video> lo dejaría fuera. Hacemos fullscreen sobre este contenedor
+            (video + canvas juntos) y desactivamos el botón nativo. */}
+        <div
+          ref={containerRef}
+          className="relative flex items-center justify-center bg-black"
+        >
           {session.recording_uuid && (
             <video
               ref={videoRef}
               src={getRecordingFileUrl(session.recording_uuid)}
               controls
-              className="w-full"
+              controlsList="nofullscreen"
+              className={isFullscreen ? "max-h-screen w-auto max-w-full" : "w-full"}
               onTimeUpdate={onTimeUpdate}
             />
           )}
@@ -88,6 +115,15 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
             detections={currentDets}
             visible={true}
           />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute right-2 top-2 h-7 w-7 bg-black/40 text-white hover:bg-black/60 hover:text-white"
+            onClick={toggleFullscreen}
+          >
+            {isFullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
