@@ -5,9 +5,11 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.database import get_db
+from back.models import Recording
 from back.schemas import (
     CountingStartRequest,
     CountingStatusOut,
@@ -39,7 +41,8 @@ async def start_counting(body: CountingStartRequest, db: AsyncSession = Depends(
     from back.routes.recordings import start_recording
 
     try:
-        await start_recording(db)
+        rec = await start_recording(db)
+        sess.recording_uuid = rec.uuid
     except HTTPException as exc:
         logger.info("Auto-start recording skipped: %s", exc.detail)
     return CountingStatusOut(
@@ -76,6 +79,22 @@ async def counting_status():
         start_time=sess.start_time,
         total_count=sess.last_frame_count,
     )
+
+
+async def _link_recording_camellon(db: AsyncSession, camellon_id: int) -> None:
+    """Assign camellon_id to the Recording auto-started with the active session.
+
+    No-op if there is no active counting session or it has no recording_uuid.
+    """
+    sess = counter.get_active_session()
+    if sess is None or sess.recording_uuid is None:
+        return
+    result = await db.execute(
+        select(Recording).where(Recording.uuid == sess.recording_uuid)
+    )
+    rec = result.scalar_one_or_none()
+    if rec is not None:
+        rec.camellon_id = camellon_id
 
 
 # --- Sessions (DB persistence) ---
@@ -144,6 +163,7 @@ async def update_session(
     if cam is None:
         raise HTTPException(404, "Camellon not found")
     sess.camellon_id = body.camellon_id
+    await _link_recording_camellon(db, body.camellon_id)
     await db.commit()
     await db.refresh(sess)
     return sess
@@ -158,4 +178,5 @@ async def save_session(body: SessionSave, db: AsyncSession = Depends(get_db)):
     sess = await storage.create_completed_session(
         db, body.camellon_id, body.target_class, body.total_count
     )
+    await _link_recording_camellon(db, body.camellon_id)
     return sess

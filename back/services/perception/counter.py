@@ -13,6 +13,7 @@ class CountingSession:
     target_class: str
     start_time: str
     last_frame_count: int = 0
+    recording_uuid: str | None = None
 
 
 _active: CountingSession | None = None
