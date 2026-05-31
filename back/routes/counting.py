@@ -1,6 +1,7 @@
 import csv
 import io
 import logging
+import os
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from back.config import config
 from back.database import get_db
 from back.models import Recording
 from back.schemas import (
@@ -66,6 +68,37 @@ async def stop_counting(db: AsyncSession = Depends(get_db)):
     except HTTPException as exc:
         logger.info("Auto-stop recording skipped: %s", exc.detail)
     return CountingStopOut(total_count=total_count, target_class=target_class)
+
+
+@router.post("/counting/discard")
+async def discard_counting(db: AsyncSession = Depends(get_db)):
+    """Drop the recording auto-started with the last counting session.
+
+    Deletes the Recording row and its {uuid}.mp4 / {uuid}.jsonl files. Idempotent:
+    returns discarded=None when there is no last recording to drop.
+    """
+    uuid = counter.get_last_recording_uuid()
+    if uuid is None:
+        return {"ok": True, "discarded": None}
+
+    result = await db.execute(select(Recording).where(Recording.uuid == uuid))
+    row = result.scalar_one_or_none()
+    mp4_path = row.file_path if row else os.path.join(
+        config.storage.recordings_dir, f"{uuid}.mp4"
+    )
+    if row is not None:
+        await db.delete(row)
+        await db.flush()
+
+    base_dir = os.path.dirname(mp4_path)
+    for path in (mp4_path, os.path.join(base_dir, f"{uuid}.jsonl")):
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+
+    counter.clear_last_recording_uuid()
+    return {"ok": True, "discarded": uuid}
 
 
 @router.get("/counting/status", response_model=CountingStatusOut)

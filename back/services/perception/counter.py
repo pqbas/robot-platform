@@ -68,6 +68,11 @@ def get_last_recording_uuid() -> str | None:
     return _last_recording_uuid
 
 
+def clear_last_recording_uuid() -> None:
+    global _last_recording_uuid
+    _last_recording_uuid = None
+
+
 def is_session_active() -> bool:
     return _active is not None
 
