@@ -119,20 +119,25 @@ AUTH_SECRET_KEY=f9e8d7c6-...b5a4c3d2-...
 
 ## 4. Levantar el servidor
 
-Con Docker Desktop corriendo, ejecuta estos cuatro comandos en orden. El último
+Con Docker Desktop corriendo, ejecuta estos comandos en orden. La migración debe
+correr **antes** de levantar el backend: si arranca primero, crea las tablas por
+su cuenta y la migración falla con "relation already exists". El último comando
 es interactivo: te pedirá usuario y contraseña para el primer administrador.
 
 ```powershell
 # 1. Construir las imágenes
 docker compose --env-file .env.server -f docker-compose.server.yml build
 
-# 2. Arrancar el stack (PostgreSQL, backend, frontend, Tailscale)
-docker compose --env-file .env.server -f docker-compose.server.yml up -d
+# 2. Arrancar solo PostgreSQL
+docker compose --env-file .env.server -f docker-compose.server.yml up -d postgres
 
-# 3. Crear las tablas en la base de datos
+# 3. Crear las tablas en la base de datos (sobre una base limpia)
 docker compose --env-file .env.server -f docker-compose.server.yml run --rm back uv run alembic -c back/alembic.ini upgrade head
 
-# 4. Crear el usuario administrador (interactivo)
+# 4. Arrancar el resto del stack (backend, frontend, nginx, Tailscale)
+docker compose --env-file .env.server -f docker-compose.server.yml up -d
+
+# 5. Crear el usuario administrador (interactivo)
 docker compose --env-file .env.server -f docker-compose.server.yml run --rm back uv run python -m back.scripts.create_admin
 ```
 
