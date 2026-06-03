@@ -199,6 +199,16 @@ fi
 ln -sf ".env.${MODE}" "$INSTALL_DIR/.env.active"
 info "Linked .env.active -> .env.${MODE}"
 
+# Robot: run DB migrations now (SQLite). install.sh never did this for robot,
+# so model changes (e.g. recordings.camellon_id) shipped without the column and
+# the backend crashed on first query. Server runs migrations in section 9 after
+# Postgres is up. alembic env.py self-paths src/, so run from the repo root.
+if [[ "$MODE" == "robot" ]]; then
+    info "Running database migrations (robot SQLite)..."
+    cd "$INSTALL_DIR"
+    ENV_FILE=.env.robot uv run alembic -c src/back/alembic.ini upgrade head
+fi
+
 # --- 7. Nginx ---
 info "Configuring nginx..."
 
