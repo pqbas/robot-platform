@@ -13,7 +13,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 # Copiar el código del backend
-COPY back/ ./back/
+COPY src/back/ ./back/
 
 EXPOSE 9090
 
