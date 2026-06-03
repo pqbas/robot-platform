@@ -97,10 +97,10 @@ compose-logs:
 	docker compose --env-file .env.server -f docker-compose.server.yml logs -f
 
 compose-migrate:
-	docker compose --env-file .env.server -f docker-compose.server.yml run --rm back uv run alembic -c src/back/alembic.ini upgrade head
+	docker compose --env-file .env.server -f docker-compose.server.yml run --rm back uv run alembic -c back/alembic.ini upgrade head
 
 compose-create-admin:
-	docker compose --env-file .env.server -f docker-compose.server.yml run --rm back uv run python -m src.back.scripts.create_admin
+	docker compose --env-file .env.server -f docker-compose.server.yml run --rm back uv run python -m back.scripts.create_admin
 
 update:
 	git pull

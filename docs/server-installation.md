@@ -130,10 +130,10 @@ docker compose --env-file .env.server -f docker-compose.server.yml build
 docker compose --env-file .env.server -f docker-compose.server.yml up -d
 
 # 3. Crear las tablas en la base de datos
-docker compose --env-file .env.server -f docker-compose.server.yml run --rm back uv run alembic -c src/back/alembic.ini upgrade head
+docker compose --env-file .env.server -f docker-compose.server.yml run --rm back uv run alembic -c back/alembic.ini upgrade head
 
 # 4. Crear el usuario administrador (interactivo)
-docker compose --env-file .env.server -f docker-compose.server.yml run --rm back uv run python -m src.back.scripts.create_admin
+docker compose --env-file .env.server -f docker-compose.server.yml run --rm back uv run python -m back.scripts.create_admin
 ```
 
 ## 5. Acceso
