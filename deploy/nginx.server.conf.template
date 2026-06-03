@@ -23,7 +23,7 @@ server {
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 
-    root /opt/robot-platform/front/dist;
+    root /opt/robot-platform/src/front/dist;
     index index.html;
 
     # SPA routing

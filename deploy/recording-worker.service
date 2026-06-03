@@ -9,7 +9,7 @@ Type=simple
 User=DEPLOY_USER
 WorkingDirectory=DEPLOY_DIR
 ExecStartPre=/bin/rm -f /tmp/recording.sock
-ExecStart=/opt/robot-platform/recording_worker/.venv/bin/recording-worker
+ExecStart=/opt/robot-platform/src/recording_worker/.venv/bin/recording-worker
 Restart=on-failure
 RestartSec=2
 Environment=CAMERA_SOCKET=/tmp/camera.sock

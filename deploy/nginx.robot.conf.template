@@ -9,7 +9,7 @@ server {
     listen 80 default_server;
     server_name _;
 
-    root /opt/robot-platform/front/dist;
+    root /opt/robot-platform/src/front/dist;
     index index.html;
 
     # SPA routing
