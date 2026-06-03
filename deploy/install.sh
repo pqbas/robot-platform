@@ -82,7 +82,7 @@ fi
 
 if [[ "$MODE" == "robot" ]]; then
     info "Installing Python dependencies (inference worker)..."
-    cd "$INSTALL_DIR/inference"
+    cd "$INSTALL_DIR/src/inference_worker"
     if [[ "$(uname -m)" == "aarch64" ]]; then
         # Jetson: use system PyTorch (NVIDIA CUDA) via --system-site-packages
         # Do not install torch/torchvision from PyPI (x86 only)
@@ -96,12 +96,12 @@ if [[ "$MODE" == "robot" ]]; then
     cd "$INSTALL_DIR"
 
     info "Installing Python dependencies (camera worker)..."
-    cd "$INSTALL_DIR/camera_worker"
+    cd "$INSTALL_DIR/src/camera_worker"
     uv sync
     cd "$INSTALL_DIR"
 
     info "Installing Python dependencies (recording worker)..."
-    cd "$INSTALL_DIR/recording_worker"
+    cd "$INSTALL_DIR/src/recording_worker"
     if [[ "$(uname -m)" == "aarch64" ]]; then
         # Jetson: install with the [gstreamer] extra so PyGObject is built
         # against system gobject-introspection and the worker can drive
@@ -137,7 +137,7 @@ if [[ "$MODE" == "robot" ]]; then
     fi
 
     info "Installing Python dependencies (conversion worker)..."
-    cd "$INSTALL_DIR/conversion_worker"
+    cd "$INSTALL_DIR/src/conversion_worker"
     if [[ "$(uname -m)" == "aarch64" ]]; then
         # Jetson: use system Python 3.10 + JetPack's tensorrt bindings
         # via --system-site-packages. The JetPack package
@@ -160,11 +160,11 @@ fi
 
 # --- 5. Build frontend ---
 info "Building frontend..."
-cd "$INSTALL_DIR/front"
+cd "$INSTALL_DIR/src/front"
 npm ci
 npm run build
 
-if [[ ! -f "$INSTALL_DIR/front/dist/index.html" ]]; then
+if [[ ! -f "$INSTALL_DIR/src/front/dist/index.html" ]]; then
     error "Frontend build failed: dist/index.html not found"
 fi
 info "Frontend built successfully"
@@ -281,17 +281,17 @@ if [[ "$MODE" == "robot" ]]; then
         | sudo tee /etc/systemd/system/inference-worker.service > /dev/null
 
     sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
-        -e "s|DEPLOY_DIR|${INSTALL_DIR}/camera_worker|g" \
+        -e "s|DEPLOY_DIR|${INSTALL_DIR}/src/camera_worker|g" \
         "$INSTALL_DIR/deploy/camera-worker.service" \
         | sudo tee /etc/systemd/system/camera-worker.service > /dev/null
 
     sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
-        -e "s|DEPLOY_DIR|${INSTALL_DIR}/recording_worker|g" \
+        -e "s|DEPLOY_DIR|${INSTALL_DIR}/src/recording_worker|g" \
         "$INSTALL_DIR/deploy/recording-worker.service" \
         | sudo tee /etc/systemd/system/recording-worker.service > /dev/null
 
     sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
-        -e "s|DEPLOY_DIR|${INSTALL_DIR}/conversion_worker|g" \
+        -e "s|DEPLOY_DIR|${INSTALL_DIR}/src/conversion_worker|g" \
         "$INSTALL_DIR/deploy/conversion-worker.service" \
         | sudo tee /etc/systemd/system/conversion-worker.service > /dev/null
 fi
@@ -327,10 +327,11 @@ if [[ "$MODE" == "server" ]]; then
     docker compose -f docker-compose.server.yml up -d
 
     info "Running database migrations..."
-    ENV_FILE=.env.server uv run alembic -c back/alembic.ini upgrade head
+    ENV_FILE=.env.server uv run alembic -c src/back/alembic.ini upgrade head
 
-    # Create initial admin user interactively (only if users table is empty)
-    USERS_COUNT=$(ENV_FILE=.env.server uv run python -c "
+    # Create initial admin user interactively (only if users table is empty).
+    # Source lives under src/ but imports are `back.*`, so put src/ on the path.
+    USERS_COUNT=$(ENV_FILE=.env.server PYTHONPATH=src uv run python -c "
 import asyncio, sys
 from back.database import AsyncSessionLocal
 from sqlalchemy import select, func
@@ -347,7 +348,7 @@ print(asyncio.run(count()))
     if [[ "$USERS_COUNT" == "0" ]]; then
         if [[ -t 0 ]]; then
             info "No hay usuarios en la base de datos. Creando admin inicial..."
-            ENV_FILE=.env.server uv run python -m back.scripts.create_admin
+            ENV_FILE=.env.server PYTHONPATH=src uv run python -m back.scripts.create_admin
         else
             warn "Instalación no-interactiva: no se creó ningún usuario admin."
             warn "Ejecutar 'make create-admin' manualmente para crear el primer admin."

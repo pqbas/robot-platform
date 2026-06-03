@@ -1,14 +1,14 @@
 .PHONY: start run-robot run-server run-front run-inference run-conversion logs-conversion db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update create-admin compose-build compose-up compose-down compose-logs compose-migrate compose-create-admin
 
 start:
-	uv run uvicorn src.back.main:app --host 0.0.0.0 --port 8080 --reload
+	PYTHONPATH=src uv run uvicorn back.main:app --host 0.0.0.0 --port 8080 --reload
 
 run-robot:
-	ENV_FILE=.env.robot uv run uvicorn src.back.main:app --host 0.0.0.0 --port 8080 --reload
+	ENV_FILE=.env.robot PYTHONPATH=src uv run uvicorn back.main:app --host 0.0.0.0 --port 8080 --reload
 
 run-server:
 	docker compose -f docker-compose.server.yml up -d
-	ENV_FILE=.env.server uv run uvicorn src.back.main:app --host 0.0.0.0 --port 9090 --reload
+	ENV_FILE=.env.server PYTHONPATH=src uv run uvicorn back.main:app --host 0.0.0.0 --port 9090 --reload
 
 run-inference:
 	cd src/inference_worker && VIRTUAL_ENV= .venv/bin/inference-worker
@@ -35,7 +35,7 @@ logs-conversion:
 	sudo journalctl -u conversion-worker -f
 
 create-admin:
-	ENV_FILE=.env.server uv run python -m src.back.scripts.create_admin
+	ENV_FILE=.env.server PYTHONPATH=src uv run python -m back.scripts.create_admin
 
 db-up:
 	docker compose -f docker-compose.server.yml up -d

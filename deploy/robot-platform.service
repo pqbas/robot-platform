@@ -9,6 +9,10 @@ User=DEPLOY_USER
 WorkingDirectory=/opt/robot-platform
 EnvironmentFile=/opt/robot-platform/.env.active
 Environment=ENV_FILE=/opt/robot-platform/.env.active
+# Source moved under src/ but internal imports stay `back.*`, so put src/ on
+# the path and keep WorkingDirectory at the repo root (relative data paths like
+# data/robot/robot.db resolve from there).
+Environment=PYTHONPATH=/opt/robot-platform/src
 ExecStart=DEPLOY_UV_PATH run uvicorn back.main:app --host 127.0.0.1 --port ${PORT} --workers 1
 Restart=on-failure
 RestartSec=5
