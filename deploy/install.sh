@@ -80,6 +80,16 @@ else
     uv sync
 fi
 
+# opencv-python and opencv-python-headless install to the same cv2/ dir. When a
+# venv transitions from one to the other, `uv sync` can uninstall the old one
+# and delete the shared cv2/ files, leaving the new package as a phantom
+# (dist-info present, cv2/ gone) → backend crashes with "No module named 'cv2'".
+# Self-repair: if cv2 doesn't import, force-reinstall the headless package.
+if ! uv run python -c "import cv2" >/dev/null 2>&1; then
+    warn "cv2 no importa tras uv sync — reinstalando opencv-python-headless"
+    uv pip install --reinstall opencv-python-headless
+fi
+
 if [[ "$MODE" == "robot" ]]; then
     info "Installing Python dependencies (inference worker)..."
     cd "$INSTALL_DIR/src/inference_worker"
