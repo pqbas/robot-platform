@@ -311,6 +311,10 @@ export default function SessionsPage() {
             const fresh = await getAllCamellones()
             setCamellones(new Map(fresh.map((c) => [c.id, c])))
           }}
+          onSessionDeleted={(id) => {
+            setSessions((prev) => prev.filter((s) => s.id !== id))
+            setSelectedSession((cur) => (cur?.id === id ? null : cur))
+          }}
         />
       </div>
 
