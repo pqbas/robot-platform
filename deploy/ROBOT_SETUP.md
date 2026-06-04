@@ -89,6 +89,49 @@ Si los datos llegan, el robot está conectado. Done.
 
 ---
 
+## Paso D — (Opcional) Subida de video por LAN
+
+> **Importante:** el archivo **MP4 de las grabaciones solo se sube por LAN**, no por
+> internet/Tailscale. La metadata (sessions, events, fila del recording) sí viaja por
+> el `Server URL` del Paso B, pero **el video se queda pendiente indefinidamente** hasta
+> que el robot pueda alcanzar al server por la red local. Si el robot y el server están
+> en la misma LAN, configura esto; si no, las grabaciones nunca pasarán de "pendiente"
+> a "subido".
+
+1. En el frontend del robot, ir a **Ajustes → Servidor → "URL LAN (video)"**.
+
+2. Ingresar la dirección del **server en la red local**, apuntando al **puerto de nginx
+   (80)**, no al uvicorn interno:
+
+   ```
+   http://<ip-lan-del-server>        # ej. http://192.168.50.67
+   ```
+
+   - Es la IP **del server**, no la del robot, y debe estar en la **misma LAN**.
+   - **No uses el puerto `:9090`.** En el deploy del server, `9090` es el uvicorn
+     interno (bind a `127.0.0.1` dentro de docker) y está cerrado desde la LAN. nginx
+     expone la API en el **80**, así que `http://<ip>` (sin puerto) es lo correcto.
+   - Dejar el campo **vacío** deshabilita la subida por LAN.
+   - Toma efecto en el siguiente ciclo de sync, sin reiniciar.
+
+3. Verificar la IP/puerto correctos **desde el robot** antes de guardar:
+
+   ```bash
+   ping -c2 <ip-lan-del-server>                              # host alcanzable
+   curl -s -o /dev/null -w "%{http_code}\n" \
+     http://<ip-lan-del-server>/api/sync/health              # → 200
+   ```
+
+   Si el `curl` da `200`, esa es la URL a poner. Si da `000`/timeout, prueba otra IP o
+   puerto (el server podría servir en otro puerto).
+
+4. Genera una grabación corta, detenla, y en el próximo ciclo (`make logs`) debe verse el
+   POST a `/api/sync/recordings/<uuid>/upload` con **200**. El recording pasa a "subido"
+   (`uploaded_at`) cuando: (a) la grabación terminó, (b) su metadata ya se pusheó, (c) la
+   LAN es alcanzable, y (d) la subida del MP4 + detecciones tiene éxito.
+
+---
+
 ## Troubleshooting
 
 ### `make logs` muestra 401 al pushear
@@ -125,6 +168,19 @@ make restart       # en el Jetson
 ```
 
 Y volver a confirmar `.env.robot`.
+
+### `make logs` muestra `LAN no alcanzable (...) — upload omitido`
+
+La metadata sincroniza pero las grabaciones no pasan de "pendiente": el robot no
+alcanza al server en la `URL LAN (video)` configurada. Casi siempre es el **puerto**:
+está puesto `:9090` (uvicorn interno, cerrado desde la LAN) en vez del **80** de nginx.
+Desde el robot:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://<ip-lan-del-server>/api/sync/health   # → 200
+```
+
+Si da `200`, corregir el campo a `http://<ip-lan-del-server>` (sin `:9090`). Ver Paso D.
 
 ### Cambiar la API key en caliente
 
