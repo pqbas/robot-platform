@@ -66,6 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
+    // Clear the server-side auth cookie too (used for <video> playback), then
+    // drop the local token and redirect regardless of the request's outcome.
+    authApi.logout().catch(() => {})
     localStorage.removeItem("auth_token")
     setUser(null)
     window.location.replace("/login")
