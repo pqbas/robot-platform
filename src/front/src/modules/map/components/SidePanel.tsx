@@ -27,6 +27,7 @@ type SidePanelProps = {
   devices: string[]
   onSelectSession: (session: Session) => void
   onSessionUpdated: (updated: Session) => void
+  onSessionDeleted: (id: number) => void
   onDateChange: (from: string | null, to: string | null) => void
   onDeviceFilterChange: (value: string) => void
 }
@@ -44,6 +45,7 @@ export default function SidePanel({
   devices,
   onSelectSession,
   onSessionUpdated,
+  onSessionDeleted,
   onDateChange,
   onDeviceFilterChange,
 }: SidePanelProps) {
@@ -208,6 +210,7 @@ export default function SidePanel({
             selectedId={selectedSession?.id ?? null}
             onSelect={onSelectSession}
             onSessionUpdated={onSessionUpdated}
+            onSessionDeleted={onSessionDeleted}
           />
         </div>
       </div>

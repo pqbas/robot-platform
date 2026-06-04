@@ -6,12 +6,12 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import config
 from back.database import get_db
-from back.models import Recording
+from back.models import Event, Recording, Session
 from back.schemas import (
     CountingStartRequest,
     CountingStatusOut,
@@ -204,6 +204,54 @@ async def update_session(
     await db.commit()
     await db.refresh(sess)
     return sess
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(session_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a session, its events, and its linked recording (row + files).
+
+    Local-only: deletions are never propagated to the server (the sync layer
+    only pushes creates). Any leftover SyncLog rows are harmless — they simply
+    keep the now-deleted record from being re-pushed.
+    """
+    sess = await storage.get_session(db, session_id)
+    if sess is None:
+        raise HTTPException(404, "Session not found")
+
+    # Delete the linked recording too (row + files). Block if it is still being
+    # written — dropping it mid-write would corrupt the MP4.
+    files_to_unlink: list[str] = []
+    if sess.recording_uuid:
+        result = await db.execute(
+            select(Recording).where(Recording.uuid == sess.recording_uuid)
+        )
+        rec = result.scalar_one_or_none()
+        if rec is not None:
+            if rec.ended_at is None:
+                raise HTTPException(
+                    409, "Detén la grabación antes de borrar la sesión"
+                )
+            files_to_unlink.append(rec.file_path)
+            # Detections sidecar lives next to the MP4 (see recordings.py).
+            files_to_unlink.append(
+                os.path.join(os.path.dirname(rec.file_path), f"{rec.uuid}.jsonl")
+            )
+            await db.delete(rec)
+
+    # Events FK the session with no cascade configured — remove them first, then
+    # the session. Both are Core bulk-deletes (not db.delete(sess)) so the ORM
+    # never processes the `events` relationship cascade during flush.
+    await db.execute(delete(Event).where(Event.session_id == session_id))
+    await db.execute(delete(Session).where(Session.id == session_id))
+    await db.commit()
+
+    for path in files_to_unlink:
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+
+    return {"ok": True, "id": session_id}
 
 
 @router.post("/sessions/save", response_model=SessionOut)

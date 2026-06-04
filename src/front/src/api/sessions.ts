@@ -78,3 +78,7 @@ export function patchSession(id: number, camellonId: number): Promise<Session> {
 export function exportSession(id: number): void {
   window.open(`/api/sessions/${id}/export`, "_blank")
 }
+
+export function deleteSession(id: number): Promise<{ ok: boolean; id: number }> {
+  return apiFetch(`/api/sessions/${id}`, { method: "DELETE" })
+}

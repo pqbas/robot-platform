@@ -1,5 +1,7 @@
 import { useState } from "react"
+import { toast } from "sonner"
 import type { Session, Camellon } from "@/types"
+import { deleteSession } from "@/api/sessions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,7 +12,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Pencil, Video } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Loader2, Pencil, Trash2, Video } from "lucide-react"
 import SessionEditDialog from "./SessionEditDialog"
 import DetectionReplayDialog from "./DetectionReplayDialog"
 
@@ -22,6 +32,7 @@ type SessionsTableProps = {
   selectedId: number | null
   onSelect: (session: Session) => void
   onSessionUpdated: (updated: Session) => void
+  onSessionDeleted: (id: number) => void
 }
 
 function formatDate(iso: string): string {
@@ -41,10 +52,28 @@ export default function SessionsTable({
   selectedId,
   onSelect,
   onSessionUpdated,
+  onSessionDeleted,
 }: SessionsTableProps) {
   const [page, setPage] = useState(0)
   const [editingSession, setEditingSession] = useState<Session | null>(null)
   const [replaySession, setReplaySession] = useState<Session | null>(null)
+  const [deleting, setDeleting] = useState<Session | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+
+  const handleConfirmDelete = async () => {
+    if (!deleting) return
+    setDeleteBusy(true)
+    try {
+      await deleteSession(deleting.id)
+      onSessionDeleted(deleting.id)
+      toast.success("Sesión eliminada")
+      setDeleting(null)
+    } catch {
+      toast.error("Error eliminando la sesión")
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
 
   const totalPages = Math.max(1, Math.ceil(sessions.length / PAGE_SIZE))
   const safeePage = Math.min(page, totalPages - 1)
@@ -64,12 +93,11 @@ export default function SessionsTable({
           <TableHeader>
             <TableRow>
               <TableHead className="w-[22%]">Camellon</TableHead>
-              <TableHead className="w-[22%]">Fecha</TableHead>
-              <TableHead className="hidden md:table-cell w-[18%]">Clase</TableHead>
-              <TableHead className="hidden lg:table-cell w-[26%]">Device</TableHead>
+              <TableHead className="w-[20%]">Fecha</TableHead>
+              <TableHead className="hidden md:table-cell w-[16%]">Clase</TableHead>
+              <TableHead className="hidden lg:table-cell w-[22%]">Device</TableHead>
               <TableHead className="w-[8%] text-right">Conteo</TableHead>
-              <TableHead className="w-8" />
-              <TableHead className="w-8" />
+              <TableHead className="w-[12%] text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -91,32 +119,46 @@ export default function SessionsTable({
                 </TableCell>
                 <TableCell className="text-right">{s.total_count}</TableCell>
                 <TableCell>
-                  {s.recording_uuid != null && (
+                  <div className="flex items-center justify-end gap-0.5">
+                    {s.recording_uuid != null && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Ver grabación"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setReplaySession(s)
+                        }}
+                      >
+                        <Video className="size-3.5" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
+                      title="Editar"
                       onClick={(e) => {
                         e.stopPropagation()
-                        setReplaySession(s)
+                        setEditingSession(s)
                       }}
                     >
-                      <Video className="size-3.5" />
+                      <Pencil className="size-3.5" />
                     </Button>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setEditingSession(s)
-                    }}
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      title="Eliminar"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDeleting(s)
+                      }}
+                    >
+                      <Trash2 className="size-3.5 text-destructive" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -159,6 +201,34 @@ export default function SessionsTable({
           onOpenChange={(open) => { if (!open) setReplaySession(null) }}
         />
       )}
+
+      <Dialog open={deleting != null} onOpenChange={(open) => !open && setDeleting(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar sesión</DialogTitle>
+            <DialogDescription>
+              Se borran la sesión y sus eventos
+              {deleting?.recording_uuid != null
+                ? ", junto con la grabación (MP4) vinculada"
+                : ""}
+              . No se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleting(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deleteBusy}
+            >
+              {deleteBusy ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

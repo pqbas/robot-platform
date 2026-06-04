@@ -67,6 +67,11 @@ export default function MapPage() {
     loadSessions()
   }, [loadSessions])
 
+  const handleSessionDeleted = useCallback((id: number) => {
+    setSessions((prev) => prev.filter((s) => s.id !== id))
+    setSelectedSession((cur) => (cur?.id === id ? null : cur))
+  }, [])
+
   const handleSaveLocation = useCallback(
     async (label: string, lat: number, lng: number, zoom: number, polygon?: PolygonPoint[] | null) => {
       try {
@@ -140,6 +145,7 @@ export default function MapPage() {
             const fresh = await getCamellones()
             setCamellones(new Map(fresh.map((c) => [c.id, c])))
           }}
+          onSessionDeleted={handleSessionDeleted}
           onDateChange={(from, to) => {
             setDateFrom(from)
             setDateTo(to)
@@ -206,6 +212,7 @@ export default function MapPage() {
             const fresh = await getCamellones()
             setCamellones(new Map(fresh.map((c) => [c.id, c])))
           }}
+          onSessionDeleted={handleSessionDeleted}
           onDateChange={(from, to) => {
             setDateFrom(from)
             setDateTo(to)
