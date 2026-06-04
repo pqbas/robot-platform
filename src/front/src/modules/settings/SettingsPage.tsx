@@ -544,6 +544,8 @@ export default function SettingsPage() {
               description="URL y credenciales del servidor central"
             >
               <ServerForm />
+              <div className="my-6 border-t" />
+              <LanUrlForm />
             </SectionPanel>
           )}
         </div>
@@ -727,6 +729,66 @@ function ServerForm() {
         />
       </Field>
       {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex justify-end pt-2">
+        <Button type="submit" disabled={saving}>
+          {saving ? "Guardando..." : "Guardar"}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+function LanUrlForm() {
+  const [lanUrl, setLanUrl] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/config/lan-url")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data.lan_url === "string") setLanUrl(data.lan_url)
+      })
+      .catch(() => {})
+  }, [])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const res = await fetch("/api/config/lan-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lan_url: lanUrl.trim() }),
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => res.statusText)
+        throw new Error(text)
+      }
+      const data = await res.json().catch(() => null)
+      if (data && typeof data.lan_url === "string") setLanUrl(data.lan_url)
+      toast.success("URL LAN actualizada")
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error de conexión"
+      toast.error(msg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <Field
+        label="URL LAN (video)"
+        htmlFor="lanUrl"
+        hint="Direccion del servidor en la red local. Si esta seteada y alcanzable, las grabaciones se suben por LAN (mas rapido) en vez de por internet. Dejar vacio para subir siempre por internet."
+      >
+        <Input
+          id="lanUrl"
+          placeholder="http://192.168.50.10:9090"
+          value={lanUrl}
+          onChange={(e) => setLanUrl(e.target.value)}
+        />
+      </Field>
       <div className="flex justify-end pt-2">
         <Button type="submit" disabled={saving}>
           {saving ? "Guardando..." : "Guardar"}
