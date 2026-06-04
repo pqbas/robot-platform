@@ -20,3 +20,9 @@ export async function login(
 export async function getMe(): Promise<UserInfo> {
   return apiFetch<UserInfo>("/api/auth/me")
 }
+
+export async function logout(): Promise<void> {
+  // Clears the httpOnly auth cookie server-side (the SPA can't delete it from
+  // JS). Best-effort: callers still drop the localStorage token regardless.
+  await apiFetch("/api/auth/logout", { method: "POST" })
+}
