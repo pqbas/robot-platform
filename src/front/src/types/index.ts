@@ -37,6 +37,9 @@ export type DetectionFrame = {
 
 export type RecordingDetections = {
   fps: number | null
+  // Recording start (= video time 0) in epoch seconds; anchors detection
+  // overlay to video.currentTime. Null for recordings predating this field.
+  started_epoch: number | null
   frames: DetectionFrame[]
 }
 
