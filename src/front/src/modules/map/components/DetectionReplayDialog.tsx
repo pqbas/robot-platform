@@ -58,9 +58,13 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
     if (frames.length === 0) return
     // El campo `frame` del JSONL es el contador de inferencias, no el índice
     // de frame del video, y la inferencia corre más lento que el video. El
-    // único eje común es el timestamp `t`: ubicamos la última detección cuyo
-    // t no supera el tiempo de reproducción transcurrido desde el inicio.
-    const target = frames[0].t + video.currentTime
+    // único eje común es el timestamp `t` (epoch). Anclamos al inicio de la
+    // grabación (started_epoch = tiempo 0 del video), NO a la primera detección:
+    // hay un warmup de cámara/inferencia antes de la primera detección, así que
+    // anclar a frames[0].t adelantaría todo el track ese tiempo. Fallback a
+    // frames[0].t para grabaciones viejas sin started_epoch.
+    const anchor = detData.started_epoch ?? frames[0].t
+    const target = anchor + video.currentTime
     let lo = 0
     let hi = frames.length - 1
     let idx = -1
