@@ -4,6 +4,7 @@ import {
   startRecording as apiStart,
   stopRecording as apiStop,
 } from "@/api/recordings"
+import { ApiError } from "@/api/client"
 import type { Recording } from "@/types"
 
 type State = {
@@ -98,12 +99,22 @@ export function useRecording() {
     }
   }, [setActive])
 
-  const stop = useCallback(async () => {
+  const stop = useCallback(async (): Promise<Recording | null> => {
     setState((prev) => ({ ...prev, loading: true }))
     try {
       const rec = await apiStop()
       setActive(null)
       return rec
+    } catch (err) {
+      // 409 means the backend has no active recording (closed by another
+      // client, drift recovery, or a restart). The local state was stale;
+      // clear it so the operator can start a new recording instead of
+      // staying stuck on a Stop button that always errors.
+      if (err instanceof ApiError && err.status === 409) {
+        setActive(null)
+        return null
+      }
+      throw err
     } finally {
       setState((prev) => ({ ...prev, loading: false }))
     }

@@ -161,6 +161,10 @@ export default function VisionPage() {
   const handleStopRecording = async () => {
     try {
       const row = await recording.stop()
+      if (!row) {
+        toast.info("La grabación ya estaba detenida")
+        return
+      }
       const dur = row.duration_seconds
         ? `${Math.round(row.duration_seconds)}s`
         : "—"
