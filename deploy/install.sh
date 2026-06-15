@@ -94,11 +94,33 @@ if [[ "$MODE" == "robot" ]]; then
     info "Installing Python dependencies (inference worker)..."
     cd "$INSTALL_DIR/src/inference_worker"
     if [[ "$(uname -m)" == "aarch64" ]]; then
-        # Jetson: use system PyTorch (NVIDIA CUDA) via --system-site-packages
-        # Do not install torch/torchvision from PyPI (x86 only)
-        info "Jetson detected (aarch64): using system PyTorch"
+        # JetPack 6 (L4T r36.4) ships NO system PyTorch — unlike JetPack 5,
+        # where torch/torchvision came preinstalled in the system Python. Install
+        # the CUDA build from the Jetson AI Lab index (cu126 / cp310).
+        #
+        # CRITICAL: torch must come from the Jetson index ONLY — do NOT add
+        # --extra-index-url https://pypi.org/simple here. PyPI also publishes a
+        # torch==2.8.0 aarch64 wheel, but it's the CPU-only build (manylinux,
+        # no CUDA). With both indexes visible, uv resolves to the PyPI CPU wheel
+        # and torch.cuda.is_available() becomes False — inference falls back to
+        # CPU and TensorRT engine export breaks ("None devices in
+        # CUDA_VISIBLE_DEVICES"). The Jetson index proxies PyPI for torch's
+        # pure-Python deps (sympy/networkx/jinja2/filelock/fsspec/...), so a
+        # single --index-url resolves the full graph with the real CUDA wheel.
+        #
+        # numpy is pinned to 1.26.x (installed LAST so it wins): the system
+        # tensorrt 10.3 bindings (python3-libnvinfer) and the system cv2 4.5.4
+        # inherited via --system-site-packages are compiled against numpy 1.x and
+        # would hit the "compiled with NumPy 1.x cannot run in 2.x" ABI error
+        # under numpy 2. For the same reason we DON'T install opencv-python here:
+        # its current wheel is built against numpy 2; the detector only needs
+        # cv2.imdecode, which the system cv2 provides.
+        info "Jetson detected (aarch64): installing CUDA PyTorch for JetPack 6 (cu126)"
         uv venv --clear --system-site-packages --python /usr/bin/python3
-        uv pip install --no-deps ultralytics opencv-python numpy lap hatchling
+        uv pip install torch==2.8.0 torchvision==0.23.0 \
+            --index-url https://pypi.jetson-ai-lab.io/jp6/cu126/+simple
+        uv pip install --no-deps ultralytics lap hatchling
+        uv pip install "numpy==1.26.4"
         uv pip install -e . --no-deps
     else
         uv sync
@@ -157,7 +179,23 @@ if [[ "$MODE" == "robot" ]]; then
         sudo apt-get install -y -qq python3-libnvinfer python3-libnvinfer-dev || \
             warn "python3-libnvinfer apt install failed — TensorRT conversions will not work until JetPack provides it"
         uv venv --clear --system-site-packages --python /usr/bin/python3
-        uv pip install --no-deps ultralytics numpy hatchling
+        # JetPack 6: torch is needed to load the .pt before export, and the
+        # ultralytics engine exporter walks .pt -> ONNX -> TensorRT, so the ONNX
+        # toolchain (onnx/onnxslim/onnxruntime) must be present — installed WITH
+        # deps (protobuf, flatbuffers, ...). Only ultralytics stays --no-deps so
+        # it can't drag an x86-only torch from PyPI. numpy<2 pinned last for the
+        # system tensorrt 10.3 ABI (see inference worker note above).
+        #
+        # CRITICAL: torch from the Jetson index ONLY (no --extra-index-url pypi).
+        # PyPI's torch==2.8.0 aarch64 wheel is CPU-only; with both indexes uv
+        # picks it and the engine export fails with torch.cuda.is_available()
+        # == False / "None devices in CUDA_VISIBLE_DEVICES". The Jetson index
+        # proxies PyPI for torch's pure-Python deps, so one --index-url is enough.
+        uv pip install torch==2.8.0 torchvision==0.23.0 \
+            --index-url https://pypi.jetson-ai-lab.io/jp6/cu126/+simple
+        uv pip install onnx onnxslim onnxruntime
+        uv pip install --no-deps ultralytics hatchling
+        uv pip install "numpy==1.26.4"
         uv pip install -e . --no-deps
     else
         uv sync

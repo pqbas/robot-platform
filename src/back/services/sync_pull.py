@@ -47,7 +47,16 @@ async def _upsert_models(remote_models: list[dict]) -> None:
             )
             existing = result.scalar_one_or_none()
             if existing:
-                existing.file_hash = m["file_hash"]
+                # Library models (.pt managed by ultralytics, never uploaded
+                # to the server) compute their file_hash locally on the robot
+                # the first time TensorRT is toggled. The server has no
+                # authoritative hash for them and sends file_hash=None, so we
+                # must NOT clobber the locally-computed hash — it's the key
+                # that maps the cached .engine on disk to this DB row. Pisarlo
+                # con None deja la conversión atascada en 'converting' para
+                # siempre (el poller no puede recomputar la ruta del engine).
+                if m["file_hash"] is not None:
+                    existing.file_hash = m["file_hash"]
                 existing.source = m.get("source", "uploaded")
                 existing.version = m["version"]
                 existing.class_mapping = m.get("class_mapping")
