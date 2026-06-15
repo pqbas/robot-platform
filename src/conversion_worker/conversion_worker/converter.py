@@ -41,7 +41,15 @@ def convert(pt_path: str, engine_path: str, precision: str = "fp16", imgsz: int 
     )
 
     model = YOLO(pt_path)
-    model.export(format="engine", half=(precision == "fp16"), imgsz=imgsz)
+    # simplify=False skips ultralytics' onnxslim pass. On JetPack 6 / aarch64
+    # onnxslim invokes onnxruntime, whose cpuinfo can't identify the Orin CPU
+    # ("Unknown CPU vendor. cpuinfo_vendor value: 0") and aborts the whole
+    # process with SIGABRT (std::vector out-of-bounds assert) mid-export.
+    # TensorRT builds the engine fine from the un-slimmed ONNX, so we just
+    # skip the optimisation that crashes here.
+    model.export(
+        format="engine", half=(precision == "fp16"), imgsz=imgsz, simplify=False
+    )
 
     default_engine = os.path.join(pt_dir, f"{pt_stem}.engine")
     if not os.path.exists(default_engine):
