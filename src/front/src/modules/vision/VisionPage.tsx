@@ -390,8 +390,8 @@ export default function VisionPage() {
           !isRecording ? (
             <Button
               onClick={handleStartRecording}
-              disabled={recording.loading || counting.state === "SAVING"}
-              title="Iniciar grabación"
+              disabled={recording.loading || counting.state !== "IDLE"}
+              title={isCounting ? "Detén el conteo para grabar" : "Iniciar grabación"}
               className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-primary/85 backdrop-blur-sm hover:bg-primary"
             >
               <Circle className="size-5 fill-red-500 text-red-500" />
@@ -414,7 +414,8 @@ export default function VisionPage() {
         {connected && !isCounting && (
           <Button
             onClick={handleStart}
-            disabled={counting.state !== "IDLE"}
+            disabled={counting.state !== "IDLE" || isRecording}
+            title={isRecording ? "Detén la grabación para contar" : "Iniciar conteo"}
             className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-primary/85 backdrop-blur-sm hover:bg-primary"
           >
             <ScanEye className="size-5" />
