@@ -56,14 +56,25 @@ async def lifespan(app: FastAPI):
 
     # TensorRT conversion reconciler + poller (robot only)
     poller_task = None
+    reconciler_task = None
     if app_config.mode == AppMode.ROBOT:
         from back.services.perception.conversion_poller import (
             reconcile_orphaned_conversions,
             run_poller,
         )
+        from back.services.perception.model_reconciler import (
+            reconcile_active_model_once,
+            run_model_reconciler,
+        )
 
         await reconcile_orphaned_conversions()
         poller_task = asyncio.create_task(run_poller())
+
+        # Restore the worker's model from the DB selection: after a worker
+        # restart it boots on the default .pt, so re-push the .engine if the
+        # active model has one ready. Periodic loop also heals later drift.
+        await reconcile_active_model_once()
+        reconciler_task = asyncio.create_task(run_model_reconciler())
 
     yield
 
@@ -71,6 +82,8 @@ async def lifespan(app: FastAPI):
         sync_task.cancel()
     if poller_task:
         poller_task.cancel()
+    if reconciler_task:
+        reconciler_task.cancel()
     await close_all_connections()
     await close_db()
 

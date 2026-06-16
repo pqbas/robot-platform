@@ -32,10 +32,7 @@ from back.services.camera_control_client import (
 )
 from back.services.camera_process import CameraRestartError, restart_camera_worker
 from back.services.perception import counter
-from back.services.perception.engine_paths import (
-    actual_pt_path_for,
-    engine_cache_path_for,
-)
+from back.services.perception.engine_paths import worker_model_path_for
 from back.services.perception.inference_client import InferenceClient
 from back.services.perception.label_selection import derive_filtered_class_mapping
 
@@ -298,50 +295,23 @@ async def select_label(body: SelectLabelRequest, db: AsyncSession = Depends(get_
             body.model_filename,
         )
         worker_path = body.model_filename
+        # Absolutise non-bare paths — the inference worker's cwd differs from
+        # the backend's, so a relative ``data/...`` would resolve against the
+        # wrong root. Bare library filenames are left alone for ultralytics.
+        if os.sep in worker_path or worker_path.startswith("."):
+            worker_path = os.path.abspath(worker_path)
     else:
-        # If TensorRT is on and the engine is built, hand the .engine to
-        # the inference-worker — applies to both library and uploaded
-        # models, since the engine cache lives in MODELS_DIR either way.
-        if (
-            model.tensorrt_enabled
-            and model.engine_status == "ready"
-            and model.file_hash
-        ):
-            engine_path = engine_cache_path_for(
-                model.filename, model.file_hash, config.storage.models_dir
-            )
-            if os.path.exists(engine_path):
-                worker_path = engine_path
-                logger.info(
-                    "select_label: %s -> ENGINE %s",
-                    body.model_filename, worker_path,
-                )
-            else:
-                worker_path = actual_pt_path_for(
-                    model.filename, model.source, config.storage.models_dir
-                )
-                logger.warning(
-                    "select_label: %s engine_status=ready but file missing at %s, falling back to .pt %s",
-                    body.model_filename, engine_path, worker_path,
-                )
-        else:
-            worker_path = actual_pt_path_for(
-                model.filename, model.source, config.storage.models_dir
-            )
-            logger.info(
-                "select_label: %s -> PT %s (tensorrt_enabled=%s, engine_status=%s, file_hash=%s)",
-                body.model_filename, worker_path,
-                model.tensorrt_enabled, model.engine_status,
-                bool(model.file_hash),
-            )
-
-    # Absolutise non-bare paths — the inference worker's cwd
-    # (/opt/robot-platform/inference) differs from the backend's
-    # (/opt/robot-platform), so a relative ``data/...`` would resolve
-    # against the wrong root. Bare filenames (library .pt) are left alone
-    # so ultralytics can do its own cache lookup / auto-download.
-    if os.sep in worker_path or worker_path.startswith("."):
-        worker_path = os.path.abspath(worker_path)
+        # Hand the worker the .engine when TensorRT is on and the engine is
+        # built, else the .pt — same decision the model reconciler uses.
+        worker_path = worker_model_path_for(
+            model.filename,
+            model.source,
+            model.file_hash,
+            model.tensorrt_enabled,
+            model.engine_status,
+            config.storage.models_dir,
+        )
+        logger.info("select_label: %s -> %s", body.model_filename, worker_path)
 
     class_mapping: list = []
     if model is not None:
