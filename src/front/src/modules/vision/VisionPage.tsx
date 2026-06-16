@@ -386,36 +386,35 @@ export default function VisionPage() {
           </Button>
         )}
 
-        {connected && (
-          !isRecording ? (
-            <Button
-              onClick={handleStartRecording}
-              disabled={recording.loading || counting.state !== "IDLE"}
-              title={isCounting ? "Detén el conteo para grabar" : "Iniciar grabación"}
-              className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-primary/85 backdrop-blur-sm hover:bg-primary"
-            >
-              <Circle className="size-5 fill-red-500 text-red-500" />
-              <span>Grabar</span>
-            </Button>
-          ) : (
-            <Button
-              variant="destructive"
-              onClick={handleStopRecording}
-              disabled={recording.loading || counting.state === "SAVING"}
-              title="Detener grabación"
-              className="size-16 flex-col gap-1 p-1 text-[10px] leading-tight bg-destructive/85 backdrop-blur-sm hover:bg-destructive"
-            >
-              <Square className="size-5" />
-              <span>{recording.durationStr}</span>
-            </Button>
-          )
+        {connected && isRecording && (
+          <Button
+            variant="destructive"
+            onClick={handleStopRecording}
+            disabled={recording.loading || counting.state === "SAVING"}
+            title="Detener grabación"
+            className="size-16 flex-col gap-1 p-1 text-[10px] leading-tight bg-destructive backdrop-blur-sm hover:bg-destructive"
+          >
+            <Square className="size-5" />
+            <span>{recording.durationStr}</span>
+          </Button>
         )}
 
-        {connected && !isCounting && (
+        {connected && !isRecording && counting.state === "IDLE" && (
+          <Button
+            onClick={handleStartRecording}
+            disabled={recording.loading}
+            title="Iniciar grabación"
+            className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-primary/85 backdrop-blur-sm hover:bg-primary"
+          >
+            <Circle className="size-5 fill-red-500 text-red-500" />
+            <span>Grabar</span>
+          </Button>
+        )}
+
+        {connected && counting.state === "IDLE" && !isRecording && (
           <Button
             onClick={handleStart}
-            disabled={counting.state !== "IDLE" || isRecording}
-            title={isRecording ? "Detén la grabación para contar" : "Iniciar conteo"}
+            title="Iniciar conteo"
             className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-primary/85 backdrop-blur-sm hover:bg-primary"
           >
             <ScanEye className="size-5" />
@@ -427,7 +426,7 @@ export default function VisionPage() {
           <Button
             variant="destructive"
             onClick={handleStop}
-            className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-destructive/85 backdrop-blur-sm hover:bg-destructive"
+            className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-destructive backdrop-blur-sm hover:bg-destructive"
           >
             <Square className="size-5 fill-current" />
             <span>Detener</span>
