@@ -202,6 +202,29 @@ if [[ "$MODE" == "robot" ]]; then
     fi
     cd "$INSTALL_DIR"
 
+    info "Installing Python dependencies (counting worker)..."
+    cd "$INSTALL_DIR/src/counting_worker"
+    if [[ "$(uname -m)" == "aarch64" ]]; then
+        # Same recipe as the inference worker: the counting worker loads a
+        # .engine/.pt and runs YOLO + ByteTrack offline, so it needs CUDA torch
+        # from the Jetson index and the system tensorrt/cv2 via
+        # --system-site-packages. It does NOT need the ONNX export toolchain
+        # (that's conversion-worker only). numpy pinned to 1.26.x last for the
+        # system tensorrt 10.3 / cv2 4.5.4 ABI; opencv-python is NOT installed
+        # (its wheel is built against numpy 2 — the worker uses system cv2's
+        # VideoCapture for MP4 decode, same as the detector uses system cv2).
+        info "Jetson detected (aarch64): installing counting worker against system Python (CUDA torch + TensorRT)"
+        uv venv --clear --system-site-packages --python /usr/bin/python3
+        uv pip install torch==2.8.0 torchvision==0.23.0 \
+            --index-url https://pypi.jetson-ai-lab.io/jp6/cu126/+simple
+        uv pip install --no-deps ultralytics lap hatchling
+        uv pip install "numpy==1.26.4"
+        uv pip install -e . --no-deps
+    else
+        uv sync
+    fi
+    cd "$INSTALL_DIR"
+
     info "Creating recordings directory..."
     mkdir -p "$INSTALL_DIR/data/robot/recordings"
 fi
@@ -352,6 +375,11 @@ if [[ "$MODE" == "robot" ]]; then
         -e "s|DEPLOY_DIR|${INSTALL_DIR}/src/conversion_worker|g" \
         "$INSTALL_DIR/deploy/conversion-worker.service" \
         | sudo tee /etc/systemd/system/conversion-worker.service > /dev/null
+
+    sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
+        -e "s|DEPLOY_DIR|${INSTALL_DIR}/src/counting_worker|g" \
+        "$INSTALL_DIR/deploy/counting-worker.service" \
+        | sudo tee /etc/systemd/system/counting-worker.service > /dev/null
 fi
 
 sudo systemctl daemon-reload
@@ -372,6 +400,10 @@ if [[ "$MODE" == "robot" ]]; then
     sudo systemctl enable conversion-worker
     sudo systemctl restart conversion-worker
     info "Conversion worker service enabled and started"
+
+    sudo systemctl enable counting-worker
+    sudo systemctl restart counting-worker
+    info "Counting worker service enabled and started"
 fi
 
 sudo systemctl enable robot-platform

@@ -1,4 +1,4 @@
-.PHONY: start run-robot run-server run-front run-inference run-conversion logs-conversion run-counting logs-counting db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update create-admin compose-build compose-up compose-down compose-logs compose-migrate compose-create-admin
+.PHONY: start run-robot run-server run-front run-inference run-conversion logs-conversion run-counting run-counting-dev logs-counting db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update create-admin compose-build compose-up compose-down compose-logs compose-migrate compose-create-admin
 
 start:
 	PYTHONPATH=src uv run uvicorn back.main:app --host 0.0.0.0 --port 8080 --reload
@@ -35,7 +35,10 @@ logs-conversion:
 	sudo journalctl -u conversion-worker -f
 
 run-counting:
-	cd src/counting_worker && uv run counting-worker --control-socket /tmp/counting.sock
+	cd src/counting_worker && VIRTUAL_ENV= .venv/bin/counting-worker --control-socket /tmp/counting.sock
+
+run-counting-dev:
+	cd src/counting_worker && uv run --group dev counting-worker --control-socket /tmp/counting.sock
 
 logs-counting:
 	sudo journalctl -u counting-worker -f

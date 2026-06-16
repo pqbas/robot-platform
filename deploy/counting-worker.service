@@ -1,0 +1,17 @@
+[Unit]
+Description=Counting Worker (offline blueberry counting via Unix socket)
+Before=robot-platform.service
+After=network.target
+
+[Service]
+Type=simple
+User=DEPLOY_USER
+WorkingDirectory=DEPLOY_DIR
+ExecStartPre=/bin/rm -f /tmp/counting.sock
+ExecStart=/opt/robot-platform/src/counting_worker/.venv/bin/counting-worker
+Restart=on-failure
+RestartSec=2
+Environment=COUNTING_SOCKET=/tmp/counting.sock
+
+[Install]
+WantedBy=multi-user.target
