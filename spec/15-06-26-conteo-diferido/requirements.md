@@ -23,15 +23,26 @@ espejo de `conversion-worker`):
 | Campo | Tipo | Notas |
 |-------|------|-------|
 | `cmd` | string | `"count"` \| `"status"` |
+| `uuid` | string | UUID del recording (el worker lo eco en `current`/`last_result` para que el poller empareje) |
 | `video_path` | string | Ruta absoluta al `{uuid}.mp4` |
 | `jsonl_path` | string | Ruta absoluta de salida del sidecar `{uuid}.jsonl` |
-| `engine_path` | string | `.engine` del modelo activo (mismo que carga el inference-worker) |
+| `engine_path` | string | `.engine` (o `.pt`) del modelo fijado |
 | `target_class` | string | Clase a contar |
 | `count_mode` | string | `"horizontal"` \| `"vertical"` |
 | `threshold` | float | Posición de línea normalizada [0,1] |
 | `direction` | string | `top2down` \| `down2top` \| `left2right` \| `right2left` |
 | `roi_mode` | string | `"square"` \| `"full"` (mismo crop que en vivo) |
 | `confidence` | float | Umbral de confianza |
+| `started_epoch` | float | Epoch del inicio del recording (= t0 del video); el worker escribe `t = started_epoch + frame/fps` para que el replay existente anchore igual |
+| `fps` | float | FPS del MP4 (de `Recording.fps`) |
+
+**Formato del sidecar:** cada línea `{"frame": int, "t": float, "dets": [...]}`
+con `dets[i] = {cls, conf, bbox, track_id}`. **`bbox` va en píxeles de frame
+completo (xyxy), NO normalizado** — el replay (`DetectionOverlay`) escala por
+`canvas.width / naturalWidth`, así que debe recibir el mismo espacio de píxeles
+que el `detection_recorder` en vivo. `t` es epoch (`started_epoch + frame/fps`)
+para que `DetectionReplayDialog` (que anclaba a `started_epoch`) siga funcionando
+sin cambios.
 
 **Respuesta `status`:** `{state: "idle"|"counting", current, last_result}` donde
 `last_result = {ok, total_count, frames, duration_seconds, finished_at}` o

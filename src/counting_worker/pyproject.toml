@@ -1,0 +1,26 @@
+[project]
+name = "counting-worker"
+version = "0.1.0"
+# Runs against the Jetson system Python (3.8) like the inference-worker so it
+# can use JetPack's CUDA PyTorch / TensorRT. Decodes the recorded MP4 and
+# re-runs detect + ByteTrack + line-crossing offline.
+description = "Offline blueberry counting worker — reprocesses recorded MP4 via Unix socket"
+requires-python = ">=3.8"
+dependencies = [
+    "ultralytics>=8.4.11",
+    "opencv-python>=4.13.0.90",
+    "lap>=0.5.13",
+]
+
+[project.scripts]
+counting-worker = "counting_worker.main:main"
+
+[dependency-groups]
+# Laptop/CI: numpy moderno, sin constraint de TensorRT (Jetson usa .venv precompilado)
+dev = [
+    "numpy>=2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
