@@ -242,6 +242,16 @@ class Recording(Base):
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fps: Mapped[float | None] = mapped_column(Float, nullable=True)
     uploaded_at: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Deferred offline counting (counting-worker). The video is the source of
+    # truth; the count is recomputed offline. count_config snapshots the config
+    # + model identity (model_uuid/version/file_hash/engine_path) for
+    # reproducibility / recount. none|pending|counting|done|error.
+    count_status: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="none", default="none"
+    )
+    count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    count_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    count_config: Mapped[str | None] = mapped_column(Text, nullable=True)
     camellon: Mapped["Camellon | None"] = relationship()
 
 

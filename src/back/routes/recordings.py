@@ -72,6 +72,9 @@ async def _build_out(db: AsyncSession, row: Recording) -> RecordingOut:
         height=row.height,
         fps=row.fps,
         uploaded_at=row.uploaded_at,
+        count_status=row.count_status,
+        count=row.count,
+        count_error=row.count_error,
     )
 
 
