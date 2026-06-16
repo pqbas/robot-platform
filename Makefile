@@ -65,10 +65,10 @@ build-front:
 	cd src/front && npm ci && npm run build
 
 deploy-robot:
-	./deploy/install.sh robot
+	./deploy/install.sh robot $(if $(FORCE),--force,)
 
 deploy-server:
-	./deploy/install.sh server
+	./deploy/install.sh server $(if $(FORCE),--force,)
 
 restart:
 	-sudo systemctl restart inference-worker

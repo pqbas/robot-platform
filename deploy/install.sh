@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${1:-}"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALL_DIR="/opt/robot-platform"
+
+# Parse args: first robot|server is the MODE; --force/-f rebuilds venvs that
+# already exist (default: skip a worker's dependency install when its .venv is
+# already present, so re-running the installer doesn't wipe + rebuild every
+# worker from scratch).
+MODE=""
+FORCE=0
+for arg in "$@"; do
+    case "$arg" in
+        robot|server) MODE="$arg" ;;
+        --force|-f)   FORCE=1 ;;
+    esac
+done
 
 # Colors
 RED='\033[0;31m'
@@ -17,13 +29,20 @@ error() { echo -e "${RED}[x]${NC} $*"; exit 1; }
 
 # --- 1. Validate mode ---
 if [[ "$MODE" != "robot" && "$MODE" != "server" ]]; then
-    echo "Usage: $0 <robot|server>"
-    echo "  robot  - Install for Jetson/robot (SQLite, port 8080)"
-    echo "  server - Install for server (PostgreSQL, port 9090)"
+    echo "Usage: $0 <robot|server> [--force]"
+    echo "  robot    - Install for Jetson/robot (SQLite, port 8080)"
+    echo "  server   - Install for server (PostgreSQL, port 9090)"
+    echo "  --force  - Rebuild venvs even if they already exist"
     exit 1
 fi
 
-info "Installing in ${MODE} mode"
+info "Installing in ${MODE} mode${FORCE:+ (force=$FORCE)}"
+
+# Skip a worker's dependency install when its venv already exists, unless
+# --force was passed. Usage: venv_exists <dir> && { info skip; } || { build; }
+venv_exists() {
+    [[ "$FORCE" != "1" && -d "$1/.venv" ]]
+}
 
 # --- 2. System dependencies ---
 info "Installing system dependencies..."
@@ -93,7 +112,9 @@ fi
 if [[ "$MODE" == "robot" ]]; then
     info "Installing Python dependencies (inference worker)..."
     cd "$INSTALL_DIR/src/inference_worker"
-    if [[ "$(uname -m)" == "aarch64" ]]; then
+    if venv_exists "$INSTALL_DIR/src/inference_worker"; then
+        info "inference worker venv ya existe — saltando (usa --force para reconstruir)"
+    elif [[ "$(uname -m)" == "aarch64" ]]; then
         # JetPack 6 (L4T r36.4) ships NO system PyTorch — unlike JetPack 5,
         # where torch/torchvision came preinstalled in the system Python. Install
         # the CUDA build from the Jetson AI Lab index (cu126 / cp310).
@@ -129,12 +150,18 @@ if [[ "$MODE" == "robot" ]]; then
 
     info "Installing Python dependencies (camera worker)..."
     cd "$INSTALL_DIR/src/camera_worker"
-    uv sync
+    if venv_exists "$INSTALL_DIR/src/camera_worker"; then
+        info "camera worker venv ya existe — saltando (usa --force para reconstruir)"
+    else
+        uv sync
+    fi
     cd "$INSTALL_DIR"
 
     info "Installing Python dependencies (recording worker)..."
     cd "$INSTALL_DIR/src/recording_worker"
-    if [[ "$(uname -m)" == "aarch64" ]]; then
+    if venv_exists "$INSTALL_DIR/src/recording_worker"; then
+        info "recording worker venv ya existe — saltando (usa --force para reconstruir)"
+    elif [[ "$(uname -m)" == "aarch64" ]]; then
         # Jetson: install with the [gstreamer] extra so PyGObject is built
         # against system gobject-introspection and the worker can drive
         # the nvv4l2h264enc plugin shipped by nvidia-l4t-gstreamer.
@@ -170,7 +197,9 @@ if [[ "$MODE" == "robot" ]]; then
 
     info "Installing Python dependencies (conversion worker)..."
     cd "$INSTALL_DIR/src/conversion_worker"
-    if [[ "$(uname -m)" == "aarch64" ]]; then
+    if venv_exists "$INSTALL_DIR/src/conversion_worker"; then
+        info "conversion worker venv ya existe — saltando (usa --force para reconstruir)"
+    elif [[ "$(uname -m)" == "aarch64" ]]; then
         # Jetson: use system Python 3.10 + JetPack's tensorrt bindings
         # via --system-site-packages. The JetPack package
         # 'python3-libnvinfer' provides 'tensorrt' for system python only,
@@ -204,7 +233,9 @@ if [[ "$MODE" == "robot" ]]; then
 
     info "Installing Python dependencies (counting worker)..."
     cd "$INSTALL_DIR/src/counting_worker"
-    if [[ "$(uname -m)" == "aarch64" ]]; then
+    if venv_exists "$INSTALL_DIR/src/counting_worker"; then
+        info "counting worker venv ya existe — saltando (usa --force para reconstruir)"
+    elif [[ "$(uname -m)" == "aarch64" ]]; then
         # Same recipe as the inference worker: the counting worker loads a
         # .engine/.pt and runs YOLO + ByteTrack offline, so it needs CUDA torch
         # from the Jetson index and the system tensorrt/cv2 via
