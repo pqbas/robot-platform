@@ -4,6 +4,7 @@ import {
   startRecording as apiStart,
   stopRecording as apiStop,
 } from "@/api/recordings"
+import { getCountingStatus } from "@/api/sessions"
 import { ApiError } from "@/api/client"
 import type { Recording } from "@/types"
 
@@ -44,11 +45,20 @@ export function useRecording() {
   }, [])
 
   // Hydrate on mount: any row with ended_at == null is the in-flight one.
+  // But a counting session auto-starts (and owns) its own recording — that one
+  // is stopped via "Detener conteo", not as an independent recording. Since
+  // counting and manual recording are mutually exclusive, an in-flight row
+  // while counting is active IS the counting-owned one; skip it so a page
+  // reload during counting doesn't surface a second "Detener grabación" button.
   useEffect(() => {
     let cancelled = false
-    getRecordings()
-      .then((rows) => {
+    Promise.all([getRecordings(), getCountingStatus().catch(() => null)])
+      .then(([rows, counting]) => {
         if (cancelled) return
+        if (counting?.active) {
+          setActive(null)
+          return
+        }
         const inFlight = rows.find((r) => r.ended_at == null) ?? null
         setActive(inFlight)
       })
