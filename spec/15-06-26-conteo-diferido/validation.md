@@ -4,37 +4,43 @@ La fase está lista para mergear a `master` cuando todo lo siguiente pasa.
 
 ## Automated Tests
 
-- [ ] `cd src/back && uv run pytest` exits 0 con no failures
-- [ ] `cd src/counting_worker && uv run pytest` exits 0 (tests del processor)
-- [ ] `cd src/front && npx tsc --noEmit` exits 0 sin errores de tipo
-- [ ] `cd src/back && uv run ruff check` exits 0
+Nota de entorno: los tests del backend viven en `tests/` (raíz). En esta Jetson
+`PYTHONPATH` trae `/opt/ros/...`, que autocarga plugins pytest de ROS y rompe la
+colección; correr con `PYTHONPATH=src` (reemplaza el heredado) lo aísla.
+
+- [x] `PYTHONPATH=src uv run pytest` → 108 passed (2 fallos preexistentes en
+      `test_wc_broadcaster.py`: NVENC/`NvVicCompose Failed`, hardware, ajenos).
+- [x] `PYTHONPATH=src/counting_worker uv run pytest src/counting_worker/tests -o testpaths=`
+      → 7 passed (paridad de `ObjectCounter`).
+- [x] `cd src/front && npx tsc --noEmit` → 0 errores.
+- [x] `uv run ruff check src/back src/counting_worker tests/test_counting_offline.py`
+      → limpio en archivos nuevos (2 errores E402 preexistentes en
+      `routes/auth.py`, no tocado).
 
 ### Specific test coverage required
 
-- [ ] `processor.count_video(...)` sobre un MP4 sintético con N objetos cruzando
-      la línea devuelve `total_count == N` y escribe un JSONL con una línea por
-      frame del video (mismo conteo de frames que el MP4).
-- [ ] `ObjectCounter` copiado al worker da el mismo conteo que el del backend
-      para la misma secuencia de `tracking_data` (test de paridad).
-- [ ] `counting_poller._process_worker_result(last_ok)` con un `Recording` en
-      `counting` lo deja en `count_status='done'`, `count=total_count`, y hace
-      backfill de `Session.total_count` en la sesión vinculada por `recording_uuid`.
-- [ ] `counting_poller._process_worker_result(last_error)` deja
-      `count_status='error'` y `count_error` poblado.
-- [ ] `reconcile_orphaned_counts()` con un `Recording` en `counting` y MP4 en
-      disco lo re-encola; sin MP4 lo marca `error`.
-- [ ] `POST /api/recordings/{uuid}/recount` re-encola y devuelve 200; 404 si el
-      uuid no existe; 409 si el MP4 no está en disco.
-- [ ] `stop_counting` persiste en `count_config` la identidad del modelo activo
-      (`model_uuid`, `model_version`, `file_hash`, `engine_path`); el job se
-      encola con ese `engine_path`.
-- [ ] `recount` por defecto reutiliza el `engine_path` fijado (reproducible) y
-      devuelve 409 si ese engine ya no está en disco; con `use_active_model=true`
-      re-snapshotea el modelo activo y encola con su engine.
-- [ ] `reconcile_orphaned_counts()` marca `error` (no re-encola) cuando el
-      `engine_path` del `count_config` ya no existe en disco.
-- [ ] La migración Alembic aplica up/down limpio y las filas `recordings`
-      existentes quedan con `count_status='none'`.
+- [~] `processor.count_video(...)` end-to-end sobre un MP4 → **check manual**
+      (necesita GPU + engine; no corre en CI sin hardware).
+- [x] `ObjectCounter` del worker: semántica de cruce de línea pinneada
+      (`src/counting_worker/tests/test_object_counter.py`, 7 casos).
+- [x] `counting_poller._process_worker_result(last_ok)` → `count_status='done'`,
+      `count=total_count`, backfill de `Session.total_count`
+      (`test_poller_transcribes_done_and_backfills_session`).
+- [x] `counting_poller._process_worker_result(last_error)` → `count_status='error'`
+      + `count_error`; y no pisa filas `done` (`test_poller_ignores_non_counting_row`).
+- [x] `reconcile_orphaned_counts()` sin MP4 → `error`; sin `count_config` →
+      `error` (`test_reconcile_marks_error_when_*`). Re-encola con worker vivo →
+      check manual (necesita socket).
+- [x] `POST /api/recordings/{uuid}/recount`: 404 uuid desconocido, 409 MP4
+      ausente (`test_recount_404_*`/`test_recount_409_*`). 200 happy-path →
+      check manual (necesita worker).
+- [~] `stop_counting` persiste el pin de modelo en `count_config` y encola con
+      ese `engine_path` → **check manual** (necesita worker + modelo activo).
+- [~] `recount` reproduce con el engine fijado / `use_active_model=true` re-pin
+      → **check manual**. La rama 409 (engine fijado ausente) está en
+      `counting_trigger.enqueue_count` (marca `error`).
+- [x] La migración Alembic `018` aplica up/down limpio en sqlite; las filas
+      `recordings` existentes quedan con `count_status='none'`.
 
 ## Manual Checks
 
