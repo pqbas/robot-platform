@@ -2,6 +2,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import type { Session, Camellon } from "@/types"
 import { deleteSession } from "@/api/sessions"
+import { recountRecording } from "@/api/recordings"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Loader2, Pencil, Trash2, Video } from "lucide-react"
+import { Loader2, Pencil, RefreshCw, Trash2, Video } from "lucide-react"
 import SessionEditDialog from "./SessionEditDialog"
 import DetectionReplayDialog from "./DetectionReplayDialog"
 
@@ -59,6 +60,22 @@ export default function SessionsTable({
   const [replaySession, setReplaySession] = useState<Session | null>(null)
   const [deleting, setDeleting] = useState<Session | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
+  const [recountingId, setRecountingId] = useState<number | null>(null)
+
+  const handleRecount = async (s: Session) => {
+    if (!s.recording_uuid) return
+    setRecountingId(s.id)
+    try {
+      const rec = await recountRecording(s.recording_uuid)
+      // Reflect the new counting state immediately (poller fills the number).
+      onSessionUpdated({ ...s, count_status: rec.count_status, count: rec.count })
+      toast.success("Recontando…")
+    } catch {
+      toast.error("No se pudo re-contar")
+    } finally {
+      setRecountingId(null)
+    }
+  }
 
   const handleConfirmDelete = async () => {
     if (!deleting) return
@@ -117,9 +134,48 @@ export default function SessionsTable({
                 <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                   {s.device_id}
                 </TableCell>
-                <TableCell className="text-right">{s.total_count}</TableCell>
+                <TableCell className="text-right">
+                  {s.count_status === "counting" || s.count_status === "pending" ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <Loader2 className="size-3 animate-spin" />
+                      procesando…
+                    </span>
+                  ) : s.count_status === "done" ? (
+                    s.count ?? s.total_count
+                  ) : s.count_status === "error" ? (
+                    <span
+                      className="text-xs text-destructive"
+                      title="Error al contar el video"
+                    >
+                      error
+                    </span>
+                  ) : (
+                    s.total_count
+                  )}
+                </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-0.5">
+                    {s.recording_uuid != null && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Re-contar el video"
+                        disabled={
+                          recountingId === s.id || s.count_status === "counting"
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRecount(s)
+                        }}
+                      >
+                        {recountingId === s.id ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="size-3.5" />
+                        )}
+                      </Button>
+                    )}
                     {s.recording_uuid != null && (
                       <Button
                         variant="ghost"
