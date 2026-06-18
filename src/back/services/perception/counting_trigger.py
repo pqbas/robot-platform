@@ -47,10 +47,16 @@ def iso_to_epoch(iso: str | None) -> float | None:
 async def build_count_config(db: AsyncSession, target_class: str | None) -> dict:
     """Snapshot the counting config + the active model's identity.
 
+    The active model is the one holding ``selected_label`` (the same selection
+    the live inference path / ``model_reconciler`` uses) — NOT the legacy
+    ``is_active`` flag, which the rest of the codebase no longer sets.
+
     Raises RuntimeError if there is no active detection model (caller marks the
     recording as error)."""
     result = await db.execute(
-        select(DetectionModel).where(DetectionModel.is_active.is_(True))
+        select(DetectionModel)
+        .where(DetectionModel.selected_label.isnot(None))
+        .limit(1)
     )
     model = result.scalars().first()
     if model is None:
