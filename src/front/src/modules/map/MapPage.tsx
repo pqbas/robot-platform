@@ -67,6 +67,18 @@ export default function MapPage() {
     loadSessions()
   }, [loadSessions])
 
+  // While an offline count is still running, the backend fills the number
+  // asynchronously (worker → poller → DB). Poll until every row settles so the
+  // "procesando…" cell flips to the final count without a manual reload.
+  const hasPendingCount = sessions.some(
+    (s) => s.count_status === "counting" || s.count_status === "pending",
+  )
+  useEffect(() => {
+    if (!hasPendingCount) return
+    const id = setInterval(loadSessions, 3000)
+    return () => clearInterval(id)
+  }, [hasPendingCount, loadSessions])
+
   const handleSessionDeleted = useCallback((id: number) => {
     setSessions((prev) => prev.filter((s) => s.id !== id))
     setSelectedSession((cur) => (cur?.id === id ? null : cur))

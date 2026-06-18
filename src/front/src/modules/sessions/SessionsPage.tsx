@@ -66,6 +66,17 @@ export default function SessionsPage() {
   useEffect(() => { loadBase() }, [loadBase])
   useEffect(() => { loadSessions() }, [loadSessions])
 
+  // Poll while an offline count is still running so "procesando…" flips to the
+  // final number without a manual reload (worker → poller → DB is async).
+  const hasPendingCount = sessions.some(
+    (s) => s.count_status === "counting" || s.count_status === "pending",
+  )
+  useEffect(() => {
+    if (!hasPendingCount) return
+    const id = setInterval(loadSessions, 3000)
+    return () => clearInterval(id)
+  }, [hasPendingCount, loadSessions])
+
   // session.camellon_id -> fundo_uuid, via camellon.fundo_uuid
   const fundoByCamellonId = useMemo(() => {
     const map = new Map<number, string>()
