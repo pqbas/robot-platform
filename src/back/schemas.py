@@ -128,7 +128,6 @@ class FrameDetectionPayload(BaseModel):
     target_class: str
     detections: list[DetectionItem]
     session_active: bool = False
-    session_total: int = 0
     error: str | None = None
 
 

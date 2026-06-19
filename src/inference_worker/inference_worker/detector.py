@@ -117,7 +117,14 @@ class Detector:
         conf: float = 0.5,
         roi_mode: str = "square",
     ) -> dict:
-        """Run YOLO tracking, optionally on a centered square ROI.
+        """Run YOLO detection, optionally on a centered square ROI.
+
+        Live inference is a **visual overlay only** — the authoritative count is
+        computed offline by the counting-worker (re-detect + ByteTrack on the
+        recorded MP4). So this uses ``predict`` (no tracker): the BoT-SORT GMC
+        optical-flow was the live bottleneck (see
+        ``spec/29-04-26-inference-perf/tracker-bottleneck-findings.md``) and we
+        no longer need ``track_id`` live.
 
         - ``roi_mode="square"`` crops a centered square of side = min(h, w).
           Avoids the letterbox padding ultralytics adds for wide inputs and
@@ -125,8 +132,8 @@ class Detector:
         - ``roi_mode="full"`` uses the whole frame (ultralytics will
           letterbox it internally to its imgsz).
 
-        Bboxes and centroids are mapped back to original-frame space
-        regardless of mode, so the overlay and counter behave the same.
+        Bboxes are mapped back to original-frame space regardless of mode, so
+        the overlay renders correctly.
         """
         h, w = frame.shape[:2]
         if roi_mode == "square":
@@ -139,7 +146,7 @@ class Detector:
             roi = frame
 
         t0 = time.perf_counter()
-        results = self._model.track(roi, conf=conf, persist=True, verbose=False)
+        results = self._model.predict(roi, conf=conf, verbose=False)
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         self._times_ms.append(elapsed_ms)
         if not self._logged_first_detect:
@@ -162,7 +169,6 @@ class Detector:
         result = results[0]
 
         detections: list[dict] = []
-        tracking_data: list[dict] = []
         count = 0
 
         for box in result.boxes:
@@ -181,21 +187,12 @@ class Detector:
             else:
                 display_name = cls_name
 
-            track_id = None
-            if box.id is not None:
-                track_id = int(box.id[0])
-                xywh = box.xywh[0].tolist()
-                tracking_data.append({
-                    "track_id": track_id,
-                    "cx": (xywh[0] + x_off) / w,
-                    "cy": xywh[1] / h,
-                })
-
             detections.append({
                 "class_name": display_name,
                 "confidence": round(box_conf, 3),
                 "bbox": [round(v, 1) for v in xyxy_full],
-                "track_id": track_id,
+                # predict() has no tracker; track_id stays null in the overlay.
+                "track_id": None,
             })
 
             if target_class is None or display_name == target_class:
@@ -203,7 +200,6 @@ class Detector:
 
         return {
             "detections": detections,
-            "tracking_data": tracking_data,
             "count": count,
             "roi": {"x": x_off, "y": 0, "w": sq, "h": h},
         }
