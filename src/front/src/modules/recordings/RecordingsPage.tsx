@@ -352,46 +352,52 @@ export default function RecordingsPage() {
                     <TableCell>
                       <StatusBadge status={status} />
                     </TableCell>
-                    <TableCell className="text-right space-x-1">
-                      {status !== "active" && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          title="Editar lugar"
-                          onClick={() => { setEditingUuid(r.uuid); setEditingRec(r) }}
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                      )}
-                      {canDownload && status !== "active" && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          title="Reproducir"
-                          onClick={() => setPlaying(r)}
-                        >
-                          <Play className="size-4" />
-                        </Button>
-                      )}
-                      {canDownload && status !== "active" && (
-                        <Button asChild size="sm" variant="ghost" title="Descargar">
-                          <a
-                            href={getRecordingFileUrl(r.uuid)}
-                            download={`${r.uuid}.mp4`}
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-0.5">
+                        {status !== "active" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            title="Editar lugar"
+                            onClick={() => { setEditingUuid(r.uuid); setEditingRec(r) }}
                           >
-                            <Download className="size-4" />
-                          </a>
-                        </Button>
-                      )}
-                      {status !== "active" && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setDeleting(r)}
-                        >
-                          <Trash2 className="size-4 text-destructive" />
-                        </Button>
-                      )}
+                            <Pencil className="size-3.5" />
+                          </Button>
+                        )}
+                        {canDownload && status !== "active" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            title="Reproducir"
+                            onClick={() => setPlaying(r)}
+                          >
+                            <Play className="size-3.5" />
+                          </Button>
+                        )}
+                        {canDownload && status !== "active" && (
+                          <Button asChild size="icon" variant="ghost" className="h-7 w-7" title="Descargar">
+                            <a
+                              href={getRecordingFileUrl(r.uuid)}
+                              download={`${r.uuid}.mp4`}
+                            >
+                              <Download className="size-3.5" />
+                            </a>
+                          </Button>
+                        )}
+                        {status !== "active" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            title="Eliminar"
+                            onClick={() => setDeleting(r)}
+                          >
+                            <Trash2 className="size-3.5 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 )
