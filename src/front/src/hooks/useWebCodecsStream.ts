@@ -308,7 +308,6 @@ export function useWebCodecsStream() {
         target_class: header.target_class ?? "",
         detections: header.detections ?? [],
         session_active: !!header.session_active,
-        session_total: header.session_total ?? 0,
         error: header.error ?? null,
       })
       if (header.session_active) inferenceFrameCountRef.current++

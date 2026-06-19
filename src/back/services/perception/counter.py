@@ -2,9 +2,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from back.config import config
-from back.services.perception.object_counter import ObjectCounter
-
 logger = logging.getLogger("counter")
 
 
@@ -12,52 +9,52 @@ logger = logging.getLogger("counter")
 class CountingSession:
     target_class: str
     start_time: str
+    # Kept for the status/stream payloads, but no longer accumulated live: the
+    # authoritative number is computed offline by the counting-worker. Stays 0.
     last_frame_count: int = 0
     recording_uuid: str | None = None
 
 
 _active: CountingSession | None = None
-_object_counter: ObjectCounter | None = None
-_last_results: list | None = None
 # recording_uuid of the last stopped session, so save/update can still link
 # the recording after the session is cleared.
 _last_recording_uuid: str | None = None
 
 
 def start_counting(target_class: str) -> CountingSession:
-    """Start live counting with ObjectCounter. No DB session needed."""
-    global _active, _object_counter, _last_results
+    """Start a counting session (marker only).
+
+    The session marks that counting is active — it triggers the auto-recording
+    and enables live inference for the visual overlay — but it no longer counts
+    in real time. The count is recomputed offline from the recorded MP4 by the
+    counting-worker, so there is no live ``ObjectCounter`` here.
+    """
+    global _active
     if _active is not None:
         raise RuntimeError("A counting session is already active")
     _active = CountingSession(
         target_class=target_class,
         start_time=datetime.now(timezone.utc).isoformat(),
     )
-    _object_counter = ObjectCounter(
-        count_mode=config.counting.count_mode,
-        threshold=config.counting.threshold,
-        direction=config.counting.direction,
-    )
-    _last_results = None
     logger.info("Counting started (target=%s)", target_class)
     return _active
 
 
 def stop_counting() -> tuple[int, str]:
-    """Stop live counting. Returns (total_count, target_class)."""
-    global _active, _object_counter, _last_results, _last_recording_uuid
-    if _active is None or _object_counter is None:
+    """Stop the counting session. Returns (0, target_class).
+
+    The total is always 0 — the authoritative count arrives later via the
+    offline worker + poller backfill of ``Session.total_count``.
+    """
+    global _active, _last_recording_uuid
+    if _active is None:
         raise RuntimeError("No counting session is active")
 
-    total = _object_counter.get_count()
-
     target_class = _active.target_class
-    logger.info("Counting stopped (target=%s, count=%d)", target_class, total)
+    logger.info("Counting stopped (target=%s); offline count pending", target_class)
     _last_recording_uuid = _active.recording_uuid
     _active = None
-    _object_counter = None
-    _last_results = None
-    return total, target_class
+    return 0, target_class
 
 
 def get_active_session() -> CountingSession | None:
@@ -75,12 +72,3 @@ def clear_last_recording_uuid() -> None:
 
 def is_session_active() -> bool:
     return _active is not None
-
-
-def update(tracking_data: list[dict]) -> None:
-    """Called every frame with tracking data to update line-crossing count."""
-    global _last_results
-    if _active is not None and _object_counter is not None:
-        _object_counter.update(tracking_data)
-        _active.last_frame_count = _object_counter.get_count()
-        _last_results = tracking_data

@@ -195,13 +195,6 @@ export default function VisionPage() {
     }
   }, [blocker, isCounting, isRecording])
 
-  // Feed frame data to counting hook
-  useEffect(() => {
-    if (frameData && isCounting) {
-      counting.updateFrame(frameData)
-    }
-  }, [frameData, isCounting, counting.updateFrame])
-
   // Show inference errors as toast (debounced to avoid spam)
   const lastErrorRef = useRef<string | null>(null)
   useEffect(() => {
@@ -302,7 +295,7 @@ export default function VisionPage() {
       >
         {isCounting && frameData && (
           <CountOverlay
-            sessionTotal={counting.sessionTotal}
+            count={frameData.detections?.length ?? 0}
             targetClass={selectedClass}
           />
         )}
@@ -436,7 +429,6 @@ export default function VisionPage() {
 
       <SaveDialog
         open={counting.state === "SAVING"}
-        totalCount={counting.sessionTotal}
         duration={savedDuration}
         deviceContext={deviceContext}
         onSave={handleSave}

@@ -160,7 +160,6 @@ class StreamBroadcaster:
                     "detections": [],
                     "target_class": None,
                     "session_active": False,
-                    "session_total": 0,
                 }
                 fresh = self._inference.consume_result()
                 if fresh is not None:
@@ -169,13 +168,11 @@ class StreamBroadcaster:
                     header["detections"] = [d.model_dump() for d in self._last_result.detections]
                     header["target_class"] = self._last_result.target_class or None
                     header["session_active"] = self._last_result.session_active
-                    header["session_total"] = self._last_result.session_total
                     if self._last_result.error:
                         header["error"] = self._last_result.error
                 elif session is not None:
                     header["target_class"] = session.target_class
                     header["session_active"] = True
-                    header["session_total"] = session.last_frame_count
 
                 msg = _pack(header, jpeg)
 
