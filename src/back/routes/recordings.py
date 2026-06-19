@@ -279,12 +279,13 @@ async def get_recording_detections(uuid: str, db: AsyncSession = Depends(get_db)
     """Per-frame detections logged alongside a recording.
 
     Returns {"fps", "frames": [...]} where each frame is the parsed JSONL line
-    {"frame", "dets"}. The sidecar is keyed by video frame index (the
-    counting-worker writes one dense line per MP4 frame), so the player maps
-    ``video.currentTime`` to a frame as ``round(currentTime * fps)`` and indexes
-    ``frames`` directly — the association is by frame, never by wall-clock time.
-    If the .jsonl is missing returns an empty frame list. Available in robot and
-    server mode so the operator can replay synced recordings from the server.
+    {"frame", "pts", "dets"}. The counting-worker writes one dense line per MP4
+    frame, each carrying that frame's own presentation timestamp ``pts``. The
+    MP4 is variable-frame-rate, so the player matches its mediaTime against
+    ``pts`` (largest pts ≤ mediaTime) to find the exact frame — never via
+    index*fps. ``fps`` is informational. If the .jsonl is missing returns an
+    empty frame list. Available in robot and server mode so the operator can
+    replay synced recordings from the server.
     """
     result = await db.execute(select(Recording).where(Recording.uuid == uuid))
     row = result.scalar_one_or_none()

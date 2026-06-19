@@ -59,6 +59,13 @@ def count_video(payload: dict) -> dict:
     try:
         with open(jsonl_path, "w") as out:
             while True:
+                # Presentation timestamp of the frame about to be read. Captured
+                # BEFORE read() so it refers to *this* frame (verified: frame 0 →
+                # 0.0). The MP4 is variable-frame-rate (the recording-worker
+                # stamps each buffer with its real arrival PTS), so a frame's
+                # position can't be reconstructed from index/fps — the replay
+                # matches the player's mediaTime against this exact pts.
+                pts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
                 ok, frame = cap.read()
                 if not ok:
                     break
@@ -127,11 +134,15 @@ def count_video(payload: dict) -> dict:
                     crossing = tracking_data
                 counter.update(crossing)
 
-                # The sidecar is keyed by video frame index: line N ↔ frame N
-                # of the MP4 (dense — one line per frame, even with empty dets).
-                # The replay associates detections to the frame, never to time.
+                # One dense line per frame (line N ↔ frame N). `pts` is the
+                # frame's own presentation timestamp (seconds, 0-based) — the
+                # join key the replay uses to find the frame the player shows,
+                # which is exact even for variable-frame-rate video.
                 out.write(
-                    json.dumps({"frame": frame_idx, "dets": dets}) + "\n"
+                    json.dumps(
+                        {"frame": frame_idx, "pts": round(pts, 4), "dets": dets}
+                    )
+                    + "\n"
                 )
                 frame_idx += 1
     finally:
