@@ -1,3 +1,8 @@
+# Nombre de proyecto fijo: ancla el prefijo de contenedores y volúmenes
+# (robot-platform_pgdata, etc.) sin importar el nombre de la carpeta. Evita
+# stacks duplicados y que el volumen de la base "cambie" al mover el repo.
+name: robot-platform
+
 services:
   postgres:
     image: postgres:16-alpine
