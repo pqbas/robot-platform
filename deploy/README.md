@@ -62,6 +62,41 @@ La aplicación queda disponible en:
 - LAN HTTP: `http://<IP-del-host>`
 - Internet HTTPS via Funnel: `https://<TS_HOSTNAME>.<tailnet>.ts.net`
 
+### Actualizar (Windows / Docker)
+
+Para subir una versión nueva ya mergeada a `master`. En Windows no hay `make` ni
+systemd, así que se usa Docker Compose directo. Desde la carpeta del repo
+(PowerShell o terminal):
+
+```bash
+# 1. Traer el código actualizado
+git checkout master
+git pull
+
+# 2. Reconstruir las imágenes que cambiaron (back y/o front)
+docker compose -f docker-compose.server.yml build back front
+
+# 3. Aplicar migraciones nuevas de Alembic
+docker compose -f docker-compose.server.yml run --rm back uv run alembic -c back/alembic.ini upgrade head
+
+# 4. Recrear los contenedores con las imágenes nuevas
+docker compose -f docker-compose.server.yml up -d
+```
+
+Notas de actualización:
+
+- **Frontend servido desde volumen**: nginx sirve el bundle desde el volumen
+  `front-dist`; el servicio `front` solo copia `dist/` ahí y termina
+  (`restart: "no"`). El `up -d` lo vuelve a ejecutar y refresca el bundle. Si por
+  caché se ve la UI vieja, forzar:
+  ```bash
+  docker compose -f docker-compose.server.yml up -d --force-recreate front nginx
+  ```
+- **No se tocan `postgres` ni `tailscale`**: sus volúmenes (`pgdata`, `ts-state`)
+  persisten; no se reconstruyen al actualizar.
+- **Migraciones**: el paso 3 es idempotente (si no hay migraciones pendientes, no
+  hace nada). En producción, respaldar el volumen `pgdata` antes de migrar.
+
 ### Notas
 
 - **Coexistencia con systemd**: si el servicio `robot-platform.service` ya está corriendo en el host, ambos no pueden usar el puerto 9090 al mismo tiempo. Detener el servicio systemd antes de levantar compose (`sudo systemctl stop robot-platform`).
