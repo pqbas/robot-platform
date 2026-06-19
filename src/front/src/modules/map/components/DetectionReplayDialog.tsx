@@ -60,26 +60,48 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
       .catch(() => toast.error("Error al cargar las detecciones"))
   }, [open, session.recording_uuid])
 
-  // Associate detections to the video by FRAME, never by time. The sidecar is
-  // dense (counting-worker writes one line per MP4 frame: line N ↔ frame N), so
-  // we map the displayed media time to a frame index `round(mediaTime * fps)`
-  // and index `frames` directly. requestVideoFrameCallback gives frame-accurate
-  // sync (fires per presented frame); timeupdate is the fallback.
+  // Associate detections to the exact video frame. The MP4 is variable-frame-
+  // rate, so a frame's position can't be derived from index*fps; instead each
+  // sidecar line carries the frame's own presentation timestamp (`pts`), and we
+  // match the player's mediaTime to the frame whose pts is the largest ≤ it.
+  // requestVideoFrameCallback gives frame-accurate sync (fires per presented
+  // frame, mediaTime = that frame's pts); timeupdate is the fallback.
   useEffect(() => {
     const video = videoRef.current as RVFCVideo | null
     if (!open || !video || !detData) return
-    const fps = detData.fps
     const frames = detData.frames
-    if (!fps || frames.length === 0) {
+    if (frames.length === 0) {
       setCurrentDets([])
       return
     }
+    // New sidecars carry per-frame `pts`; old ones (pre-VFR-fix) don't — fall
+    // back to index*fps for those so their replay still works (re-count to get
+    // frame-accurate sync).
+    const hasPts = frames[0].pts != null
+    const fps = detData.fps ?? 0
 
     const applyAt = (mediaTime: number) => {
-      const idx = Math.min(
-        frames.length - 1,
-        Math.max(0, Math.round(mediaTime * fps)),
-      )
+      let idx: number
+      if (hasPts) {
+        // Largest frame with pts <= mediaTime (the frame currently displayed).
+        let lo = 0
+        let hi = frames.length - 1
+        idx = 0
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1
+          if (frames[mid].pts <= mediaTime) {
+            idx = mid
+            lo = mid + 1
+          } else {
+            hi = mid - 1
+          }
+        }
+      } else {
+        idx = Math.min(
+          frames.length - 1,
+          Math.max(0, Math.round(mediaTime * fps)),
+        )
+      }
       setCurrentDets(
         frames[idx].dets.map((d) => ({
           class_name: d.cls,

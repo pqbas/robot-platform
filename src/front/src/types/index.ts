@@ -34,9 +34,11 @@ export type Session = {
 }
 
 export type DetectionFrame = {
-  // Video frame index (0-based). The replay associates detections to this
-  // frame, never to a timestamp.
+  // Video frame index (0-based), one line per frame.
   frame: number
+  // The frame's own presentation timestamp (seconds, 0-based). Used to match
+  // the player's mediaTime to the exact frame — robust to variable frame rate.
+  pts: number
   dets: { cls: string; conf: number; bbox: [number, number, number, number]; track_id: number | null }[]
 }
 
