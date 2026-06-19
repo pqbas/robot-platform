@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -56,6 +57,14 @@ function formatSize(bytes: number | null): string {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString()
+}
+
+// Local YYYY-MM-DD for date-range filtering (matches the date shown to the user).
+function localDateStr(iso: string): string {
+  const d = new Date(iso)
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${d.getFullYear()}-${m}-${day}`
 }
 
 type RowStatus = "active" | "uploaded" | "uploading" | "pending" | "missing"
@@ -108,6 +117,9 @@ export default function RecordingsPage() {
   const [fundos, setFundos] = useState<Fundo[]>([])
   const [empresaFilter, setEmpresaFilter] = useState("all")
   const [fundoFilter, setFundoFilter] = useState("all")
+  const [deviceFilter, setDeviceFilter] = useState("all")
+  const [dateFrom, setDateFrom] = useState<string | null>(null)
+  const [dateTo, setDateTo] = useState<string | null>(null)
 
   const loadBase = useCallback(async () => {
     try {
@@ -219,10 +231,22 @@ export default function RecordingsPage() {
     )
   }, [rowsByEmpresa, fundos])
 
+  // Distinct robots seen in the rows (for the Device filter, like Sessions).
+  const devices = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.device_id))).sort(),
+    [rows],
+  )
+
   const filteredRows = useMemo(() => {
-    if (fundoFilter === "all") return rowsByEmpresa
-    return rowsByEmpresa.filter((r) => r.fundo_uuid === fundoFilter)
-  }, [rowsByEmpresa, fundoFilter])
+    return rowsByEmpresa.filter((r) => {
+      if (fundoFilter !== "all" && r.fundo_uuid !== fundoFilter) return false
+      if (deviceFilter !== "all" && r.device_id !== deviceFilter) return false
+      const d = localDateStr(r.started_at)
+      if (dateFrom && d < dateFrom) return false
+      if (dateTo && d > dateTo) return false
+      return true
+    })
+  }, [rowsByEmpresa, fundoFilter, deviceFilter, dateFrom, dateTo])
 
   // Reset child filter when parent filter changes and selection is no longer valid
   useEffect(() => {
@@ -237,7 +261,20 @@ export default function RecordingsPage() {
     }
   }, [fundoOptions, fundoFilter])
 
-  const hasActiveFilters = empresaFilter !== "all" || fundoFilter !== "all"
+  const hasActiveFilters =
+    empresaFilter !== "all" ||
+    fundoFilter !== "all" ||
+    deviceFilter !== "all" ||
+    dateFrom != null ||
+    dateTo != null
+
+  const clearAllFilters = () => {
+    setEmpresaFilter("all")
+    setFundoFilter("all")
+    setDeviceFilter("all")
+    setDateFrom(null)
+    setDateTo(null)
+  }
 
   const handleConfirmDelete = async () => {
     if (!deleting) return
@@ -257,13 +294,18 @@ export default function RecordingsPage() {
   return (
     <div className="flex-1 space-y-4 overflow-auto p-4 md:p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Grabaciones</h1>
+        <h1 className="text-lg font-semibold">
+          Grabaciones
+          <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+            ({filteredRows.length})
+          </span>
+        </h1>
         {hasActiveFilters && (
           <Button
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-xs text-muted-foreground"
-            onClick={() => { setEmpresaFilter("all"); setFundoFilter("all") }}
+            onClick={clearAllFilters}
           >
             Limpiar filtros
           </Button>
@@ -299,6 +341,43 @@ export default function RecordingsPage() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {devices.length > 1 && (
+          <div className="space-y-1 min-w-[160px]">
+            <Label className="text-xs">Device</Label>
+            <Select value={deviceFilter} onValueChange={setDeviceFilter}>
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {devices.map((d) => (
+                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div className="space-y-1 min-w-[140px]">
+          <Label className="text-xs">Desde</Label>
+          <Input
+            type="date"
+            className="h-9"
+            value={dateFrom ?? ""}
+            onChange={(e) => setDateFrom(e.target.value || null)}
+          />
+        </div>
+
+        <div className="space-y-1 min-w-[140px]">
+          <Label className="text-xs">Hasta</Label>
+          <Input
+            type="date"
+            className="h-9"
+            value={dateTo ?? ""}
+            onChange={(e) => setDateTo(e.target.value || null)}
+          />
         </div>
       </div>
 
