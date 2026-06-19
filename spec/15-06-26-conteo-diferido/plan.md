@@ -114,48 +114,73 @@ no `dev`).
 > backfill de `Session.total_count`) y se valida presencialmente antes de retirar
 > el live en fase 2.
 
-## Group 4: Live path — overlay visual sin contar — **DIFERIDO A FASE 2**
+## Group 4: Live path — overlay visual sin contar — **FASE 2 (rama `conteo-vivo-desmontaje`)**
+
+> **Revisión 18-06-26 (al implementar fase 2).** El spec original subestimó la
+> superficie: `session_total` se emite por **tres** transportes (no solo el
+> data-channel WebRTC) y el frontend lo consume en **cuatro** archivos. El
+> `detection_recorder` y el worker escriben el **mismo** `{uuid}.jsonl` →
+> **decisión: quitar `detection_recorder` del todo** (las grabaciones sin sesión
+> de conteo quedan sin replay; en la práctica siempre se cuenta al grabar). El
+> número en vivo (`CountOverlay`, 6xl) se retira: el overlay queda visual (cajas
+> + "● grabando") y el número final lo da el conteo offline en la lista.
 
 15. `src/inference_worker/inference_worker/detector.py::detect`: cambiar
     `self._model.track(roi, persist=True, ...)` por `self._model.predict(roi, ...)`
-    (sin tracker). Quitar la construcción de `tracking_data` (ya no se cuenta en
-    vivo); seguir devolviendo `detections` para el overlay.
+    (sin tracker → recupera el cuello del GMC). Quitar la construcción de
+    `tracking_data` y el campo del retorno; seguir devolviendo `detections`
+    (mapeadas a frame completo) para el overlay.
 
 16. `src/back/services/camera.py::_InferenceWorker._run`: quitar
     `counter.update(tracking_data)` y `detection_recorder.record(...)`; dejar de
-    emitir `session_total` en el `FrameDetectionPayload` (el conteo ya no es
-    autoritativo en vivo). Mantener el envío de `detections` para el overlay.
+    setear `session_total` en el `FrameDetectionPayload`. `needs_inference` pasa a
+    depender **solo** de `counter.get_active_session()` (ya no de
+    `detection_recorder.is_active()`). Mantener el envío de `detections`.
 
 17. `src/back/services/perception/counter.py`: la sesión en memoria sigue siendo
     el marcador de "hay conteo activo" (dispara recording + needs_inference),
-    pero se retira el uso de `ObjectCounter` en vivo. Revisar `counting.py` y
-    `config_routes.py` para no romper imports.
+    pero se retira `ObjectCounter`: `update()` queda no-op/eliminada,
+    `last_frame_count` ya no se actualiza. Revisar imports en `counting.py`.
 
-18. `src/back/services/detection_recorder.py`: ya no se usa para logging en vivo
-    (el sidecar lo genera el worker). Dejar de llamarlo desde `camera.py` y
-    `recordings.py`; evaluar borrarlo o marcarlo deprecated en esta fase.
+18. **Tres transportes** dejan de inyectar `session_total`:
+    - `src/back/services/camera.py` (data-channel WebRTC) — paso 16.
+    - `src/back/services/stream_broadcaster.py` (MJPEG WS) — header línea ~163/172/178.
+    - `src/back/services/wc_broadcaster.py` (WebCodecs WS) — header línea ~173/186/192.
+    Quitar `session_total` del header (o dejarlo fijo en 0 si el frontend aún lo
+    lee transitoriamente). Mantener `detections`/`session_active` para el overlay.
+
+19. **Eliminar `detection_recorder`**: borrar `src/back/services/detection_recorder.py`
+    y sus usos: `camera.py` (`record`/`is_active`), `recordings.py`
+    (`start`/`stop` en start/stop_recording). El sidecar lo genera el worker.
+    Quitar `session_total` de `FrameDetectionPayload` en `schemas.py`.
 
 ---
 
-## Group 5: Frontend — estado "procesando" y conteo final — **RECORTADO EN FASE 1**
+## Group 5: Frontend — estado "procesando" y conteo final
 
-> En fase 1 el live sigue mostrando su número como hoy (el `SaveDialog` no se
-> toca). Solo se expone el conteo offline en la lista de sesiones para poder
-> validarlo. Los pasos 19–20 (ajustar `useCounting`/`SaveDialog` para no mostrar
-> número en vivo) van con el desmontaje del live → **fase 2**.
+> Paso 21 (lista de sesiones) ya se entregó en **fase 1**. Pasos 20–24 (retirar el
+> número en vivo) son **fase 2**, rama `conteo-vivo-desmontaje`.
 
-19. *(fase 2)* `src/front/src/hooks/useCounting.ts`: tras `stopCounting`, el total
-    ya no llega síncrono; el `SaveDialog` debe reflejar `count_status` del
-    recording. Ajustar `stopCounting`/estado para no mostrar un número en vivo.
+20. *(fase 2)* `src/front/src/types/index.ts`: quitar `session_total` de
+    `FrameData` (el backend ya no lo emite).
 
-20. *(fase 2)* `src/front/src/modules/vision/components/SaveDialog.tsx`: mostrar
-    "Procesando conteo…" cuando el recording está en `counting`/`pending`, y el
-    número cuando `done`.
+21. **(fase 1 — hecho)** Lista de sesiones: estado del conteo offline +
+    botón "Re-contar" → `POST /api/recordings/{uuid}/recount`.
 
-21. **(fase 1)** Lista de sesiones: mostrar el estado del conteo offline
-    (`count_status`: "procesando" cuando `!= 'done'`, el número cuando `done`) y
-    un botón/acción "Re-contar" que llama `POST /api/recordings/{uuid}/recount`.
+22. *(fase 2)* `src/front/src/hooks/useCounting.ts`: retirar `sessionTotal`/
+    `lastFrameCount` como número en vivo (`updateFrame` ya no lo setea desde el
+    payload). `stopCounting`/`save` no dependen de un total en vivo (se guarda
+    con 0 y el poller hace backfill de `Session.total_count`).
 
-22. Verificar que `DetectionReplayDialog` (replay existente) ahora pinta las
-    cajas alineadas al consumir el JSONL regenerado — sin cambios de código,
-    solo validación visual.
+23. *(fase 2)* `src/front/src/hooks/useMjpegStream.ts` y `useWebCodecsStream.ts`:
+    dejar de leer `header.session_total`; `src/front/src/lib/streamFraming.ts`:
+    quitar `session_total` del tipo del header.
+
+24. *(fase 2)* Overlay y guardado:
+    - `CountOverlay.tsx` / `VisionPage.tsx`: retirar el número 6xl en vivo; el
+      overlay queda visual (cajas + indicador "● grabando").
+    - `SaveDialog.tsx`: mostrar "Procesando conteo…" en vez de un número (el
+      número final aparece en la lista de sesiones vía backfill).
+
+25. **(fase 1 — hecho)** `DetectionReplayDialog`: pinta las cajas alineadas al
+    consumir el JSONL regenerado por el worker (solo validación visual).

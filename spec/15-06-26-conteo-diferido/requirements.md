@@ -145,6 +145,21 @@ la config de cruce de línea:
   offline podría usarse uno más pesado, pero se difiere para mantener la fase
   acotada (el override de re-count ya abre la puerta a re-contar con otro modelo).
 
+- **Fase 2 — `detection_recorder` se elimina del todo (decisión 18-06-26)** — el
+  recorder en vivo y el `counting-worker` escriben el mismo `{uuid}.jsonl`; en una
+  sesión contada el worker lo regenera alineado, así que el log en vivo sobra. Una
+  grabación **sin** sesión de conteo se queda sin sidecar (sin replay), pero en la
+  práctica siempre se cuenta al grabar, así que se prioriza eliminar el desync y la
+  superficie muerta sobre conservar el replay de grabaciones-solo. `needs_inference`
+  pasa a depender solo de la sesión de conteo activa.
+- **Fase 2 — el número en vivo se retira de la UI (decisión 18-06-26)** — el
+  `session_total` se emitía por tres transportes (data-channel, MJPEG WS, WebCodecs
+  WS) y se mostraba en el `CountOverlay` (6xl) y el `SaveDialog`. Al dejar de contar
+  en vivo, ese número ya no es autoritativo: se retira el overlay numérico (queda el
+  overlay visual de cajas + "● grabando") y el `SaveDialog` muestra "Procesando
+  conteo…". El número final lo da el conteo offline en la lista de sesiones (backfill
+  del poller a `Session.total_count`).
+
 ## Context
 
 - See `spec/roadmap.md` — extiende "conteo por cruce de línea" hacia conteo
