@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Download, Loader2, MapPin, Pencil, Trash2 } from "lucide-react"
+import { Download, Loader2, MapPin, Pencil, Play, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -98,6 +98,7 @@ export default function RecordingsPage() {
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<Recording | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
+  const [playing, setPlaying] = useState<Recording | null>(null)
   const [editingUuid, setEditingUuid] = useState<string | null>(null)
   const [editingRec, setEditingRec] = useState<Recording | null>(null)
   const [uploadingUuids, setUploadingUuids] = useState<Set<string>>(new Set())
@@ -363,6 +364,16 @@ export default function RecordingsPage() {
                         </Button>
                       )}
                       {canDownload && status !== "active" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Reproducir"
+                          onClick={() => setPlaying(r)}
+                        >
+                          <Play className="size-4" />
+                        </Button>
+                      )}
+                      {canDownload && status !== "active" && (
                         <Button asChild size="sm" variant="outline">
                           <a
                             href={getRecordingFileUrl(r.uuid)}
@@ -414,6 +425,27 @@ export default function RecordingsPage() {
               Eliminar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reproductor simple: solo el MP4, sin overlay de detecciones (las
+          grabaciones no tienen un conteo/sidecar asociado). */}
+      <Dialog open={playing != null} onOpenChange={(open) => !open && setPlaying(null)}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Reproducir grabación</DialogTitle>
+            <DialogDescription className="font-mono text-xs">
+              {playing ? formatDate(playing.started_at) : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {playing && (
+            <video
+              src={getRecordingFileUrl(playing.uuid)}
+              controls
+              autoPlay
+              className="w-full rounded-md bg-black"
+            />
+          )}
         </DialogContent>
       </Dialog>
 
