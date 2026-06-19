@@ -23,6 +23,11 @@ services:
         required: false
     environment:
       ENV_FILE: .env.server
+      # Construye la URL desde POSTGRES_PASSWORD (única fuente de verdad, misma
+      # que usa el contenedor `postgres`). Host = `postgres` (nombre del servicio
+      # en la red de Compose), no localhost. Esto pisa cualquier DATABASE_URL del
+      # .env.server, evitando que back y postgres se desincronicen.
+      DATABASE_URL: "postgresql+asyncpg://platform:${POSTGRES_PASSWORD:-dev-password}@postgres:5432/robot_platform"
     depends_on:
       postgres:
         condition: service_healthy
