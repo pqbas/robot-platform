@@ -7,7 +7,6 @@ export type FrameHeader = {
   detections?: Detection[]
   target_class?: string | null
   session_active?: boolean
-  session_total?: number
   error?: string | null
 }
 
