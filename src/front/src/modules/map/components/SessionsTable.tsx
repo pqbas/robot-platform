@@ -65,8 +65,19 @@ export default function SessionsTable({
   const handleRecount = async (s: Session) => {
     if (!s.recording_uuid) return
     setRecountingId(s.id)
+    // A recording that was never counted has no pinned count_config to
+    // reproduce → count with the currently active model. Otherwise reproduce
+    // the pinned model, but fall back to the active one if the pin is gone
+    // (engine no longer cached → backend returns 409).
+    const useActive = s.count_status === "none"
     try {
-      const rec = await recountRecording(s.recording_uuid)
+      let rec
+      try {
+        rec = await recountRecording(s.recording_uuid, useActive)
+      } catch {
+        if (useActive) throw new Error("recount failed")
+        rec = await recountRecording(s.recording_uuid, true)
+      }
       // Reflect the new counting state immediately (poller fills the number).
       onSessionUpdated({ ...s, count_status: rec.count_status, count: rec.count })
       toast.success("Recontando…")
