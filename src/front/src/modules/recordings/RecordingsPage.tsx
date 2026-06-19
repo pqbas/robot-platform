@@ -374,12 +374,12 @@ export default function RecordingsPage() {
                         </Button>
                       )}
                       {canDownload && status !== "active" && (
-                        <Button asChild size="sm" variant="outline">
+                        <Button asChild size="sm" variant="ghost" title="Descargar">
                           <a
                             href={getRecordingFileUrl(r.uuid)}
                             download={`${r.uuid}.mp4`}
                           >
-                            <Download className="size-4 mr-1" /> Descargar
+                            <Download className="size-4" />
                           </a>
                         </Button>
                       )}
