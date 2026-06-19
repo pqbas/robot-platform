@@ -294,7 +294,10 @@ export default function VisionPage() {
         showRoi={countingConfig?.roi_mode === "square"}
       >
         {isCounting && frameData && (
-          <CountOverlay targetClass={selectedClass} />
+          <CountOverlay
+            count={frameData.detections?.length ?? 0}
+            targetClass={selectedClass}
+          />
         )}
         {connected && (
           <div className="absolute top-2 left-2 flex flex-col items-start gap-2">
