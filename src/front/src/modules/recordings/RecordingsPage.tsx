@@ -312,8 +312,8 @@ export default function RecordingsPage() {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <div className="space-y-1 min-w-[160px]">
+      <div className="grid grid-cols-2 items-end gap-3 landscape:grid-cols-4 landscape:gap-2 md:flex md:gap-4">
+        <div className="space-y-1 md:min-w-0 md:flex-1">
           <Label className="text-xs">Empresa</Label>
           <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
             <SelectTrigger className="h-9 w-full">
@@ -328,7 +328,7 @@ export default function RecordingsPage() {
           </Select>
         </div>
 
-        <div className="space-y-1 min-w-[160px]">
+        <div className="space-y-1 md:min-w-0 md:flex-1">
           <Label className="text-xs">Fundo</Label>
           <Select value={fundoFilter} onValueChange={setFundoFilter}>
             <SelectTrigger className="h-9 w-full">
@@ -344,7 +344,7 @@ export default function RecordingsPage() {
         </div>
 
         {devices.length > 1 && (
-          <div className="space-y-1 min-w-[160px]">
+          <div className="space-y-1 md:min-w-0 md:flex-1">
             <Label className="text-xs">Device</Label>
             <Select value={deviceFilter} onValueChange={setDeviceFilter}>
               <SelectTrigger className="h-9 w-full">
@@ -360,7 +360,7 @@ export default function RecordingsPage() {
           </div>
         )}
 
-        <div className="space-y-1 min-w-[140px]">
+        <div className="space-y-1 md:min-w-0 md:flex-1">
           <Label className="text-xs">Desde</Label>
           <Input
             type="date"
@@ -370,7 +370,7 @@ export default function RecordingsPage() {
           />
         </div>
 
-        <div className="space-y-1 min-w-[140px]">
+        <div className="space-y-1 md:min-w-0 md:flex-1">
           <Label className="text-xs">Hasta</Label>
           <Input
             type="date"
