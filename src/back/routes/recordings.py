@@ -274,43 +274,26 @@ async def download_recording(uuid: str, db: AsyncSession = Depends(get_db)):
     )
 
 
-def _iso_to_epoch(iso: str | None) -> float | None:
-    """Parse the stored ISO timestamp ('%Y-%m-%dT%H:%M:%SZ', UTC) to epoch
-    seconds. Second-resolution, which is enough to anchor replay (±~1s)."""
-    if not iso:
-        return None
-    try:
-        return (
-            datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ")
-            .replace(tzinfo=timezone.utc)
-            .timestamp()
-        )
-    except ValueError:
-        return None
-
-
 @router.get("/{uuid}/detections")
 async def get_recording_detections(uuid: str, db: AsyncSession = Depends(get_db)):
     """Per-frame detections logged alongside a recording.
 
-    Returns {"fps", "started_epoch", "frames": [...]} where each frame is the
-    parsed JSONL line {"frame", "t", "dets"}. ``started_epoch`` is the recording
-    start (= video time 0) in epoch seconds, so the player can map
-    video.currentTime to a detection wall-clock ``t`` directly. Anchoring to the
-    first detection instead would skip the camera/inference warmup gap before the
-    first logged detection and shift the whole track early. If the .jsonl is
-    missing returns an empty frame list. Available in robot and server mode so the
-    operator can replay synced recordings from the server.
+    Returns {"fps", "frames": [...]} where each frame is the parsed JSONL line
+    {"frame", "dets"}. The sidecar is keyed by video frame index (the
+    counting-worker writes one dense line per MP4 frame), so the player maps
+    ``video.currentTime`` to a frame as ``round(currentTime * fps)`` and indexes
+    ``frames`` directly — the association is by frame, never by wall-clock time.
+    If the .jsonl is missing returns an empty frame list. Available in robot and
+    server mode so the operator can replay synced recordings from the server.
     """
     result = await db.execute(select(Recording).where(Recording.uuid == uuid))
     row = result.scalar_one_or_none()
     if row is None:
         raise HTTPException(404, "Recording not found")
 
-    started_epoch = _iso_to_epoch(row.started_at)
     jsonl_path = os.path.join(os.path.dirname(row.file_path), f"{uuid}.jsonl")
     if not os.path.isfile(jsonl_path):
-        return {"fps": row.fps, "started_epoch": started_epoch, "frames": []}
+        return {"fps": row.fps, "frames": []}
 
     frames = []
     with open(jsonl_path) as f:
@@ -318,7 +301,7 @@ async def get_recording_detections(uuid: str, db: AsyncSession = Depends(get_db)
             line = line.strip()
             if line:
                 frames.append(json.loads(line))
-    return {"fps": row.fps, "started_epoch": started_epoch, "frames": frames}
+    return {"fps": row.fps, "frames": frames}
 
 
 @router.post("/{uuid}/recount", response_model=RecordingOut)

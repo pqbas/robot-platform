@@ -160,6 +160,17 @@ la config de cruce de línea:
   conteo…". El número final lo da el conteo offline en la lista de sesiones (backfill
   del poller a `Session.total_count`).
 
+- **Fase 2 — el sidecar y el replay se asocian por FRAME, no por tiempo
+  (decisión 18-06-26)** — el `counting-worker` escribe una línea densa por frame
+  del MP4 (`frame_idx` de `cap.read()`: línea N ↔ frame N), así que el índice de
+  frame es la clave real. Se elimina el campo `t` del JSONL y `started_epoch` del
+  endpoint `/detections`. El replay mapea `video.currentTime → round(t·fps)` e
+  indexa `frames` directo, usando `requestVideoFrameCallback` para sincronía
+  frame-exacta (fallback a `timeupdate`). El anclaje por `t` (epoch) era herencia
+  del viejo `detection_recorder`, que logueaba a ritmo de inferencia (sparse) y no
+  por frame de video; con el worker eso ya no aplica. Los sidecars viejos del
+  recorder en vivo (sparse) se re-sincronizan re-contando.
+
 ## Context
 
 - See `spec/roadmap.md` — extiende "conteo por cruce de línea" hacia conteo

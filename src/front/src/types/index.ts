@@ -34,16 +34,14 @@ export type Session = {
 }
 
 export type DetectionFrame = {
+  // Video frame index (0-based). The replay associates detections to this
+  // frame, never to a timestamp.
   frame: number
-  t: number
   dets: { cls: string; conf: number; bbox: [number, number, number, number]; track_id: number | null }[]
 }
 
 export type RecordingDetections = {
   fps: number | null
-  // Recording start (= video time 0) in epoch seconds; anchors detection
-  // overlay to video.currentTime. Null for recordings predating this field.
-  started_epoch: number | null
   frames: DetectionFrame[]
 }
 

@@ -19,6 +19,15 @@ type Props = {
   onOpenChange: (open: boolean) => void
 }
 
+// requestVideoFrameCallback isn't in every TS DOM lib version; type it locally.
+type VideoFrameMeta = { mediaTime: number }
+type RVFCVideo = HTMLVideoElement & {
+  requestVideoFrameCallback?: (
+    cb: (now: number, metadata: VideoFrameMeta) => void,
+  ) => number
+  cancelVideoFrameCallback?: (handle: number) => void
+}
+
 export default function DetectionReplayDialog({ session, open, onOpenChange }: Props) {
   const [detData, setDetData] = useState<RecordingDetections | null>(null)
   const [currentDets, setCurrentDets] = useState<Detection[]>([])
@@ -51,45 +60,64 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
       .catch(() => toast.error("Error al cargar las detecciones"))
   }, [open, session.recording_uuid])
 
-  function onTimeUpdate() {
-    const video = videoRef.current
-    if (!video || !detData) return
+  // Associate detections to the video by FRAME, never by time. The sidecar is
+  // dense (counting-worker writes one line per MP4 frame: line N ↔ frame N), so
+  // we map the displayed media time to a frame index `round(mediaTime * fps)`
+  // and index `frames` directly. requestVideoFrameCallback gives frame-accurate
+  // sync (fires per presented frame); timeupdate is the fallback.
+  useEffect(() => {
+    const video = videoRef.current as RVFCVideo | null
+    if (!open || !video || !detData) return
+    const fps = detData.fps
     const frames = detData.frames
-    if (frames.length === 0) return
-    // El campo `frame` del JSONL es el contador de inferencias, no el índice
-    // de frame del video, y la inferencia corre más lento que el video. El
-    // único eje común es el timestamp `t` (epoch). Anclamos al inicio de la
-    // grabación (started_epoch = tiempo 0 del video), NO a la primera detección:
-    // hay un warmup de cámara/inferencia antes de la primera detección, así que
-    // anclar a frames[0].t adelantaría todo el track ese tiempo. Fallback a
-    // frames[0].t para grabaciones viejas sin started_epoch.
-    const anchor = detData.started_epoch ?? frames[0].t
-    const target = anchor + video.currentTime
-    let lo = 0
-    let hi = frames.length - 1
-    let idx = -1
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1
-      if (frames[mid].t <= target) {
-        idx = mid
-        lo = mid + 1
-      } else {
-        hi = mid - 1
-      }
-    }
-    if (idx < 0) {
+    if (!fps || frames.length === 0) {
       setCurrentDets([])
       return
     }
-    setCurrentDets(
-      frames[idx].dets.map((d) => ({
-        class_name: d.cls,
-        confidence: d.conf,
-        bbox: d.bbox,
-        track_id: d.track_id,
-      })),
-    )
-  }
+
+    const applyAt = (mediaTime: number) => {
+      const idx = Math.min(
+        frames.length - 1,
+        Math.max(0, Math.round(mediaTime * fps)),
+      )
+      setCurrentDets(
+        frames[idx].dets.map((d) => ({
+          class_name: d.cls,
+          confidence: d.conf,
+          bbox: d.bbox,
+          track_id: d.track_id,
+        })),
+      )
+    }
+
+    let cancelled = false
+    let handle = 0
+    const onSeeked = () => applyAt(video.currentTime)
+    video.addEventListener("seeked", onSeeked)
+    applyAt(video.currentTime) // initial paint
+
+    if (typeof video.requestVideoFrameCallback === "function") {
+      const loop = (_now: number, metadata: VideoFrameMeta) => {
+        if (cancelled) return
+        applyAt(metadata.mediaTime)
+        handle = video.requestVideoFrameCallback!(loop)
+      }
+      handle = video.requestVideoFrameCallback(loop)
+      return () => {
+        cancelled = true
+        video.cancelVideoFrameCallback?.(handle)
+        video.removeEventListener("seeked", onSeeked)
+      }
+    }
+
+    const onTimeUpdate = () => applyAt(video.currentTime)
+    video.addEventListener("timeupdate", onTimeUpdate)
+    return () => {
+      cancelled = true
+      video.removeEventListener("timeupdate", onTimeUpdate)
+      video.removeEventListener("seeked", onSeeked)
+    }
+  }, [open, detData])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -111,7 +139,6 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
               controls
               controlsList="nofullscreen"
               className={isFullscreen ? "h-full w-full object-contain" : "w-full"}
-              onTimeUpdate={onTimeUpdate}
             />
           )}
           <DetectionOverlay

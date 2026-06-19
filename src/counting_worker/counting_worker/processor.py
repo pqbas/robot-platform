@@ -41,8 +41,6 @@ def count_video(payload: dict) -> dict:
     direction = payload.get("direction", "left2right")
     roi_mode = payload.get("roi_mode", "square")
     confidence = float(payload.get("confidence", 0.25))
-    started_epoch = float(payload.get("started_epoch") or 0.0)
-    fps = float(payload.get("fps") or 0.0)
 
     if not os.path.isfile(video_path):
         raise FileNotFoundError(f"video not found: {video_path}")
@@ -55,12 +53,6 @@ def count_video(payload: dict) -> dict:
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise RuntimeError(f"cannot open video: {video_path}")
-
-    # Prefer the recording-worker's authoritative fps; fall back to the
-    # container's metadata so `t` stays sane when fps wasn't passed.
-    if fps <= 0:
-        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
-    dt = 1.0 / fps if fps > 0 else 0.0
 
     os.makedirs(os.path.dirname(jsonl_path), exist_ok=True)
     frame_idx = 0
@@ -135,9 +127,11 @@ def count_video(payload: dict) -> dict:
                     crossing = tracking_data
                 counter.update(crossing)
 
-                t = started_epoch + frame_idx * dt
+                # The sidecar is keyed by video frame index: line N ↔ frame N
+                # of the MP4 (dense — one line per frame, even with empty dets).
+                # The replay associates detections to the frame, never to time.
                 out.write(
-                    json.dumps({"frame": frame_idx, "t": t, "dets": dets}) + "\n"
+                    json.dumps({"frame": frame_idx, "dets": dets}) + "\n"
                 )
                 frame_idx += 1
     finally:
