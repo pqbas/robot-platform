@@ -119,6 +119,45 @@ Notas de actualización:
   `dev-password` → poner `POSTGRES_PASSWORD=dev-password` en `.env.server` y
   `docker compose -f docker-compose.server.yml up -d --force-recreate back`.
 
+- **`TS_AUTHKEY is not set` (o la contraseña cae al default)**: la interpolación
+  `${TS_AUTHKEY}`, `${POSTGRES_PASSWORD}`, `${TS_HOSTNAME}` del compose **no** se
+  lee de `.env.server` automáticamente — Compose solo lee el archivo `.env` (a
+  secas) o el que se le pase con `--env-file`. El `env_file:` del servicio `back`
+  solo inyecta variables **dentro** de ese contenedor, no sirve para la
+  interpolación. Solución: pasar `--env-file .env.server` en **todos** los comandos
+  de compose:
+  ```bash
+  docker compose --env-file .env.server -f docker-compose.server.yml up -d
+  ```
+  (El `Makefile` ya lo hace en `make compose-*`; los comandos manuales de esta guía
+  asumen que se agrega `--env-file .env.server`.)
+
+- **La base aparece vacía / no entra con las credenciales de siempre**: el `back`
+  está conectado a un volumen `pgdata` distinto al que tiene los datos. Pasa cuando
+  cambia el **nombre del proyecto** (p. ej. al renombrar/mover la carpeta del repo,
+  o al fijar `name:` en el compose): los volúmenes se nombran `<proyecto>_pgdata`,
+  así que un proyecto nuevo apunta a un `pgdata` nuevo y vacío. Los datos **no se
+  pierden** — siguen en el volumen viejo. Para identificarlo y migrarlos:
+  ```bash
+  docker volume ls          # busca las dos líneas que terminan en _pgdata
+  ```
+  Una será `robot-platform_pgdata` (el actual, vacío) y la otra tendrá el prefijo
+  viejo (con los datos). Copiar el viejo al actual:
+  ```bash
+  # 1. Apagar el stack
+  docker compose --env-file .env.server -f docker-compose.server.yml down
+  # 2. Recrear limpio el volumen actual
+  docker volume rm robot-platform_pgdata
+  docker volume create robot-platform_pgdata
+  # 3. Copiar TODO del volumen viejo al actual (no borra el viejo: queda de respaldo)
+  docker run --rm -v <VOLUMEN_VIEJO>:/from -v robot-platform_pgdata:/to \
+    alpine sh -c "cp -a /from/. /to/"
+  # 4. Levantar de nuevo
+  docker compose --env-file .env.server -f docker-compose.server.yml up -d
+  ```
+  Fijar `name: robot-platform` en el compose evita que esto se repita: ancla el
+  nombre del proyecto (y de los volúmenes) sin importar dónde esté la carpeta.
+
 ### Notas
 
 - **Coexistencia con systemd**: si el servicio `robot-platform.service` ya está corriendo en el host, ambos no pueden usar el puerto 9090 al mismo tiempo. Detener el servicio systemd antes de levantar compose (`sudo systemctl stop robot-platform`).
