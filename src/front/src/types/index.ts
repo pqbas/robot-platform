@@ -18,6 +18,8 @@ export type FrameData = {
   error?: string | null
 }
 
+export type CountStatus = "none" | "pending" | "counting" | "done" | "error"
+
 export type Session = {
   id: number
   camellon_id: number
@@ -27,6 +29,9 @@ export type Session = {
   target_class: string
   total_count: number
   recording_uuid: string | null
+  // Offline counting status/number, derived from the linked recording.
+  count_status: CountStatus
+  count: number | null
 }
 
 export type DetectionFrame = {
@@ -165,6 +170,9 @@ export type Recording = {
   height: number | null
   fps: number | null
   uploaded_at: string | null
+  count_status: CountStatus
+  count: number | null
+  count_error: string | null
 }
 
 export type ClassMappingItem = string | { model_label: string; system_label: string }

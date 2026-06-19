@@ -57,10 +57,15 @@ async def lifespan(app: FastAPI):
     # TensorRT conversion reconciler + poller (robot only)
     poller_task = None
     reconciler_task = None
+    counting_poller_task = None
     if app_config.mode == AppMode.ROBOT:
         from back.services.perception.conversion_poller import (
             reconcile_orphaned_conversions,
             run_poller,
+        )
+        from back.services.perception.counting_poller import (
+            reconcile_orphaned_counts,
+            run_poller as run_counting_poller,
         )
         from back.services.perception.model_reconciler import (
             reconcile_active_model_once,
@@ -69,6 +74,10 @@ async def lifespan(app: FastAPI):
 
         await reconcile_orphaned_conversions()
         poller_task = asyncio.create_task(run_poller())
+
+        # Offline counting reconciler + poller (mirror of conversion).
+        await reconcile_orphaned_counts()
+        counting_poller_task = asyncio.create_task(run_counting_poller())
 
         # Restore the worker's model from the DB selection: after a worker
         # restart it boots on the default .pt, so re-push the .engine if the
@@ -82,6 +91,8 @@ async def lifespan(app: FastAPI):
         sync_task.cancel()
     if poller_task:
         poller_task.cancel()
+    if counting_poller_task:
+        counting_poller_task.cancel()
     if reconciler_task:
         reconciler_task.cancel()
     await close_all_connections()

@@ -28,6 +28,14 @@ export function getRecordings(params?: RecordingFilters): Promise<Recording[]> {
   return apiFetch(`/api/recordings/${qs}`)
 }
 
+export function recountRecording(
+  uuid: string,
+  useActiveModel = false,
+): Promise<Recording> {
+  const qs = useActiveModel ? "?use_active_model=true" : ""
+  return apiFetch(`/api/recordings/${uuid}/recount${qs}`, { method: "POST" })
+}
+
 export function setRecordingPlace(
   uuid: string,
   camellonId: number | null,

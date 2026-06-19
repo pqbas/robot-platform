@@ -80,6 +80,14 @@ class ConversionConfig:
 
 
 @dataclass
+class CountingWorkerConfig:
+    # Offline counting worker control socket. NOTE: distinct from CountingConfig
+    # above (which holds line-crossing mode/threshold/direction); this only
+    # carries the socket path for the deferred-counting worker.
+    control_socket_path: str = os.getenv("COUNTING_SOCKET", "/tmp/counting.sock")
+
+
+@dataclass
 class EncoderConfig:
     bitrate: int = 1_000_000        # target bitrate in bps (1 Mbps)
     preset: str = "low-latency"     # "low-latency" | "high-quality"
@@ -112,6 +120,7 @@ class Config:
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     recording: RecordingConfig = field(default_factory=RecordingConfig)
     conversion: ConversionConfig = field(default_factory=ConversionConfig)
+    counting_worker: CountingWorkerConfig = field(default_factory=CountingWorkerConfig)
     sync: SyncConfig = field(default_factory=SyncConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
     public_url: str = field(default_factory=lambda: os.getenv("SERVER_PUBLIC_URL", ""))

@@ -72,6 +72,9 @@ async def _build_out(db: AsyncSession, row: Recording) -> RecordingOut:
         height=row.height,
         fps=row.fps,
         uploaded_at=row.uploaded_at,
+        count_status=row.count_status,
+        count=row.count,
+        count_error=row.count_error,
     )
 
 
@@ -321,6 +324,58 @@ async def get_recording_detections(uuid: str, db: AsyncSession = Depends(get_db)
             if line:
                 frames.append(json.loads(line))
     return {"fps": row.fps, "started_epoch": started_epoch, "frames": frames}
+
+
+@router.post("/{uuid}/recount", response_model=RecordingOut)
+async def recount(
+    uuid: str,
+    use_active_model: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-run the offline count for a finished recording.
+
+    Default reproduces the original number with the model pinned in
+    ``count_config`` (deterministic). ``use_active_model=true`` re-pins the
+    currently active model and counts with it (e.g. to re-count old videos with
+    an improved model). 404 if unknown, 409 if the MP4 / required engine is
+    missing.
+    """
+    result = await db.execute(select(Recording).where(Recording.uuid == uuid))
+    rec = result.scalar_one_or_none()
+    if rec is None:
+        raise HTTPException(404, "Recording not found")
+    if rec.ended_at is None:
+        raise HTTPException(409, "La grabación aún no ha terminado")
+    if not os.path.isfile(rec.file_path):
+        raise HTTPException(409, "El MP4 no está en disco")
+
+    from back.services.perception.counting_trigger import (
+        build_count_config,
+        enqueue_count,
+    )
+
+    if use_active_model:
+        prev = json.loads(rec.count_config) if rec.count_config else {}
+        try:
+            cfg = await build_count_config(db, prev.get("target_class"))
+        except RuntimeError:
+            raise HTTPException(409, "No hay un modelo de detección activo")
+    else:
+        if not rec.count_config:
+            raise HTTPException(
+                409, "No hay count_config para reproducir; usa use_active_model=true"
+            )
+        cfg = json.loads(rec.count_config)
+        engine_path = cfg.get("engine_path") or ""
+        if os.sep in engine_path and not os.path.exists(engine_path):
+            raise HTTPException(
+                409, "El engine fijado ya no está en disco; usa use_active_model=true"
+            )
+
+    await enqueue_count(db, rec, cfg)
+    await db.flush()
+    await db.refresh(rec)
+    return await _build_out(db, rec)
 
 
 @router.delete("/{uuid}")

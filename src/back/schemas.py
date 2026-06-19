@@ -60,6 +60,10 @@ class SessionOut(BaseModel):
     target_class: str
     total_count: int
     recording_uuid: str | None = None
+    # Offline counting status/number derived from the linked recording (the
+    # video is the source of truth). 'done' + count once the worker finishes.
+    count_status: str = "none"
+    count: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -373,6 +377,9 @@ class RecordingOut(BaseModel):
     height: int | None
     fps: float | None
     uploaded_at: str | None
+    count_status: str = "none"
+    count: int | None = None
+    count_error: str | None = None
 
     model_config = {"from_attributes": True}
 

@@ -1,4 +1,4 @@
-.PHONY: start run-robot run-server run-front run-inference run-conversion logs-conversion db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update create-admin compose-build compose-up compose-down compose-logs compose-migrate compose-create-admin
+.PHONY: start run-robot run-server run-front run-inference run-conversion logs-conversion run-counting run-counting-dev logs-counting db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update create-admin compose-build compose-up compose-down compose-logs compose-migrate compose-create-admin
 
 start:
 	PYTHONPATH=src uv run uvicorn back.main:app --host 0.0.0.0 --port 8080 --reload
@@ -34,6 +34,15 @@ run-conversion:
 logs-conversion:
 	sudo journalctl -u conversion-worker -f
 
+run-counting:
+	cd src/counting_worker && VIRTUAL_ENV= .venv/bin/counting-worker --control-socket /tmp/counting.sock
+
+run-counting-dev:
+	cd src/counting_worker && uv run --group dev counting-worker --control-socket /tmp/counting.sock
+
+logs-counting:
+	sudo journalctl -u counting-worker -f
+
 create-admin:
 	ENV_FILE=.env.server PYTHONPATH=src uv run python -m back.scripts.create_admin
 
@@ -56,16 +65,17 @@ build-front:
 	cd src/front && npm ci && npm run build
 
 deploy-robot:
-	./deploy/install.sh robot
+	./deploy/install.sh robot $(if $(FORCE),--force,)
 
 deploy-server:
-	./deploy/install.sh server
+	./deploy/install.sh server $(if $(FORCE),--force,)
 
 restart:
 	-sudo systemctl restart inference-worker
 	-sudo systemctl restart camera-worker
 	-sudo systemctl restart recording-worker
 	-sudo systemctl restart conversion-worker
+	-sudo systemctl restart counting-worker
 	sudo systemctl restart robot-platform
 
 logs:
@@ -115,4 +125,5 @@ update:
 	-sudo systemctl restart camera-worker
 	-sudo systemctl restart recording-worker
 	-sudo systemctl restart conversion-worker
+	-sudo systemctl restart counting-worker
 	sudo systemctl restart robot-platform

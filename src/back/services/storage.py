@@ -4,7 +4,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from back.models import Camellon, Event, Location, Session
+from back.models import Camellon, Event, Location, Recording, Session
 
 
 # --- Locations ---
@@ -227,6 +227,25 @@ async def finish_session(
     return sess
 
 
+async def _attach_count_status(
+    db: AsyncSession, sessions: list[Session]
+) -> None:
+    """Set transient count_status/count on each session from its linked
+    recording (the offline counting state lives on the Recording, not the
+    Session). Non-mapped attributes read by SessionOut's from_attributes."""
+    uuids = [s.recording_uuid for s in sessions if s.recording_uuid]
+    by_uuid: dict[str, Recording] = {}
+    if uuids:
+        rows = await db.execute(
+            select(Recording).where(Recording.uuid.in_(uuids))
+        )
+        by_uuid = {r.uuid: r for r in rows.scalars().all()}
+    for s in sessions:
+        rec = by_uuid.get(s.recording_uuid) if s.recording_uuid else None
+        s.count_status = rec.count_status if rec else "none"
+        s.count = rec.count if rec else None
+
+
 async def list_sessions(
     db: AsyncSession,
     date_from: date | None = None,
@@ -242,7 +261,9 @@ async def list_sessions(
         stmt = stmt.where(Session.device_id == device_id)
     stmt = stmt.order_by(Session.id.desc())
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    sessions = list(result.scalars().all())
+    await _attach_count_status(db, sessions)
+    return sessions
 
 
 async def list_session_devices(db: AsyncSession) -> list[str]:
@@ -254,7 +275,10 @@ async def list_session_devices(db: AsyncSession) -> list[str]:
 
 async def get_session(db: AsyncSession, session_id: int) -> Session | None:
     result = await db.execute(select(Session).where(Session.id == session_id))
-    return result.scalar_one_or_none()
+    sess = result.scalar_one_or_none()
+    if sess is not None:
+        await _attach_count_status(db, [sess])
+    return sess
 
 
 async def get_session_events(db: AsyncSession, session_id: int) -> list[Event]:

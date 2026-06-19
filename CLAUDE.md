@@ -17,6 +17,7 @@
 - `/tmp/inference.sock` — JPEG → JSON detecciones.
 - `/tmp/recording.sock` — control start/stop/status.
 - `/tmp/conversion.sock` — control convert/status.
+- `/tmp/counting.sock` — control count/status (conteo diferido offline).
 
 ## Archivos clave
 
@@ -51,6 +52,7 @@
 - `inference/inference_worker/main.py` + `detector.py` + `protocol.py` — inferencia + timing.
 - `recording_worker/recording_worker/encoder.py` — bitrate/preset/profile por backend.
 - `conversion_worker/conversion_worker/main.py` + `converter.py` — `.pt` → FP16 `.engine`.
+- `counting_worker/counting_worker/main.py` + `processor.py` + `object_counter.py` — conteo diferido: reprocesa el MP4 (detect + ByteTrack + cruce de línea) → conteo + sidecar `{uuid}.jsonl` alineado.
 
 ### Specs / planning
 - `spec/<fecha>-<feature>/{plan,requirements,validation}.md` — convención por feature.
@@ -63,7 +65,7 @@
 - TensorRT engines cache: `data/robot/models/`.
 
 ## Comandos
-- Workers: `make run-{camera,inference,recording,conversion}`.
+- Workers: `make run-{camera,inference,recording,conversion,counting}`.
 - Backend: `make run-{robot,server}`. Frontend: `make run-front`.
 - Deploy: `make deploy-{robot,server}`. Update: `make update`.
 - Logs: `make logs[-{inference,camera,recording,conversion}]`. Status/restart: `make {status,restart}`.

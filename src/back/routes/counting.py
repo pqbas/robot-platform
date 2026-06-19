@@ -63,10 +63,34 @@ async def stop_counting(db: AsyncSession = Depends(get_db)):
     # Stop the recording started alongside this counting session.
     from back.routes.recordings import stop_recording
 
+    rec_out = None
     try:
-        await stop_recording(db)
+        rec_out = await stop_recording(db)
     except HTTPException as exc:
         logger.info("Auto-stop recording skipped: %s", exc.detail)
+
+    # Hand the finished MP4 to the offline counting-worker. The video is the
+    # source of truth; the authoritative number is recomputed offline (the live
+    # total above is only a hint). Never abort the stop on a counting failure.
+    if rec_out is not None:
+        from back.services.perception.counting_trigger import (
+            build_count_config,
+            enqueue_count,
+        )
+
+        result = await db.execute(
+            select(Recording).where(Recording.uuid == rec_out.uuid)
+        )
+        rec = result.scalar_one_or_none()
+        if rec is not None:
+            try:
+                cfg = await build_count_config(db, target_class)
+                await enqueue_count(db, rec, cfg)
+            except RuntimeError as exc:
+                rec.count_status = "error"
+                rec.count_error = str(exc)
+                logger.warning("Count config failed for %s: %s", rec.uuid, exc)
+
     return CountingStopOut(total_count=total_count, target_class=target_class)
 
 
