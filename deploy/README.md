@@ -97,6 +97,28 @@ Notas de actualización:
 - **Migraciones**: el paso 3 es idempotente (si no hay migraciones pendientes, no
   hace nada). En producción, respaldar el volumen `pgdata` antes de migrar.
 
+#### Errores comunes al actualizar
+
+- **`port is already allocated` (bind for 0.0.0.0:80)**: quedó corriendo el `nginx`
+  del arranque anterior y todavía tiene tomado el puerto 80. Bajar el stack y
+  volver a subirlo (recrea los contenedores viejos y libera el puerto):
+  ```bash
+  docker compose -f docker-compose.server.yml down
+  docker compose -f docker-compose.server.yml up -d
+  ```
+  ⚠️ **Nunca usar `down -v`**: `-v` borra los volúmenes (incluida la base `pgdata`).
+  Sin `-v`, los datos se conservan. Para confirmar que todo quedó arriba:
+  `docker compose -f docker-compose.server.yml ps` (el servicio `front` aparece
+  como `Exited` y es normal — solo copia el bundle y termina).
+
+- **`password authentication failed for user platform`**: la contraseña de la base
+  no coincide. `DATABASE_URL` se deriva de `POSTGRES_PASSWORD` (única fuente de
+  verdad en `.env.server`). Postgres fija la contraseña al **crear** el volumen
+  `pgdata` y no la cambia después: una vez creada la base, `POSTGRES_PASSWORD` no
+  se cambia más. Si nunca se definió, el volumen se creó con el default
+  `dev-password` → poner `POSTGRES_PASSWORD=dev-password` en `.env.server` y
+  `docker compose -f docker-compose.server.yml up -d --force-recreate back`.
+
 ### Notas
 
 - **Coexistencia con systemd**: si el servicio `robot-platform.service` ya está corriendo en el host, ambos no pueden usar el puerto 9090 al mismo tiempo. Detener el servicio systemd antes de levantar compose (`sudo systemctl stop robot-platform`).
