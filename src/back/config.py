@@ -47,6 +47,9 @@ class StorageConfig:
     camera_settings_path: str = os.getenv(
         "CAMERA_SETTINGS_PATH", "data/robot/camera_settings.json"
     )
+    counting_settings_path: str = os.getenv(
+        "COUNTING_SETTINGS_PATH", "data/robot/counting_settings.json"
+    )
 
 
 @dataclass

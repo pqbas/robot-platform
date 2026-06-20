@@ -25,7 +25,7 @@ from back.schemas import (
     CountingConfigUpdate,
     SelectLabelRequest,
 )
-from back.services import camera_settings
+from back.services import camera_settings, counting_settings
 from back.services.camera_control_client import (
     CameraControlClient,
     CameraWorkerUnavailable,
@@ -247,6 +247,8 @@ async def update_counting_config(body: CountingConfigUpdate):
         c.confidence_threshold = body.confidence_threshold
     if body.roi_mode is not None:
         c.roi_mode = body.roi_mode
+    # Persist so the change survives a backend restart (mirrors camera_settings).
+    counting_settings.persist_from_config()
     return CountingConfigOut(
         count_mode=c.count_mode,
         threshold=c.threshold,
