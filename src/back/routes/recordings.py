@@ -310,7 +310,11 @@ async def get_recording_detections(uuid: str, db: AsyncSession = Depends(get_db)
                 "threshold": cc.get("threshold"),
                 "direction": cc.get("direction"),
                 "roi_mode": cc.get("roi_mode"),
+                # target_class is the system_label (display); target_model_label
+                # is what the worker actually counted on and what the sidecar
+                # `cls` equals — the replay overlay filters boxes by that.
                 "target_class": cc.get("target_class"),
+                "target_model_label": cc.get("target_model_label"),
             }
         except (json.JSONDecodeError, TypeError):
             count_config = None

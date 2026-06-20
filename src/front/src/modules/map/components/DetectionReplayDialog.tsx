@@ -85,6 +85,14 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
     // frame-accurate sync).
     const hasPts = frames[0].pts != null
     const fps = detData.fps ?? 0
+    // Solo pintar la clase configurada para el conteo (igual que el contador la
+    // filtra). El sidecar `cls` es el model_label, así que filtramos por
+    // target_model_label; fallback a target_class (sidecars/configs viejos) y a
+    // pintar todas si no hay clase definida.
+    const targetClass =
+      detData.count_config?.target_model_label ??
+      detData.count_config?.target_class ??
+      null
 
     const applyAt = (mediaTime: number) => {
       let idx: number
@@ -109,12 +117,14 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
         )
       }
       setCurrentDets(
-        frames[idx].dets.map((d) => ({
-          class_name: d.cls,
-          confidence: d.conf,
-          bbox: d.bbox,
-          track_id: d.track_id,
-        })),
+        frames[idx].dets
+          .filter((d) => targetClass == null || d.cls === targetClass)
+          .map((d) => ({
+            class_name: d.cls,
+            confidence: d.conf,
+            bbox: d.bbox,
+            track_id: d.track_id,
+          })),
       )
       const c = frames[idx].count
       setCurrentCount(c ?? null)
@@ -194,25 +204,34 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
           {cfg?.roi_mode === "square" && (
             <RoiOverlay mediaRef={videoRef as MediaRef} visible={true} />
           )}
-          {cfg && (
-            <div className="absolute bottom-2 right-3 flex flex-col items-end gap-0.5 rounded bg-black/55 px-2 py-1 text-right text-[11px] leading-tight text-white/90">
-              <span>
-                Clase: <span className="font-semibold">{cfg.target_class ?? "—"}</span>
-              </span>
-              <span>
-                Línea: {cfg.count_mode ?? "—"} @ {cfg.threshold != null ? cfg.threshold.toFixed(2) : "—"} · {cfg.direction ?? "—"}
-              </span>
-              <span>ROI: {cfg.roi_mode ?? "—"}</span>
-            </div>
-          )}
-          {currentCount !== null && (
-            <div className="absolute left-3 top-3 flex flex-col items-start gap-0.5 text-white tabular-nums">
-              <span className="text-5xl font-semibold leading-none drop-shadow-md md:text-6xl">
-                {currentCount}
-              </span>
-              <span className="text-xs uppercase tracking-wider text-white/70">
-                contados
-              </span>
+          {/* Una sola tarjeta arriba a la izquierda: el número contado grande
+              fusionado con la config usada para el conteo (clase/línea/ROI). */}
+          {(cfg || currentCount !== null) && (
+            <div className="absolute left-3 top-3 flex flex-col gap-1.5 rounded bg-black/55 px-3 py-2 text-white">
+              {currentCount !== null && (
+                <div className="flex flex-col items-start leading-none tabular-nums">
+                  <span className="text-4xl font-semibold drop-shadow-md md:text-5xl">
+                    {currentCount}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-white/70">
+                    contados
+                  </span>
+                </div>
+              )}
+              {cfg && (
+                <div className="flex flex-col gap-0.5 text-[11px] leading-tight text-white/90">
+                  {currentCount !== null && (
+                    <span className="my-0.5 h-px w-full bg-white/20" />
+                  )}
+                  <span>
+                    Clase: <span className="font-semibold">{cfg.target_class ?? "—"}</span>
+                  </span>
+                  <span>
+                    Línea: {cfg.count_mode ?? "—"} @ {cfg.threshold != null ? cfg.threshold.toFixed(2) : "—"} · {cfg.direction ?? "—"}
+                  </span>
+                  <span>ROI: {cfg.roi_mode ?? "—"}</span>
+                </div>
+              )}
             </div>
           )}
           <Button

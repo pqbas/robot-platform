@@ -54,6 +54,9 @@ export type ReplayCountConfig = {
   direction: string | null
   roi_mode: string | null
   target_class: string | null
+  // El label del modelo con el que el worker contó (== `cls` del sidecar). El
+  // overlay filtra las cajas por este; target_class es solo para mostrar.
+  target_model_label: string | null
 }
 
 export type RecordingDetections = {
