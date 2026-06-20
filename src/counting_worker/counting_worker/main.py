@@ -7,9 +7,9 @@ One Unix socket:
 
 Protocol (request -> response):
     {"cmd": "count", "uuid": "...", "video_path": "...", "jsonl_path": "...",
-     "engine_path": "...", "target_class": "...", "count_mode": "...",
-     "threshold": 0.5, "direction": "...", "roi_mode": "square",
-     "confidence": 0.25, "started_epoch": 0.0, "fps": 30.0}
+     "engine_path": "...", "target_class": "...", "method": "single"|"tiled",
+     "count_mode": "...", "threshold": 0.5, "direction": "...",
+     "roi_mode": "square", "confidence": 0.25, "started_epoch": 0.0, "fps": 30.0}
         -> {"ok": true, "state": "counting", "started_at": "..."}
         -> {"ok": false, "error": "busy"|"missing_video_path"|...}
     {"cmd": "status"}
