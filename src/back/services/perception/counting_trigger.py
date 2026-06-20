@@ -28,6 +28,30 @@ from back.services.perception.engine_paths import worker_model_path_for
 logger = logging.getLogger("counting_trigger")
 
 
+def resolve_model_label(class_mapping_json: str | None, target_class: str | None) -> str | None:
+    """Translate a target class to the raw model label the detector emits.
+
+    Counting compares against ``model.names[cls_id]`` (the model_label, e.g.
+    ``person``), NEVER the system_label (e.g. ``Persona``), which exists only for
+    display. The session/UI carries the system_label, so resolve it back to its
+    model_label via the model's class_mapping. Targets that don't map (already a
+    model_label, or a model without a mapping) pass through unchanged.
+    """
+    if not target_class or not class_mapping_json:
+        return target_class
+    try:
+        mapping = json.loads(class_mapping_json)
+    except (json.JSONDecodeError, TypeError):
+        return target_class
+    for entry in mapping:
+        if isinstance(entry, dict):
+            ml = entry.get("model_label", "")
+            sl = entry.get("system_label") or ml
+            if ml and target_class in (sl, ml):
+                return ml
+    return target_class
+
+
 def iso_to_epoch(iso: str | None) -> float | None:
     """Parse stored ISO ('%Y-%m-%dT%H:%M:%SZ', UTC) to epoch seconds. Mirrors
     recordings.py so the worker's `t = started_epoch + frame/fps` lines up with
@@ -77,7 +101,10 @@ async def build_count_config(db: AsyncSession, target_class: str | None) -> dict
         "direction": c.direction,
         "roi_mode": c.roi_mode,
         "confidence": c.confidence_threshold,
+        # target_class stays the system_label for display (replay panel / record).
+        # target_model_label is what the worker actually counts on (model.names).
         "target_class": target_class,
+        "target_model_label": resolve_model_label(model.class_mapping, target_class),
         "model_uuid": model.uuid,
         "model_version": model.version,
         "file_hash": model.file_hash,
@@ -96,6 +123,21 @@ async def enqueue_count(db: AsyncSession, rec: Recording, count_config: dict) ->
     the operator isn't blocked and reconciliation/recount can retry. Does NOT
     raise — the caller (stop flow) must not abort on a counting failure.
     """
+    # Upgrade old/pinned configs that lack target_model_label: resolve it from
+    # the pinned model so re-counting an existing recording (which reproduces the
+    # stored count_config) also counts on the model_label, not the system_label.
+    if "target_model_label" not in count_config and count_config.get("model_uuid"):
+        m = await db.execute(
+            select(DetectionModel).where(
+                DetectionModel.uuid == count_config["model_uuid"]
+            )
+        )
+        model = m.scalars().first()
+        if model is not None:
+            count_config["target_model_label"] = resolve_model_label(
+                model.class_mapping, count_config.get("target_class")
+            )
+
     rec.count_config = json.dumps(count_config)
     rec.count_error = None
 
@@ -114,7 +156,11 @@ async def enqueue_count(db: AsyncSession, rec: Recording, count_config: dict) ->
             video_path=rec.file_path,
             jsonl_path=_jsonl_path_for(rec),
             engine_path=engine_path,
-            target_class=count_config.get("target_class"),
+            # The worker counts on the model_label (model.names), not the
+            # display-only system_label. Fall back for old configs that predate
+            # target_model_label (re-count to repopulate).
+            target_class=count_config.get("target_model_label")
+            or count_config.get("target_class"),
             count_mode=count_config["count_mode"],
             threshold=count_config["threshold"],
             direction=count_config["direction"],
