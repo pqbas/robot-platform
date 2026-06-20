@@ -191,7 +191,7 @@ export default function SessionsTable({
                         )}
                       </Button>
                     )}
-                    {s.recording_uuid != null && (
+                    {mode === "robot" && s.recording_uuid != null && (
                       <Button
                         variant="ghost"
                         size="icon"
