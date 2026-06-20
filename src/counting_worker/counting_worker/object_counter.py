@@ -7,6 +7,11 @@ dependency, so we duplicate it rather than share a package. Keep it in sync
 with the backend copy (there's a parity test in tests/).
 """
 
+# The counting worker runs on the Jetson system Python 3.8, where PEP 585
+# builtin generics (``list[dict]``) are not subscriptable at runtime in
+# function signatures. Defer annotation evaluation so they stay as strings.
+from __future__ import annotations
+
 
 class ObjectCounter:
     def __init__(self, count_mode: str, threshold: float, direction: str):
