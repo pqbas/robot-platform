@@ -11,6 +11,8 @@ import ExportButton from "./ExportButton"
 type SessionDetailProps = {
   session: Session
   camellonName: string
+  // Location is server-managed; the robot hides it entirely.
+  showCamellon?: boolean
 }
 
 function formatDateTime(iso: string): string {
@@ -36,6 +38,7 @@ function formatDuration(start: string, end: string | null): string {
 export default function SessionDetail({
   session,
   camellonName,
+  showCamellon = true,
 }: SessionDetailProps) {
   return (
     <Card>
@@ -45,8 +48,12 @@ export default function SessionDetail({
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-y-2 text-sm">
-          <span className="text-muted-foreground">Camellon</span>
-          <span>{camellonName}</span>
+          {showCamellon && (
+            <>
+              <span className="text-muted-foreground">Camellon</span>
+              <span>{camellonName}</span>
+            </>
+          )}
 
           <span className="text-muted-foreground">Inicio</span>
           <span>{formatDateTime(session.start_time)}</span>

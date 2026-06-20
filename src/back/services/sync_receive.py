@@ -122,11 +122,11 @@ async def receive_sessions(db: AsyncSession, items: list[SyncSession]) -> SyncRe
     errors: list[str] = []
     ok: list[str] = []
     for item in items:
-        # Resolve camellon_uuid → camellon_id up front (used by both the insert
-        # and the upsert path). A session may carry no location (saved without
-        # one) — accept it with camellon_id=None. If a location is named but its
-        # camellon hasn't synced here yet, skip without acking so the robot
-        # retries next cycle (don't drop the session).
+        # Location is server-authoritative: the robot never registers or edits a
+        # session's camellón (it only captures/counts/sends), so robot pushes
+        # always carry camellon_uuid=None. A named camellón may still arrive from
+        # legacy data; resolve it for the insert path only. If named but not yet
+        # synced here, skip without acking so the robot retries next cycle.
         camellon_id: int | None = None
         if item.camellon_uuid is not None:
             cam = await db.execute(select(Camellon).where(Camellon.uuid == item.camellon_uuid))
@@ -139,12 +139,10 @@ async def receive_sessions(db: AsyncSession, items: list[SyncSession]) -> SyncRe
         existing = await db.execute(select(Session).where(Session.uuid == item.uuid))
         row = existing.scalar_one_or_none()
         if row is not None:
-            # Upsert. total_count is recomputed offline after the first sync, and
-            # camellon_id may be assigned later via edit — both re-push. Don't
-            # clobber an existing location with None (edit is assign-only).
+            # Upsert total_count (recomputed offline after the first sync). Never
+            # touch camellon_id: location is assigned/edited only on the server,
+            # so a robot re-push must not clobber it.
             row.total_count = item.total_count
-            if camellon_id is not None:
-                row.camellon_id = camellon_id
             skipped += 1
             ok.append(item.uuid)
             continue
@@ -193,9 +191,10 @@ async def receive_recordings(
 ) -> SyncResult:
     """Ingest recording metadata. session_uuid is informational — do not
     reject if it doesn't resolve on this server. camellon_uuid is resolved
-    to local camellon_id; if not found locally, camellon_id stays None.
-    On re-push of an already-existing recording (e.g. after editing place),
-    update camellon_id so the new place is reflected on the server.
+    to local camellon_id on first insert only; if not found locally,
+    camellon_id stays None. Location is server-authoritative — the robot
+    never assigns a recording's place (re-pushes carry camellon_uuid=None),
+    so an existing row's camellon_id is never overwritten by a push.
     The blob is uploaded separately via /api/sync/recordings/{uuid}/upload.
     """
     inserted = 0
@@ -213,15 +212,9 @@ async def receive_recordings(
         existing_result = await db.execute(select(Recording).where(Recording.uuid == item.uuid))
         existing = existing_result.scalar_one_or_none()
         if existing is not None:
-            # Update camellon_id if the push carries a resolved value, or if
-            # it's being explicitly cleared (null). Preserve the old value only
-            # when camellon_uuid was not resolvable locally — in that case the
-            # robot may have sent a valid uuid we don't know yet; don't clobber
-            # an already-set local id.
-            if item.camellon_uuid is None:
-                existing.camellon_id = None
-            elif camellon_id is not None:
-                existing.camellon_id = camellon_id
+            # Never touch camellon_id on re-push: a recording's place is
+            # assigned/edited only on the server, so a robot re-push (which
+            # always carries camellon_uuid=None) must not clobber it.
             # The offline count + its config are computed after the first sync;
             # upsert them so the server's replay can show ROI/direction/threshold.
             existing.count = item.count

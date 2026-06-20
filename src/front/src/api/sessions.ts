@@ -53,15 +53,15 @@ export function getSession(id: number): Promise<Session> {
   return apiFetch(`/api/sessions/${id}`)
 }
 
+// The robot saves a session without a location; the server assigns it later.
 export function saveSession(
-  camellonId: number | null,
   targetClass: string,
   totalCount: number,
 ): Promise<Session> {
   return apiFetch("/api/sessions/save", {
     method: "POST",
     body: JSON.stringify({
-      camellon_id: camellonId,
+      camellon_id: null,
       target_class: targetClass,
       total_count: totalCount,
     }),

@@ -14,10 +14,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { useAppMode } from "@/context/AppModeContext"
 import SessionsTable from "@/modules/map/components/SessionsTable"
 import SessionDetail from "@/modules/map/components/SessionDetail"
 
 export default function SessionsPage() {
+  const { mode } = useAppMode()
   const [sessions, setSessions] = useState<Session[]>([])
   const [camellones, setCamellones] = useState<Map<number, Camellon>>(new Map())
   const [empresas, setEmpresas] = useState<Empresa[]>([])
@@ -236,35 +238,39 @@ export default function SessionsPage() {
       </div>
 
       <div className="grid grid-cols-2 items-end gap-3 md:flex md:gap-4">
-        <div className="space-y-1 md:min-w-0 md:flex-1">
-          <Label className="text-xs">Empresa</Label>
-          <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
-            <SelectTrigger className="h-9 w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              {empresaOptions.map((emp) => (
-                <SelectItem key={emp.uuid} value={emp.uuid}>{emp.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {mode === "server" && (
+          <div className="space-y-1 md:min-w-0 md:flex-1">
+            <Label className="text-xs">Empresa</Label>
+            <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {empresaOptions.map((emp) => (
+                  <SelectItem key={emp.uuid} value={emp.uuid}>{emp.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
-        <div className="space-y-1 md:min-w-0 md:flex-1">
-          <Label className="text-xs">Fundo</Label>
-          <Select value={fundoFilter} onValueChange={setFundoFilter}>
-            <SelectTrigger className="h-9 w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {fundoOptions.map((f) => (
-                <SelectItem key={f.uuid} value={f.uuid}>{f.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {mode === "server" && (
+          <div className="space-y-1 md:min-w-0 md:flex-1">
+            <Label className="text-xs">Fundo</Label>
+            <Select value={fundoFilter} onValueChange={setFundoFilter}>
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {fundoOptions.map((f) => (
+                  <SelectItem key={f.uuid} value={f.uuid}>{f.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="space-y-1 md:min-w-0 md:flex-1">
           <Label className="text-xs">Clase</Label>
@@ -340,7 +346,11 @@ export default function SessionsPage() {
       {selectedSession && (
         <>
           <Separator />
-          <SessionDetail session={selectedSession} camellonName={camellonName} />
+          <SessionDetail
+            session={selectedSession}
+            camellonName={camellonName}
+            showCamellon={mode === "server"}
+          />
         </>
       )}
     </div>

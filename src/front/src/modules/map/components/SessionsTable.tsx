@@ -126,7 +126,7 @@ export default function SessionsTable({
         <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[22%]">Camellon</TableHead>
+              {mode === "server" && <TableHead className="w-[22%]">Camellon</TableHead>}
               <TableHead className="w-[20%]">Fecha</TableHead>
               <TableHead className="hidden md:table-cell w-[16%]">Clase</TableHead>
               <TableHead className="hidden lg:table-cell w-[22%]">Device</TableHead>
@@ -141,13 +141,15 @@ export default function SessionsTable({
                 className={s.id === selectedId ? "bg-muted/50 cursor-pointer" : "cursor-pointer"}
                 onClick={() => onSelect(s)}
               >
-                <TableCell>
-                  {s.camellon_id == null ? (
-                    <span className="italic text-muted-foreground">Sin ubicación</span>
-                  ) : (
-                    camellones.get(s.camellon_id)?.nombre ?? `#${s.camellon_id}`
-                  )}
-                </TableCell>
+                {mode === "server" && (
+                  <TableCell>
+                    {s.camellon_id == null ? (
+                      <span className="italic text-muted-foreground">Sin ubicación</span>
+                    ) : (
+                      camellones.get(s.camellon_id)?.nombre ?? `#${s.camellon_id}`
+                    )}
+                  </TableCell>
+                )}
                 <TableCell>{formatDate(s.start_time)}</TableCell>
                 <TableCell className="hidden md:table-cell">
                   <Badge variant="outline">{s.target_class}</Badge>
@@ -224,18 +226,20 @@ export default function SessionsTable({
                         <Video className="size-3.5" />
                       </Button>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title="Editar"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setEditingSession(s)
-                      }}
-                    >
-                      <Pencil className="size-3.5" />
-                    </Button>
+                    {mode === "server" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Editar"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditingSession(s)
+                        }}
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"

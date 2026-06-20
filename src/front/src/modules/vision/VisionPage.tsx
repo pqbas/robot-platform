@@ -1,21 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useBlocker } from "react-router-dom"
 import { toast } from "sonner"
-import { Circle, MapPin, Monitor, RefreshCw, ScanEye, Square } from "lucide-react"
+import { Circle, Monitor, RefreshCw, ScanEye, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import type { Camellon } from "@/types"
-import { getCamellones } from "@/api/camellones"
 import { useStream } from "@/hooks/useStream"
 import { useCounting } from "@/hooks/useCounting"
-import { useDeviceContext } from "@/hooks/useDeviceContext"
 import { useRecording } from "@/hooks/useRecording"
 import { useCameraResolution } from "@/hooks/useCameraResolution"
 import { useAppMode } from "@/context/AppModeContext"
 import VideoStream from "./components/VideoStream"
 import CountOverlay from "./components/CountOverlay"
 import SaveDialog from "./components/SaveDialog"
-import RecordingPlaceDialog from "./components/RecordingPlaceDialog"
 import {
   getAvailableLabels,
   selectLabel,
@@ -52,7 +48,6 @@ export default function VisionPage() {
   const counting = useCounting()
   const recording = useRecording()
   const { mode } = useAppMode()
-  const { context: deviceContext, refetch: refetchDeviceContext } = useDeviceContext(mode === "robot")
   const resolution = useCameraResolution(mode === "robot")
 
   const [selectedClass, setSelectedClass] = useState("")
@@ -61,17 +56,7 @@ export default function VisionPage() {
   const [labelsLoading, setLabelsLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [durationStr, setDurationStr] = useState("0s")
-  const [, setCamellones] = useState<Camellon[]>([])
   const [countingConfig, setCountingConfig] = useState<CountingConfig | null>(null)
-  const [placeDialogUuid, setPlaceDialogUuid] = useState<string | null>(null)
-
-  const loadCamellones = () => {
-    getCamellones().then(setCamellones).catch(console.error)
-  }
-
-  useEffect(() => {
-    loadCamellones()
-  }, [])
 
   // Fetch counting config once on mount so the line + arrow can render before
   // pressing "Contar". `handleStart` also refreshes it to catch /settings edits.
@@ -172,7 +157,6 @@ export default function VisionPage() {
         ? `${(row.file_size_bytes / 1_048_576).toFixed(1)} MB`
         : "—"
       toast.success(`Video guardado — ${dur}, ${size}`)
-      setPlaceDialogUuid(row.uuid)
     } catch (e) {
       toast.error(
         "Error al detener grabación: " +
@@ -239,12 +223,10 @@ export default function VisionPage() {
     }
   }
 
-  const handleSave = async (camellonId: number | null) => {
+  const handleSave = async () => {
     try {
-      await counting.save(camellonId)
+      await counting.save()
       toast.success("Sesion guardada")
-      loadCamellones()
-      refetchDeviceContext()
     } catch (e) {
       toast.error("Error al guardar: " + (e instanceof Error ? e.message : "desconocido"))
     }
@@ -318,27 +300,6 @@ export default function VisionPage() {
               >
                 <Circle className="size-2 fill-current" />
                 REC {recording.durationStr}
-              </Badge>
-            )}
-            {mode === "robot" && (
-              <Badge
-                variant="outline"
-                className="bg-black/60 text-white border-none text-xs flex items-center gap-1.5"
-              >
-                <MapPin className="size-3" />
-                {deviceContext?.fundo ? (
-                  <span>
-                    <span className="opacity-70">
-                      {deviceContext.empresa?.name ?? "—"}
-                    </span>
-                    <span className="mx-1 opacity-50">›</span>
-                    <span className="font-medium">
-                      {deviceContext.fundo.name}
-                    </span>
-                  </span>
-                ) : (
-                  <span>Sin fundo asignado</span>
-                )}
               </Badge>
             )}
             {selectedClass && (
@@ -430,17 +391,8 @@ export default function VisionPage() {
       <SaveDialog
         open={counting.state === "SAVING"}
         duration={savedDuration}
-        deviceContext={deviceContext}
         onSave={handleSave}
         onDiscard={counting.discard}
-      />
-
-      <RecordingPlaceDialog
-        open={placeDialogUuid != null}
-        recordingUuid={placeDialogUuid}
-        deviceContext={deviceContext}
-        onSaved={() => setPlaceDialogUuid(null)}
-        onSkip={() => setPlaceDialogUuid(null)}
       />
     </div>
   )

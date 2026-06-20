@@ -341,35 +341,39 @@ export default function RecordingsPage() {
       </div>
 
       <div className="grid grid-cols-2 items-end gap-3 landscape:grid-cols-4 landscape:gap-2 md:flex md:gap-4">
-        <div className="space-y-1 md:min-w-0 md:flex-1">
-          <Label className="text-xs">Empresa</Label>
-          <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
-            <SelectTrigger className="h-9 w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              {empresaOptions.map((e) => (
-                <SelectItem key={e.uuid} value={e.uuid}>{e.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {mode === "server" && (
+          <div className="space-y-1 md:min-w-0 md:flex-1">
+            <Label className="text-xs">Empresa</Label>
+            <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {empresaOptions.map((e) => (
+                  <SelectItem key={e.uuid} value={e.uuid}>{e.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
-        <div className="space-y-1 md:min-w-0 md:flex-1">
-          <Label className="text-xs">Fundo</Label>
-          <Select value={fundoFilter} onValueChange={setFundoFilter}>
-            <SelectTrigger className="h-9 w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {fundoOptions.map((f) => (
-                <SelectItem key={f.uuid} value={f.uuid}>{f.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {mode === "server" && (
+          <div className="space-y-1 md:min-w-0 md:flex-1">
+            <Label className="text-xs">Fundo</Label>
+            <Select value={fundoFilter} onValueChange={setFundoFilter}>
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {fundoOptions.map((f) => (
+                  <SelectItem key={f.uuid} value={f.uuid}>{f.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {devices.length > 1 && (
           <div className="space-y-1 md:min-w-0 md:flex-1">
@@ -416,11 +420,13 @@ export default function RecordingsPage() {
               <TableHead>Inicio</TableHead>
               <TableHead>Duración</TableHead>
               <TableHead>Tamaño</TableHead>
-              <TableHead>
-                <span className="flex items-center gap-1">
-                  <MapPin className="size-3" /> Lugar
-                </span>
-              </TableHead>
+              {mode === "server" && (
+                <TableHead>
+                  <span className="flex items-center gap-1">
+                    <MapPin className="size-3" /> Lugar
+                  </span>
+                </TableHead>
+              )}
               {mode === "server" && <TableHead>Robot</TableHead>}
               <TableHead>Estado</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
@@ -429,13 +435,13 @@ export default function RecordingsPage() {
           <TableBody>
             {loading && rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={mode === "server" ? 7 : 5} className="text-center py-8">
                   <Loader2 className="size-5 animate-spin inline" />
                 </TableCell>
               </TableRow>
             ) : filteredRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={mode === "server" ? 7 : 5} className="text-center py-8 text-muted-foreground">
                   No hay grabaciones todavía.
                 </TableCell>
               </TableRow>
@@ -450,9 +456,11 @@ export default function RecordingsPage() {
                     </TableCell>
                     <TableCell>{formatDuration(r.duration_seconds)}</TableCell>
                     <TableCell>{formatSize(r.file_size_bytes)}</TableCell>
-                    <TableCell>
-                      <LugarCell rec={r} />
-                    </TableCell>
+                    {mode === "server" && (
+                      <TableCell>
+                        <LugarCell rec={r} />
+                      </TableCell>
+                    )}
                     {mode === "server" && (
                       <TableCell className="font-mono text-xs">{r.device_id}</TableCell>
                     )}
@@ -477,7 +485,7 @@ export default function RecordingsPage() {
                             )}
                           </Button>
                         )}
-                        {status !== "active" && (
+                        {mode === "server" && status !== "active" && (
                           <Button
                             size="icon"
                             variant="ghost"
