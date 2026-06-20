@@ -403,6 +403,7 @@ class RecountRequest(BaseModel):
     target_class: str | None = None
     model_uuid: str | None = None
     runtime: Literal["pytorch", "tensorrt"] | None = None
+    method: Literal["single", "tiled"] | None = None
 
 
 class RecountConfigOut(BaseModel):
@@ -417,6 +418,27 @@ class RecountConfigOut(BaseModel):
     target_class: str | None
     model_uuid: str | None
     runtime: Literal["pytorch", "tensorrt"] | None
+    method: Literal["single", "tiled"] = "single"
+
+
+class CountingMethodOut(BaseModel):
+    """A selectable object (model+class) plus its persisted counting method.
+
+    Mirrors a CountingOptionOut entry; ``method`` is the per-object choice
+    (default ``single``). Lets the settings page show one toggle per object."""
+
+    label: str
+    model_uuid: str
+    model_version: str
+    model_filename: str
+    source: str
+    method: Literal["single", "tiled"]
+
+
+class CountingMethodUpdate(BaseModel):
+    model_uuid: str
+    label: str
+    method: Literal["single", "tiled"]
 
 
 class CountingOptionOut(BaseModel):

@@ -50,6 +50,10 @@ class StorageConfig:
     counting_settings_path: str = os.getenv(
         "COUNTING_SETTINGS_PATH", "data/robot/counting_settings.json"
     )
+    # Per-object counting method ("{model_uuid}::{label}" -> "single"|"tiled").
+    counting_methods_path: str = os.getenv(
+        "COUNTING_METHODS_PATH", "data/robot/counting_methods.json"
+    )
 
 
 @dataclass
@@ -70,6 +74,7 @@ class CountingConfig:
     direction: str = "left2right"       # "top2down" | "down2top" | "left2right" | "right2left"
     confidence_threshold: float = 0.25
     roi_mode: str = "square"            # "square" (centered, side=height) | "full" (whole frame)
+    method: str = "single"             # "single" (line-crossing) | "tiled"; per-object override in counting_methods
 
 
 @dataclass

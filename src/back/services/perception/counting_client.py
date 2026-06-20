@@ -73,6 +73,7 @@ class CountingClient:
         confidence: float,
         started_epoch: float | None,
         fps: float | None,
+        method: str = "single",
     ) -> dict:
         return self._send(
             {
@@ -84,6 +85,7 @@ class CountingClient:
                 if os.sep in engine_path
                 else engine_path,
                 "target_class": target_class,
+                "method": method,
                 "count_mode": count_mode,
                 "threshold": threshold,
                 "direction": direction,

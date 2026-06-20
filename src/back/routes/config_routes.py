@@ -23,10 +23,12 @@ from back.schemas import (
     CameraSourceUpdate,
     CountingConfigOut,
     CountingConfigUpdate,
+    CountingMethodOut,
+    CountingMethodUpdate,
     CountingOptionOut,
     SelectLabelRequest,
 )
-from back.services import camera_settings, counting_settings
+from back.services import camera_settings, counting_methods, counting_settings
 from back.services.camera_control_client import (
     CameraControlClient,
     CameraWorkerUnavailable,
@@ -332,6 +334,65 @@ async def get_counting_options(db: AsyncSession = Depends(get_db)):
                 )
             )
     return options
+
+
+@router.get("/counting-methods", response_model=list[CountingMethodOut])
+async def get_counting_methods(db: AsyncSession = Depends(get_db)):
+    """Selectable objects (model+class) with their persisted counting method.
+
+    One entry per (model, class), each carrying its current method (``single`` by
+    default). The settings page renders one Single/Tiled toggle per object.
+    """
+    result = await db.execute(select(DetectionModel))
+    models = result.scalars().all()
+    out: list[CountingMethodOut] = []
+    for m in models:
+        if not m.class_mapping:
+            continue
+        try:
+            mapping = json.loads(m.class_mapping)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for entry in mapping:
+            if isinstance(entry, str):
+                label = entry
+            else:
+                label = entry.get("system_label") or entry.get("model_label")
+            if not label:
+                continue
+            out.append(
+                CountingMethodOut(
+                    label=label,
+                    model_uuid=m.uuid,
+                    model_version=m.version,
+                    model_filename=m.filename,
+                    source=m.source,
+                    method=counting_methods.read_method(m.uuid, label),  # type: ignore[arg-type]
+                )
+            )
+    return out
+
+
+@router.put("/counting-methods", response_model=CountingMethodOut)
+async def update_counting_method(
+    body: CountingMethodUpdate, db: AsyncSession = Depends(get_db)
+):
+    """Persist the counting method for one object (model+class)."""
+    result = await db.execute(
+        select(DetectionModel).where(DetectionModel.uuid == body.model_uuid)
+    )
+    model = result.scalar_one_or_none()
+    if model is None:
+        raise HTTPException(404, "modelo no encontrado")
+    counting_methods.set_method(body.model_uuid, body.label, body.method)
+    return CountingMethodOut(
+        label=body.label,
+        model_uuid=model.uuid,
+        model_version=model.version,
+        model_filename=model.filename,
+        source=model.source,
+        method=body.method,
+    )
 
 
 @router.post("/select-label")

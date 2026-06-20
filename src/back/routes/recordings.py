@@ -369,6 +369,14 @@ async def get_recount_config(uuid: str, db: AsyncSession = Depends(get_db)):
         if am is not None:
             model_uuid = am.uuid
 
+    # Method to prefill: the video's last-used method if counted before, else the
+    # per-object default (counting_methods), else single.
+    from back.services import counting_methods
+
+    method = cc.get("method") or counting_methods.read_method(
+        model_uuid, cc.get("target_class")
+    )
+
     return RecountConfigOut(
         count_mode=cc.get("count_mode", c.count_mode),
         threshold=cc.get("threshold", c.threshold),
@@ -378,6 +386,7 @@ async def get_recount_config(uuid: str, db: AsyncSession = Depends(get_db)):
         target_class=cc.get("target_class"),
         model_uuid=model_uuid,
         runtime=runtime,
+        method=method,  # type: ignore[arg-type]
     )
 
 
