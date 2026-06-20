@@ -122,6 +122,26 @@ export default function RecountConfigDialog({
     setCfg({ ...cfg, count_mode: m, direction: directionsByMode[m][0].value })
   }
 
+  // Tiled fixes the geometry: horizontal mode (vertical line), square ROI, line
+  // at center. Only direction (left/right) + confidence stay configurable, so we
+  // coerce those fields and the dialog hides mode/line/ROI for tiled.
+  const handleMethodChange = (m: string) => {
+    if (!cfg) return
+    if (m === "tiled") {
+      const dir = cfg.direction === "right2left" ? "right2left" : "left2right"
+      setCfg({
+        ...cfg,
+        method: "tiled",
+        count_mode: "horizontal",
+        roi_mode: "square",
+        threshold: 0.5,
+        direction: dir,
+      })
+    } else {
+      setCfg({ ...cfg, method: "single" })
+    }
+  }
+
   const handleProcess = async () => {
     if (!cfg) return
     setSubmitting(true)
@@ -137,9 +157,14 @@ export default function RecountConfigDialog({
     }
   }
 
+  // Tiled always uses horizontal directions (vertical line); single follows the
+  // chosen count_mode.
   const directions = cfg
-    ? directionsByMode[cfg.count_mode] ?? directionsByMode.horizontal
+    ? cfg.method === "tiled"
+      ? directionsByMode.horizontal
+      : directionsByMode[cfg.count_mode] ?? directionsByMode.horizontal
     : []
+  const isTiled = cfg?.method === "tiled"
 
   const sources = ["uploaded", "library"] as const
 
@@ -220,36 +245,60 @@ export default function RecountConfigDialog({
               </Select>
             </Field>
 
-            <Field label="Modo de conteo" htmlFor="rc-mode">
-              <Select value={cfg.count_mode} onValueChange={handleModeChange}>
-                <SelectTrigger id="rc-mode" className="w-full">
+            <Field
+              label="Método de conteo"
+              htmlFor="rc-method"
+              hint={
+                isTiled
+                  ? "Tiled: parte la franja central en 2 tiles con trackers independientes. Mejor para arándanos; fija modo horizontal, ROI cuadrado y línea al centro."
+                  : "Single: line-crossing clásico sobre el ROI."
+              }
+            >
+              <Select value={cfg.method} onValueChange={handleMethodChange}>
+                <SelectTrigger id="rc-method" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="vertical">Vertical (línea horizontal)</SelectItem>
-                  <SelectItem value="horizontal">Horizontal (línea vertical)</SelectItem>
+                  <SelectItem value="single">Single (line-crossing)</SelectItem>
+                  <SelectItem value="tiled">Tiled (2 tiles)</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
 
-            <Field
-              label={`Línea de cruce (${cfg.count_mode === "vertical" ? "Y" : "X"} normalizada, 0–1)`}
-              htmlFor="rc-threshold"
-              hint="Posición relativa de la línea sobre el frame (0 = borde inicial, 1 = borde opuesto)."
-            >
-              <Input
-                id="rc-threshold"
-                type="number"
-                min={0}
-                max={1}
-                step={0.05}
-                value={cfg.threshold}
-                onChange={(e) =>
-                  setCfg({ ...cfg, threshold: Number(e.target.value) })
-                }
-                className="max-w-[10rem]"
-              />
-            </Field>
+            {!isTiled && (
+              <Field label="Modo de conteo" htmlFor="rc-mode">
+                <Select value={cfg.count_mode} onValueChange={handleModeChange}>
+                  <SelectTrigger id="rc-mode" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vertical">Vertical (línea horizontal)</SelectItem>
+                    <SelectItem value="horizontal">Horizontal (línea vertical)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
+
+            {!isTiled && (
+              <Field
+                label={`Línea de cruce (${cfg.count_mode === "vertical" ? "Y" : "X"} normalizada, 0–1)`}
+                htmlFor="rc-threshold"
+                hint="Posición relativa de la línea sobre el frame (0 = borde inicial, 1 = borde opuesto)."
+              >
+                <Input
+                  id="rc-threshold"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={cfg.threshold}
+                  onChange={(e) =>
+                    setCfg({ ...cfg, threshold: Number(e.target.value) })
+                  }
+                  className="max-w-[10rem]"
+                />
+              </Field>
+            )}
 
             <Field label="Dirección de cruce" htmlFor="rc-direction">
               <Select
@@ -269,22 +318,24 @@ export default function RecountConfigDialog({
               </Select>
             </Field>
 
-            <Field label="Área de análisis (ROI)" htmlFor="rc-roi">
-              <Select
-                value={cfg.roi_mode}
-                onValueChange={(v) =>
-                  setCfg({ ...cfg, roi_mode: v as "square" | "full" })
-                }
-              >
-                <SelectTrigger id="rc-roi" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="square">Cuadrado central</SelectItem>
-                  <SelectItem value="full">Frame completo</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
+            {!isTiled && (
+              <Field label="Área de análisis (ROI)" htmlFor="rc-roi">
+                <Select
+                  value={cfg.roi_mode}
+                  onValueChange={(v) =>
+                    setCfg({ ...cfg, roi_mode: v as "square" | "full" })
+                  }
+                >
+                  <SelectTrigger id="rc-roi" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="square">Cuadrado central</SelectItem>
+                    <SelectItem value="full">Frame completo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
 
             <Field
               label="Umbral de confianza (0–1)"

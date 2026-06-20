@@ -36,6 +36,7 @@ import { useCameraResolution } from "@/hooks/useCameraResolution"
 import { useAppMode } from "@/context/AppModeContext"
 import { forceSyncPull, forceSyncPush } from "@/api/sync"
 import ModelStatusInline from "./components/ModelStatusInline"
+import CountingMethodsPanel from "./components/CountingMethodsPanel"
 
 const SELECTED_LABEL_KEY = "vision.selectedLabel.v3"
 const PREFERRED_DEFAULT_LABEL = "blueberry"
@@ -518,6 +519,17 @@ export default function SettingsPage() {
               </Field>
 
               <SaveBar onClick={handleSave} disabled={saving} saving={saving} />
+
+              {mode === "robot" && (
+                <div className="mt-6 border-t pt-5">
+                  <p className="text-sm font-medium">Método de conteo por objeto</p>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Single (line-crossing) o Tiled (2 tiles, mejor para arándanos).
+                    Se aplica al reprocesar; default Single.
+                  </p>
+                  <CountingMethodsPanel />
+                </div>
+              )}
             </SectionPanel>
           )}
 
