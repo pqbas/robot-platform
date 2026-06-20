@@ -38,12 +38,6 @@ export default function SaveDialog({
         </DialogHeader>
 
         <ul className="space-y-1 text-sm">
-          <li>
-            <span className="text-muted-foreground">Conteo:</span>{" "}
-            <span className="text-muted-foreground italic">
-              procesando… (aparecerá en la lista de sesiones)
-            </span>
-          </li>
           <li><span className="text-muted-foreground">Duración:</span> {duration}</li>
         </ul>
 
