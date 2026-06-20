@@ -10,6 +10,20 @@ data-channel) had variable latency that drifted the bbox to an older frame.
 The ROI crop, bbox-to-full-frame mapping, and centroid normalization mirror
 ``inference_worker/detector.py`` exactly so the geometry matches the live
 overlay the operator validated against.
+
+Two methods, dispatched by ``payload["method"]``:
+
+- ``single`` (default): one detector over the ROI, one ObjectCounter on the
+  configured line. The historical behavior.
+- ``tiled``: two squares of side H/2, vertically stacked (top y[0, H/2], bottom
+  y[H/2, H]) and both centered on the frame's vertical axis (x = W/2). Each tile
+  runs its own YOLO instance (independent tracker) and counts crossings of a
+  vertical line at its center; the total is the sum. Each tile is rescaled up at
+  inference, so blueberries look bigger and track_id churn drops — the dominant
+  source of mis-counting. Tile detections are remapped back to full-frame pixels
+  so the JSONL sidecar (and therefore the replay) stays aligned exactly like
+  ``single``. NOTE: tiled's region is its own (these two squares); it does NOT
+  use the single center square nor the ``roi_mode`` (Área de detección) setting.
 """
 
 from __future__ import annotations
@@ -20,13 +34,25 @@ import os
 
 logger = logging.getLogger("counting_worker.processor")
 
+_HORIZONTAL_DIRECTIONS = ("left2right", "right2left")
+
 
 def count_video(payload: dict) -> dict:
     """Reprocess ``video_path`` and return {total_count, frames}.
 
-    Imports cv2/ultralytics lazily (inside the worker thread) so the control
-    socket stays light and numpy is already monkey-patched (see main.py).
+    Dispatches on ``payload["method"]`` ("single" | "tiled"); defaults to
+    "single" so old configs/recordings keep working. Imports cv2/ultralytics
+    lazily (inside the worker thread) so the control socket stays light and numpy
+    is already monkey-patched (see main.py).
     """
+    method = payload.get("method", "single")
+    if method == "tiled":
+        return _count_tiled(payload)
+    return _count_single(payload)
+
+
+def _count_single(payload: dict) -> dict:
+    """Historical single-detector line-crossing over the ROI."""
     import cv2
     from ultralytics import YOLO
 
@@ -157,13 +183,209 @@ def count_video(payload: dict) -> dict:
 
     total = counter.get_count()
     logger.info(
-        "Counted %s: total=%d frames=%d (%s)",
+        "Counted %s [single]: total=%d frames=%d (%s)",
         os.path.basename(video_path),
         total,
         frame_idx,
         target_class or "all",
     )
     return {"total_count": total, "frames": frame_idx}
+
+
+def _count_tiled(payload: dict) -> dict:
+    """Tiled line-crossing: two H/2 squares stacked top/bottom, centered on the
+    frame's vertical axis, each with its own detector+tracker and a vertical line
+    at its center. See ``_tile_geometry`` for the exact geometry.
+
+    Adapted from ``mlops-blueberry-counting/ops/strategies/tiled_crossing.py`` to:
+    the robot's ObjectCounter (normalized coords, get_count()), the TensorRT
+    engine path, and the frame-aligned JSONL sidecar (tile detections are
+    remapped to full-frame pixels so the replay overlay lines up).
+
+    The method's geometry is fixed: count_mode is horizontal (vertical line),
+    threshold 0.5 (tile center). Only ``direction`` (left/right), ``confidence``
+    and the model are configurable. ``roi_mode`` does not apply (tiled defines its
+    own region).
+    """
+    import cv2
+    from ultralytics import YOLO
+
+    from counting_worker.object_counter import ObjectCounter
+
+    video_path = payload["video_path"]
+    jsonl_path = payload["jsonl_path"]
+    engine_path = payload["engine_path"]
+    target_class = payload.get("target_class")
+    confidence = float(payload.get("confidence", 0.25))
+    # Coerce to the directions tiled supports (movement is horizontal so the line
+    # is vertical). A vertical-mode config falls back to left2right.
+    direction = payload.get("direction", "left2right")
+    if direction not in _HORIZONTAL_DIRECTIONS:
+        direction = "left2right"
+
+    if not os.path.isfile(video_path):
+        raise FileNotFoundError(f"video not found: {video_path}")
+    if not os.path.exists(engine_path):
+        raise FileNotFoundError(f"engine not found: {engine_path}")
+
+    # Two instances → two independent ByteTrack states (one per tile). Loading the
+    # engine twice doubles its GPU memory; acceptable for one small detector.
+    model_top = YOLO(engine_path, task="detect")
+    model_bottom = YOLO(engine_path, task="detect")
+    counter_top = ObjectCounter("horizontal", 0.5, direction)
+    counter_bottom = ObjectCounter("horizontal", 0.5, direction)
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise RuntimeError(f"cannot open video: {video_path}")
+
+    os.makedirs(os.path.dirname(jsonl_path), exist_ok=True)
+    frame_idx = 0
+    try:
+        with open(jsonl_path, "w") as out:
+            while True:
+                pts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                h, w = frame.shape[:2]
+                geom = _tile_geometry(h, w)
+                tile_top, tile_bottom = _slice_tiles(frame, geom)
+
+                result_top = model_top.track(
+                    tile_top,
+                    conf=confidence,
+                    persist=True,
+                    tracker="bytetrack.yaml",
+                    verbose=False,
+                )[0]
+                result_bottom = model_bottom.track(
+                    tile_bottom,
+                    conf=confidence,
+                    persist=True,
+                    tracker="bytetrack.yaml",
+                    verbose=False,
+                )[0]
+
+                dets: list[dict] = []
+                # y_off 0 for the top tile, ``tile`` (=H/2) for the bottom one; x0
+                # is each tile's left edge in full-frame pixels (shared by both,
+                # since both are centered on x = W/2).
+                top_dets, top_tracks = _tile_detections(
+                    result_top, model_top, geom, target_class, y_off=0
+                )
+                bottom_dets, bottom_tracks = _tile_detections(
+                    result_bottom, model_bottom, geom, target_class, y_off=geom["tile"]
+                )
+                counter_top.update(top_tracks)
+                counter_bottom.update(bottom_tracks)
+                dets.extend(top_dets)
+                dets.extend(bottom_dets)
+
+                count = counter_top.get_count() + counter_bottom.get_count()
+                out.write(
+                    json.dumps(
+                        {
+                            "frame": frame_idx,
+                            "pts": round(pts, 4),
+                            "count": count,
+                            "dets": dets,
+                        }
+                    )
+                    + "\n"
+                )
+                frame_idx += 1
+    finally:
+        cap.release()
+
+    total = counter_top.get_count() + counter_bottom.get_count()
+    logger.info(
+        "Counted %s [tiled]: total=%d (top=%d bottom=%d) frames=%d (%s)",
+        os.path.basename(video_path),
+        total,
+        counter_top.get_count(),
+        counter_bottom.get_count(),
+        frame_idx,
+        target_class or "all",
+    )
+    return {"total_count": total, "frames": frame_idx}
+
+
+def _tile_geometry(h: int, w: int) -> dict:
+    """Geometry of the two stacked tiles for an H x W (landscape) frame.
+
+    Tiled is defined DIRECTLY on the original frame — NOT via a center-square
+    crop: two squares of side ``H/2``, vertically stacked (top spans y[0, H/2],
+    bottom spans y[H/2, H]), both horizontally centered on the frame's vertical
+    axis (x = W/2). Their centers lie on that center line, and the crossing line
+    is each tile's vertical center.
+
+    Returns dict with: ``tile`` (side = H/2) and ``x0`` (full-frame x of each
+    tile's left edge; shared, since both are centered on x = W/2). Offsets are
+    full-frame pixels so tile detections remap back exactly.
+    """
+    tile = h // 2
+    x0 = (w - tile) // 2
+    return {"tile": tile, "x0": x0}
+
+
+def _slice_tiles(frame, geom: dict):
+    """Return (tile_top, tile_bottom): two ``tile``x``tile`` squares, top and
+    bottom, both centered on the frame's vertical axis. y is already full-frame
+    (top at 0, bottom at ``tile``)."""
+    tile = geom["tile"]
+    x0 = geom["x0"]
+    band = frame[:, x0 : x0 + tile]
+    return band[:tile, :], band[tile : tile * 2, :]
+
+
+def _tile_detections(result, model, geom: dict, target_class, y_off: int):
+    """Build (dets, tracking_data) for one tile.
+
+    ``dets`` carry bboxes in **full-frame pixels** (tile x-offset ``x0`` + tile x;
+    tile y + ``y_off``) so the JSONL/replay overlay aligns. ``tracking_data``
+    carry centroids normalized to the tile (line at 0.5), filtered to
+    ``target_class`` so only that class advances the counter.
+    """
+    x0 = geom["x0"]
+    tile = geom["tile"]
+    dets: list[dict] = []
+    tracking_data: list[dict] = []
+    for box in result.boxes:
+        cls_id = int(box.cls[0])
+        cls_name = model.names[cls_id]
+        box_conf = float(box.conf[0])
+        xyxy = box.xyxy[0].tolist()
+        xyxy_full = [
+            xyxy[0] + x0,
+            xyxy[1] + y_off,
+            xyxy[2] + x0,
+            xyxy[3] + y_off,
+        ]
+
+        track_id = None
+        if box.id is not None:
+            track_id = int(box.id[0])
+            if target_class is None or cls_name == target_class:
+                xywh = box.xywh[0].tolist()
+                # Normalized to the tile: line is at cx == 0.5 of the tile.
+                tracking_data.append(
+                    {
+                        "track_id": track_id,
+                        "cx": xywh[0] / tile,
+                        "cy": xywh[1] / tile,
+                    }
+                )
+
+        dets.append(
+            {
+                "cls": cls_name,
+                "conf": round(box_conf, 3),
+                "bbox": [round(v, 1) for v in xyxy_full],
+                "track_id": track_id,
+            }
+        )
+    return dets, tracking_data
 
 
 def _with_tracks(dets: list[dict]) -> list[dict]:

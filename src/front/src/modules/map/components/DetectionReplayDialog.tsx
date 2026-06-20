@@ -11,6 +11,7 @@ import {
 import DetectionOverlay from "@/modules/vision/components/DetectionOverlay"
 import CountingLineOverlay from "@/modules/vision/components/CountingLineOverlay"
 import RoiOverlay from "@/modules/vision/components/RoiOverlay"
+import TiledOverlay from "@/modules/vision/components/TiledOverlay"
 import { Button } from "@/components/ui/button"
 import { Maximize, Minimize } from "lucide-react"
 import { toast } from "sonner"
@@ -192,17 +193,29 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
               operator can see where the counting line was — a 0 count with the
               line off where nothing crosses, or the wrong target class, is then
               obvious. */}
-          {cfg && cfg.count_mode && cfg.threshold != null && cfg.direction && (
-            <CountingLineOverlay
+          {/* Tiled draws its own region (2 stacked H/2 tiles + their center
+              line); single keeps the line@threshold + square ROI overlay. */}
+          {cfg?.method === "tiled" ? (
+            <TiledOverlay
               mediaRef={videoRef as MediaRef}
-              mode={cfg.count_mode}
-              threshold={cfg.threshold}
-              direction={cfg.direction}
+              direction={cfg.direction ?? "left2right"}
               visible={true}
             />
-          )}
-          {cfg?.roi_mode === "square" && (
-            <RoiOverlay mediaRef={videoRef as MediaRef} visible={true} />
+          ) : (
+            <>
+              {cfg && cfg.count_mode && cfg.threshold != null && cfg.direction && (
+                <CountingLineOverlay
+                  mediaRef={videoRef as MediaRef}
+                  mode={cfg.count_mode}
+                  threshold={cfg.threshold}
+                  direction={cfg.direction}
+                  visible={true}
+                />
+              )}
+              {cfg?.roi_mode === "square" && (
+                <RoiOverlay mediaRef={videoRef as MediaRef} visible={true} />
+              )}
+            </>
           )}
           {/* Una sola tarjeta arriba a la izquierda: el número contado grande
               fusionado con la config usada para el conteo (clase/línea/ROI). */}
@@ -226,10 +239,21 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
                   <span>
                     Clase: <span className="font-semibold">{cfg.target_class ?? "—"}</span>
                   </span>
-                  <span>
-                    Línea: {cfg.count_mode ?? "—"} @ {cfg.threshold != null ? cfg.threshold.toFixed(2) : "—"} · {cfg.direction ?? "—"}
-                  </span>
-                  <span>ROI: {cfg.roi_mode ?? "—"}</span>
+                  {cfg.method === "tiled" ? (
+                    <>
+                      <span>
+                        Método: <span className="font-semibold">Tiled</span> · 2 tiles (H/2)
+                      </span>
+                      <span>Dirección: {cfg.direction ?? "—"}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        Línea: {cfg.count_mode ?? "—"} @ {cfg.threshold != null ? cfg.threshold.toFixed(2) : "—"} · {cfg.direction ?? "—"}
+                      </span>
+                      <span>ROI: {cfg.roi_mode ?? "—"}</span>
+                    </>
+                  )}
                 </div>
               )}
             </div>

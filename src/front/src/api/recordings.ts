@@ -47,6 +47,8 @@ export type RecountConfig = {
   target_class: string | null
   model_uuid: string | null
   runtime: "pytorch" | "tensorrt" | null
+  // single = line-crossing; tiled = central-strip 2-tile crossing (blueberries).
+  method: "single" | "tiled"
 }
 
 // Prefill for the re-process dialog: this video's last-used params, or the

@@ -310,6 +310,9 @@ async def get_recording_detections(uuid: str, db: AsyncSession = Depends(get_db)
                 "threshold": cc.get("threshold"),
                 "direction": cc.get("direction"),
                 "roi_mode": cc.get("roi_mode"),
+                # Counting method ("single"|"tiled"); old configs lack it → single.
+                # The replay draws tiled's two tiles instead of the square ROI.
+                "method": cc.get("method", "single"),
                 # target_class is the system_label (display); target_model_label
                 # is what the worker actually counted on and what the sidecar
                 # `cls` equals — the replay overlay filters boxes by that.
@@ -369,6 +372,14 @@ async def get_recount_config(uuid: str, db: AsyncSession = Depends(get_db)):
         if am is not None:
             model_uuid = am.uuid
 
+    # Method to prefill: the video's last-used method if counted before, else the
+    # per-object default (counting_methods), else single.
+    from back.services import counting_methods
+
+    method = cc.get("method") or counting_methods.read_method(
+        model_uuid, cc.get("target_class")
+    )
+
     return RecountConfigOut(
         count_mode=cc.get("count_mode", c.count_mode),
         threshold=cc.get("threshold", c.threshold),
@@ -378,6 +389,7 @@ async def get_recount_config(uuid: str, db: AsyncSession = Depends(get_db)):
         target_class=cc.get("target_class"),
         model_uuid=model_uuid,
         runtime=runtime,
+        method=method,  # type: ignore[arg-type]
     )
 
 

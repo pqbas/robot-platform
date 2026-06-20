@@ -121,3 +121,32 @@ export type CountingOption = {
 export function getCountingOptions(): Promise<CountingOption[]> {
   return apiFetch("/api/config/counting-options")
 }
+
+// --- Counting method per object (single | tiled) ---
+
+export type CountingMethodValue = "single" | "tiled"
+
+// An object (model+class) plus its persisted counting method (default single).
+export type CountingMethod = {
+  label: string
+  model_uuid: string
+  model_version: string
+  model_filename: string
+  source: string
+  method: CountingMethodValue
+}
+
+export function getCountingMethods(): Promise<CountingMethod[]> {
+  return apiFetch("/api/config/counting-methods")
+}
+
+export function setCountingMethod(
+  model_uuid: string,
+  label: string,
+  method: CountingMethodValue,
+): Promise<CountingMethod> {
+  return apiFetch("/api/config/counting-methods", {
+    method: "PUT",
+    body: JSON.stringify({ model_uuid, label, method }),
+  })
+}

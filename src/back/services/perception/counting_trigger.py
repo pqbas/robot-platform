@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import config
 from back.models import DetectionModel, Recording
+from back.services import counting_methods
 from back.services.perception.counting_client import (
     CountingClient,
     CountingWorkerUnavailable,
@@ -149,12 +150,18 @@ async def build_count_config(
         v = o.get(key)
         return v if v is not None else default
 
+    # Method default comes from the per-object config (counting_methods), NOT the
+    # global config: each object type carries its own "single"|"tiled" choice
+    # (default "single"). An explicit override (re-process dialog) wins.
+    object_method = counting_methods.read_method(model.uuid, target_class)
+
     return {
         "count_mode": _pick("count_mode", c.count_mode),
         "threshold": _pick("threshold", c.threshold),
         "direction": _pick("direction", c.direction),
         "roi_mode": _pick("roi_mode", c.roi_mode),
         "confidence": _pick("confidence", c.confidence_threshold),
+        "method": _pick("method", object_method),
         # target_class stays the system_label for display (replay panel / record).
         # target_model_label is what the worker actually counts on (model.names).
         "target_class": target_class,
@@ -221,6 +228,8 @@ async def enqueue_count(db: AsyncSession, rec: Recording, count_config: dict) ->
             direction=count_config["direction"],
             roi_mode=count_config["roi_mode"],
             confidence=count_config["confidence"],
+            # Old pinned configs predate method → default single.
+            method=count_config.get("method", "single"),
             started_epoch=iso_to_epoch(rec.started_at),
             fps=rec.fps,
         )
