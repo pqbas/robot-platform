@@ -123,7 +123,12 @@ async def receive_sessions(db: AsyncSession, items: list[SyncSession]) -> SyncRe
     ok: list[str] = []
     for item in items:
         existing = await db.execute(select(Session).where(Session.uuid == item.uuid))
-        if existing.scalar_one_or_none():
+        row = existing.scalar_one_or_none()
+        if row is not None:
+            # Already inserted, but the count is recomputed offline after the
+            # first sync, so the robot re-queues the session with the
+            # authoritative number. Upsert total_count instead of skipping.
+            row.total_count = item.total_count
             skipped += 1
             ok.append(item.uuid)
             continue

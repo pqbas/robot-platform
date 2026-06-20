@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import AppMode, config
@@ -122,6 +122,18 @@ async def push_session_now(session_id: int, db: AsyncSession = Depends(get_db)):
 
     from back.services.sync_push import push_all
     from back.services.sync_recordings_upload import upload_single_recording
+
+    # The button means "send everything for this session now" — including the
+    # offline count, which is computed after the first sync. Sync is otherwise
+    # insert-only, so drop this session's sync_log row to force a fresh re-push
+    # with the current count (the server upserts total_count). The recording's
+    # MP4 + metadata are handled below by upload_single_recording / push_all.
+    await db.execute(
+        delete(SyncLog).where(
+            (SyncLog.table_name == "sessions") & (SyncLog.record_uuid == session.uuid)
+        )
+    )
+    await db.commit()
 
     await push_all(db)
 
