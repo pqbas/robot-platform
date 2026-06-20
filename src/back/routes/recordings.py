@@ -310,6 +310,9 @@ async def get_recording_detections(uuid: str, db: AsyncSession = Depends(get_db)
                 "threshold": cc.get("threshold"),
                 "direction": cc.get("direction"),
                 "roi_mode": cc.get("roi_mode"),
+                # Counting method ("single"|"tiled"); old configs lack it → single.
+                # The replay draws tiled's two tiles instead of the square ROI.
+                "method": cc.get("method", "single"),
                 # target_class is the system_label (display); target_model_label
                 # is what the worker actually counted on and what the sidecar
                 # `cls` equals — the replay overlay filters boxes by that.

@@ -54,6 +54,8 @@ export type ReplayCountConfig = {
   threshold: number | null
   direction: string | null
   roi_mode: string | null
+  // "single" (line-crossing) | "tiled" (2 stacked H/2 tiles). Old counts → single.
+  method?: "single" | "tiled" | null
   target_class: string | null
   // El label del modelo con el que el worker contó (== `cls` del sidecar). El
   // overlay filtra las cajas por este; target_class es solo para mostrar.
