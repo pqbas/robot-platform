@@ -15,14 +15,15 @@ Two methods, dispatched by ``payload["method"]``:
 
 - ``single`` (default): one detector over the ROI, one ObjectCounter on the
   configured line. The historical behavior.
-- ``tiled``: ported from ``mlops-blueberry-counting``. Crops the center square,
-  takes the central strip (width = side/2) and splits it into two stacked square
-  tiles. Each tile runs its own YOLO instance (independent tracker) and counts
-  crossings of a vertical line at its center; the total is the sum. Each tile is
-  rescaled up at inference, so blueberries look bigger and track_id churn drops —
-  which is the dominant source of mis-counting. Tile detections are remapped back
-  to full-frame pixels so the JSONL sidecar (and therefore the replay) stays
-  aligned exactly like ``single``.
+- ``tiled``: two squares of side H/2, vertically stacked (top y[0, H/2], bottom
+  y[H/2, H]) and both centered on the frame's vertical axis (x = W/2). Each tile
+  runs its own YOLO instance (independent tracker) and counts crossings of a
+  vertical line at its center; the total is the sum. Each tile is rescaled up at
+  inference, so blueberries look bigger and track_id churn drops — the dominant
+  source of mis-counting. Tile detections are remapped back to full-frame pixels
+  so the JSONL sidecar (and therefore the replay) stays aligned exactly like
+  ``single``. NOTE: tiled's region is its own (these two squares); it does NOT
+  use the single center square nor the ``roi_mode`` (Área de detección) setting.
 """
 
 from __future__ import annotations
@@ -192,17 +193,19 @@ def _count_single(payload: dict) -> dict:
 
 
 def _count_tiled(payload: dict) -> dict:
-    """Tiled line-crossing: central strip split into top/bottom square tiles,
-    each with its own detector+tracker and a vertical line at its center.
+    """Tiled line-crossing: two H/2 squares stacked top/bottom, centered on the
+    frame's vertical axis, each with its own detector+tracker and a vertical line
+    at its center. See ``_tile_geometry`` for the exact geometry.
 
-    Ported from ``mlops-blueberry-counting/ops/strategies/tiled_crossing.py`` but
-    adapted to: the robot's ObjectCounter (normalized coords, get_count()), the
-    TensorRT engine path, and the frame-aligned JSONL sidecar (tile detections
-    are remapped to full-frame pixels so the replay overlay lines up).
+    Adapted from ``mlops-blueberry-counting/ops/strategies/tiled_crossing.py`` to:
+    the robot's ObjectCounter (normalized coords, get_count()), the TensorRT
+    engine path, and the frame-aligned JSONL sidecar (tile detections are
+    remapped to full-frame pixels so the replay overlay lines up).
 
     The method's geometry is fixed: count_mode is horizontal (vertical line),
-    threshold 0.5 (tile center), ROI is the center square. Only ``direction``
-    (left/right), ``confidence`` and the model are configurable.
+    threshold 0.5 (tile center). Only ``direction`` (left/right), ``confidence``
+    and the model are configurable. ``roi_mode`` does not apply (tiled defines its
+    own region).
     """
     import cv2
     from ultralytics import YOLO
@@ -265,13 +268,14 @@ def _count_tiled(payload: dict) -> dict:
                 )[0]
 
                 dets: list[dict] = []
-                # y_off 0 for the top tile, ``half`` for the bottom one; x_off is
-                # the strip's left edge in full-frame pixels (shared by both).
+                # y_off 0 for the top tile, ``tile`` (=H/2) for the bottom one; x0
+                # is each tile's left edge in full-frame pixels (shared by both,
+                # since both are centered on x = W/2).
                 top_dets, top_tracks = _tile_detections(
                     result_top, model_top, geom, target_class, y_off=0
                 )
                 bottom_dets, bottom_tracks = _tile_detections(
-                    result_bottom, model_bottom, geom, target_class, y_off=geom["half"]
+                    result_bottom, model_bottom, geom, target_class, y_off=geom["tile"]
                 )
                 counter_top.update(top_tracks)
                 counter_bottom.update(bottom_tracks)
@@ -308,42 +312,43 @@ def _count_tiled(payload: dict) -> dict:
 
 
 def _tile_geometry(h: int, w: int) -> dict:
-    """Geometry of the two stacked tiles for a HxW frame.
+    """Geometry of the two stacked tiles for an H x W (landscape) frame.
 
-    Center square (side = min(h, w)); central strip of width = side/2 centered in
-    it; split horizontally into two square tiles of side ``half``. All offsets are
-    in full-frame pixels so tile detections can be remapped back.
+    Tiled is defined DIRECTLY on the original frame — NOT via a center-square
+    crop: two squares of side ``H/2``, vertically stacked (top spans y[0, H/2],
+    bottom spans y[H/2, H]), both horizontally centered on the frame's vertical
+    axis (x = W/2). Their centers lie on that center line, and the crossing line
+    is each tile's vertical center.
 
-    Returns dict with: side, half, x_off (full-frame x of the square's left
-    edge), strip_x0 (full-frame x of the strip's left edge = tile left edge).
+    Returns dict with: ``tile`` (side = H/2) and ``x0`` (full-frame x of each
+    tile's left edge; shared, since both are centered on x = W/2). Offsets are
+    full-frame pixels so tile detections remap back exactly.
     """
-    side = min(h, w)
-    half = side // 2
-    x_off = (w - side) // 2
-    strip_x0 = x_off + (side - half) // 2
-    return {"side": side, "half": half, "x_off": x_off, "strip_x0": strip_x0}
+    tile = h // 2
+    x0 = (w - tile) // 2
+    return {"tile": tile, "x0": x0}
 
 
 def _slice_tiles(frame, geom: dict):
-    """Return (tile_top, tile_bottom): two square ``half``x``half`` crops of the
-    central strip, top and bottom. The square keeps full height, so the tiles'
-    y already are full-frame y (top at 0, bottom at ``half``)."""
-    half = geom["half"]
-    strip_x0 = geom["strip_x0"]
-    strip = frame[:, strip_x0 : strip_x0 + half]
-    return strip[:half, :], strip[half : half * 2, :]
+    """Return (tile_top, tile_bottom): two ``tile``x``tile`` squares, top and
+    bottom, both centered on the frame's vertical axis. y is already full-frame
+    (top at 0, bottom at ``tile``)."""
+    tile = geom["tile"]
+    x0 = geom["x0"]
+    band = frame[:, x0 : x0 + tile]
+    return band[:tile, :], band[tile : tile * 2, :]
 
 
 def _tile_detections(result, model, geom: dict, target_class, y_off: int):
     """Build (dets, tracking_data) for one tile.
 
-    ``dets`` carry bboxes in **full-frame pixels** (strip x-offset + tile x; tile
-    y + ``y_off``) so the JSONL/replay overlay aligns. ``tracking_data`` carry
-    centroids normalized to the tile (line at 0.5), filtered to ``target_class``
-    so only that class advances the counter.
+    ``dets`` carry bboxes in **full-frame pixels** (tile x-offset ``x0`` + tile x;
+    tile y + ``y_off``) so the JSONL/replay overlay aligns. ``tracking_data``
+    carry centroids normalized to the tile (line at 0.5), filtered to
+    ``target_class`` so only that class advances the counter.
     """
-    strip_x0 = geom["strip_x0"]
-    half = geom["half"]
+    x0 = geom["x0"]
+    tile = geom["tile"]
     dets: list[dict] = []
     tracking_data: list[dict] = []
     for box in result.boxes:
@@ -352,9 +357,9 @@ def _tile_detections(result, model, geom: dict, target_class, y_off: int):
         box_conf = float(box.conf[0])
         xyxy = box.xyxy[0].tolist()
         xyxy_full = [
-            xyxy[0] + strip_x0,
+            xyxy[0] + x0,
             xyxy[1] + y_off,
-            xyxy[2] + strip_x0,
+            xyxy[2] + x0,
             xyxy[3] + y_off,
         ]
 
@@ -367,8 +372,8 @@ def _tile_detections(result, model, geom: dict, target_class, y_off: int):
                 tracking_data.append(
                     {
                         "track_id": track_id,
-                        "cx": xywh[0] / half,
-                        "cy": xywh[1] / half,
+                        "cx": xywh[0] / tile,
+                        "cy": xywh[1] / tile,
                     }
                 )
 

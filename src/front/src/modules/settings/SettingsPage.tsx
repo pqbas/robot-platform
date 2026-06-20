@@ -473,9 +473,10 @@ export default function SettingsPage() {
                 <div className="mb-6 border-b pb-5">
                   <p className="text-sm font-medium">Método de conteo por objeto</p>
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Single (line-crossing) o Tiled (2 tiles, mejor para arándanos).
-                    Cada cambio se guarda solo. La línea y dirección de abajo solo
-                    aplican al método Single.
+                    Single (line-crossing sobre el Área de detección) o Tiled (dos
+                    cuadrados H/2 apilados y centrados, con tracker propio; mejor
+                    para arándanos). Cada cambio se guarda solo. La línea y dirección
+                    de abajo solo aplican a Single.
                   </p>
                   <CountingMethodsPanel />
                 </div>

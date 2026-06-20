@@ -20,12 +20,14 @@ significativa el conteo de arándanos. Las métricas del repo de mlops
 arándano a mayor tamaño y reduce el churn de `track_id`, que es la causa
 principal del sub/sobre-conteo.
 
-El método `tiled` recorta el cuadrado central, toma la franja central (ancho =
-mitad del lado) y la parte en **2 tiles cuadrados apilados** (superior/inferior).
-Cada tile corre con su **propia instancia YOLO** (tracker independiente) y cuenta
-cruces de una **línea vertical** en su centro; el total es la suma de ambos. La
-frontera horizontal entre tiles es paralela al movimiento, así que un arándano
-vive en un solo tile salvo los que caen sobre el corte.
+El método `tiled` define **dos cuadrados de lado `H/2`** (H = alto del frame),
+**apilados verticalmente** (superior y∈[0, H/2], inferior y∈[H/2, H]) y ambos
+**centrados en el eje vertical del frame** (x = W/2). NO usa el cuadrado central
+ni el `roi_mode`: su región es propia. Cada tile corre con su **propia instancia
+YOLO** (tracker independiente) y cuenta cruces de una **línea vertical** en su
+centro; el total es la suma. La frontera horizontal entre tiles es paralela al
+movimiento, así que un arándano vive en un solo tile salvo los que caen sobre el
+corte.
 
 ## Alcance
 

@@ -250,8 +250,8 @@ export default function RecountConfigDialog({
               htmlFor="rc-method"
               hint={
                 isTiled
-                  ? "Tiled: parte la franja central en 2 tiles con trackers independientes. Mejor para arándanos; fija modo horizontal, ROI cuadrado y línea al centro."
-                  : "Single: line-crossing clásico sobre el ROI."
+                  ? "Tiled: dos cuadrados (lado H/2) apilados y centrados en el eje vertical del frame, cada uno con su tracker; línea de cruce al centro de cada uno. Mejor para arándanos. No usa el Área de detección."
+                  : "Single: line-crossing clásico sobre el Área de detección."
               }
             >
               <Select value={cfg.method} onValueChange={handleMethodChange}>
