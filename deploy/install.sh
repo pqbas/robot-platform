@@ -236,20 +236,37 @@ if [[ "$MODE" == "robot" ]]; then
     if venv_exists "$INSTALL_DIR/src/counting_worker"; then
         info "counting worker venv ya existe — saltando (usa --force para reconstruir)"
     elif [[ "$(uname -m)" == "aarch64" ]]; then
-        # Same recipe as the inference worker: the counting worker loads a
-        # .engine/.pt and runs YOLO + ByteTrack offline, so it needs CUDA torch
-        # from the Jetson index and the system tensorrt/cv2 via
-        # --system-site-packages. It does NOT need the ONNX export toolchain
-        # (that's conversion-worker only). numpy pinned to 1.26.x last for the
-        # system tensorrt 10.3 / cv2 4.5.4 ABI; opencv-python is NOT installed
-        # (its wheel is built against numpy 2 — the worker uses system cv2's
-        # VideoCapture for MP4 decode, same as the detector uses system cv2).
-        info "Jetson detected (aarch64): installing counting worker against system Python (CUDA torch + TensorRT)"
+        # The counting worker loads a .engine and runs YOLO + ByteTrack offline,
+        # so it needs CUDA torch + the system tensorrt/cv2 via
+        # --system-site-packages, exactly like the inference worker. The exact
+        # recipe depends on which JetPack the system Python is:
+        #
+        #   JP5 (Python 3.8): JetPack already ships a CUDA torch (1.13 nv22.06)
+        #     and TensorRT 8.5 in the system site-packages, so we DON'T pip-install
+        #     torch — it's inherited. We only add ultralytics + lap on top, with
+        #     numpy pinned to 1.24.x (last so it wins) for the TRT 8.5 / system cv2
+        #     ABI. This matches the inference/conversion worker venvs actually
+        #     running on this box.
+        #
+        #   JP6 (Python 3.10): no system torch — install the CUDA build from the
+        #     Jetson AI Lab index (cu126/cp310), numpy pinned to 1.26.x for TRT 10.3.
+        #
+        # opencv-python is NOT installed in either case: the worker decodes the MP4
+        # with system cv2's VideoCapture (same as the detector uses system cv2).
+        PYVER="$(/usr/bin/python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+        info "Jetson detected (aarch64): system Python ${PYVER} — installing counting worker against system Python (torch + TensorRT)"
         uv venv --clear --system-site-packages --python /usr/bin/python3
-        uv pip install torch==2.8.0 torchvision==0.23.0 \
-            --index-url https://pypi.jetson-ai-lab.io/jp6/cu126/+simple
-        uv pip install --no-deps ultralytics lap hatchling
-        uv pip install "numpy==1.26.4"
+        if [[ "$PYVER" == "3.8" ]]; then
+            # JP5: torch + tensorrt come from system site-packages (inherited).
+            uv pip install --no-deps ultralytics lap hatchling
+            uv pip install "numpy==1.24.4"
+        else
+            # JP6: install CUDA torch from the Jetson index (see inference worker note).
+            uv pip install torch==2.8.0 torchvision==0.23.0 \
+                --index-url https://pypi.jetson-ai-lab.io/jp6/cu126/+simple
+            uv pip install --no-deps ultralytics lap hatchling
+            uv pip install "numpy==1.26.4"
+        fi
         uv pip install -e . --no-deps
     else
         uv sync
