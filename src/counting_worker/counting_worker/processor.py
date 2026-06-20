@@ -137,10 +137,17 @@ def count_video(payload: dict) -> dict:
                 # One dense line per frame (line N ↔ frame N). `pts` is the
                 # frame's own presentation timestamp (seconds, 0-based) — the
                 # join key the replay uses to find the frame the player shows,
-                # which is exact even for variable-frame-rate video.
+                # which is exact even for variable-frame-rate video. `count` is
+                # the running accumulated total up to this frame, so the replay
+                # can show the live counter rising as objects cross the line.
                 out.write(
                     json.dumps(
-                        {"frame": frame_idx, "pts": round(pts, 4), "dets": dets}
+                        {
+                            "frame": frame_idx,
+                            "pts": round(pts, 4),
+                            "count": counter.get_count(),
+                            "dets": dets,
+                        }
                     )
                     + "\n"
                 )

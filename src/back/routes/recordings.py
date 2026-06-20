@@ -292,9 +292,27 @@ async def get_recording_detections(uuid: str, db: AsyncSession = Depends(get_db)
     if row is None:
         raise HTTPException(404, "Recording not found")
 
+    # The line/ROI/direction actually used for this count, snapshotted on the
+    # row when it was enqueued. The replay overlays it so the operator can SEE
+    # where the counting line was — e.g. a count of 0 with the line off to one
+    # side, or detections of the wrong class, becomes obvious.
+    count_config: dict | None = None
+    if row.count_config:
+        try:
+            cc = json.loads(row.count_config)
+            count_config = {
+                "count_mode": cc.get("count_mode"),
+                "threshold": cc.get("threshold"),
+                "direction": cc.get("direction"),
+                "roi_mode": cc.get("roi_mode"),
+                "target_class": cc.get("target_class"),
+            }
+        except (json.JSONDecodeError, TypeError):
+            count_config = None
+
     jsonl_path = os.path.join(os.path.dirname(row.file_path), f"{uuid}.jsonl")
     if not os.path.isfile(jsonl_path):
-        return {"fps": row.fps, "frames": []}
+        return {"fps": row.fps, "frames": [], "count_config": count_config}
 
     frames = []
     with open(jsonl_path) as f:
@@ -302,7 +320,7 @@ async def get_recording_detections(uuid: str, db: AsyncSession = Depends(get_db)
             line = line.strip()
             if line:
                 frames.append(json.loads(line))
-    return {"fps": row.fps, "frames": frames}
+    return {"fps": row.fps, "frames": frames, "count_config": count_config}
 
 
 @router.post("/{uuid}/recount", response_model=RecordingOut)
