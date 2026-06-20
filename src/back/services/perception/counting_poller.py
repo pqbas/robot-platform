@@ -93,6 +93,16 @@ async def _process_worker_result(last_result: dict) -> None:
             rec.count = last_result.get("total_count")
             rec.count_status = "done"
             rec.count_error = None
+            # Re-queue the recording too: its count/count_status/count_config are
+            # set after the first sync, so drop its sync_log row to re-push them.
+            # The server needs count_config to render the replay overlay
+            # (ROI/direction/threshold).
+            await session.execute(
+                delete(SyncLog).where(
+                    (SyncLog.table_name == "recordings")
+                    & (SyncLog.record_uuid == uuid)
+                )
+            )
             # Backfill the authoritative number onto any linked session.
             sessions = (
                 await session.execute(

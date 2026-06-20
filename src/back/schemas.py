@@ -443,3 +443,6 @@ class SyncRecording(BaseModel):
     width: int | None = None
     height: int | None = None
     fps: float | None = None
+    count: int | None = None
+    count_status: str = "none"
+    count_config: str | None = None

@@ -212,6 +212,11 @@ async def receive_recordings(
                 existing.camellon_id = None
             elif camellon_id is not None:
                 existing.camellon_id = camellon_id
+            # The offline count + its config are computed after the first sync;
+            # upsert them so the server's replay can show ROI/direction/threshold.
+            existing.count = item.count
+            existing.count_status = item.count_status
+            existing.count_config = item.count_config
             skipped += 1
             ok.append(item.uuid)
             continue
@@ -230,6 +235,9 @@ async def receive_recordings(
             width=item.width,
             height=item.height,
             fps=item.fps,
+            count=item.count,
+            count_status=item.count_status,
+            count_config=item.count_config,
         ))
         inserted += 1
         ok.append(item.uuid)
