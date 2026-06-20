@@ -36,6 +36,37 @@ export function recountRecording(
   return apiFetch(`/api/recordings/${uuid}/recount${qs}`, { method: "POST" })
 }
 
+// Per-video counting params reviewed in the re-process dialog. The chosen class
+// fixes the model (model_uuid) and the operator picks the runtime of that model.
+export type RecountConfig = {
+  count_mode: string
+  threshold: number
+  direction: string
+  roi_mode: "square" | "full"
+  confidence: number
+  target_class: string | null
+  model_uuid: string | null
+  runtime: "pytorch" | "tensorrt" | null
+}
+
+// Prefill for the re-process dialog: this video's last-used params, or the
+// current global defaults if it was never counted.
+export function getRecountConfig(uuid: string): Promise<RecountConfig> {
+  return apiFetch(`/api/recordings/${uuid}/count-config`)
+}
+
+// Run the count with the reviewed/edited per-video params (only this video's
+// count_config changes; the global default is untouched).
+export function recountWithConfig(
+  uuid: string,
+  params: RecountConfig,
+): Promise<Recording> {
+  return apiFetch(`/api/recordings/${uuid}/recount`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  })
+}
+
 export function setRecordingPlace(
   uuid: string,
   camellonId: number | null,

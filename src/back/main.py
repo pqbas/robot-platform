@@ -41,6 +41,12 @@ async def lifespan(app: FastAPI):
     init_nvenc()
     await init_db()
 
+    # Restore persisted line-crossing counting config over the in-memory
+    # defaults, so the operator's settings survive a backend restart.
+    from back.services import counting_settings
+
+    counting_settings.apply_to_config()
+
     # Seed standard ultralytics models (server mode — source of truth)
     if app_config.mode == AppMode.SERVER:
         from back.services.seed_library_models import seed_library_models

@@ -39,12 +39,27 @@ export type DetectionFrame = {
   // The frame's own presentation timestamp (seconds, 0-based). Used to match
   // the player's mediaTime to the exact frame — robust to variable frame rate.
   pts: number
+  // Running accumulated count up to this frame. Optional: sidecars written
+  // before this field lack it (re-count to populate them).
+  count?: number
   dets: { cls: string; conf: number; bbox: [number, number, number, number]; track_id: number | null }[]
+}
+
+// The counting config actually used for a recording's count, so the replay can
+// overlay the line/ROI/direction. Null for recordings counted before this was
+// snapshotted (re-count to populate).
+export type ReplayCountConfig = {
+  count_mode: string | null
+  threshold: number | null
+  direction: string | null
+  roi_mode: string | null
+  target_class: string | null
 }
 
 export type RecordingDetections = {
   fps: number | null
   frames: DetectionFrame[]
+  count_config: ReplayCountConfig | null
 }
 
 export type Camellon = {

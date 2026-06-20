@@ -23,16 +23,20 @@ from back.schemas import (
     CameraSourceUpdate,
     CountingConfigOut,
     CountingConfigUpdate,
+    CountingOptionOut,
     SelectLabelRequest,
 )
-from back.services import camera_settings
+from back.services import camera_settings, counting_settings
 from back.services.camera_control_client import (
     CameraControlClient,
     CameraWorkerUnavailable,
 )
 from back.services.camera_process import CameraRestartError, restart_camera_worker
 from back.services.perception import counter
-from back.services.perception.engine_paths import worker_model_path_for
+from back.services.perception.engine_paths import (
+    engine_cache_path_for,
+    worker_model_path_for,
+)
 from back.services.perception.inference_client import InferenceClient
 from back.services.perception.label_selection import derive_filtered_class_mapping
 
@@ -247,6 +251,8 @@ async def update_counting_config(body: CountingConfigUpdate):
         c.confidence_threshold = body.confidence_threshold
     if body.roi_mode is not None:
         c.roi_mode = body.roi_mode
+    # Persist so the change survives a backend restart (mirrors camera_settings).
+    counting_settings.persist_from_config()
     return CountingConfigOut(
         count_mode=c.count_mode,
         threshold=c.threshold,
@@ -279,6 +285,53 @@ async def get_available_labels(db: AsyncSession = Depends(get_db)):
             if label:
                 labels.append(AvailableLabelItem(label=label, model_filename=m.filename, source=m.source))
     return labels
+
+
+@router.get("/counting-options", response_model=list[CountingOptionOut])
+async def get_counting_options(db: AsyncSession = Depends(get_db)):
+    """Selectable model+class pairs for the re-process dialog.
+
+    One entry per (model, class), so picking a class fixes its model. Each entry
+    also reports whether the model's TensorRT engine is built, so the dialog can
+    offer or disable the TensorRT runtime (PyTorch is always available).
+    """
+    result = await db.execute(select(DetectionModel))
+    models = result.scalars().all()
+    options: list[CountingOptionOut] = []
+    for m in models:
+        if not m.class_mapping:
+            continue
+        try:
+            mapping = json.loads(m.class_mapping)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        trt_available = bool(
+            m.engine_status == "ready"
+            and m.file_hash
+            and os.path.exists(
+                engine_cache_path_for(
+                    m.filename, m.file_hash, config.storage.models_dir
+                )
+            )
+        )
+        for entry in mapping:
+            if isinstance(entry, str):
+                label = entry
+            else:
+                label = entry.get("system_label") or entry.get("model_label")
+            if not label:
+                continue
+            options.append(
+                CountingOptionOut(
+                    label=label,
+                    model_uuid=m.uuid,
+                    model_version=m.version,
+                    model_filename=m.filename,
+                    source=m.source,
+                    tensorrt_available=trt_available,
+                )
+            )
+    return options
 
 
 @router.post("/select-label")

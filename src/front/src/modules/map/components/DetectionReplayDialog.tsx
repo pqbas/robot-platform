@@ -9,6 +9,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import DetectionOverlay from "@/modules/vision/components/DetectionOverlay"
+import CountingLineOverlay from "@/modules/vision/components/CountingLineOverlay"
+import RoiOverlay from "@/modules/vision/components/RoiOverlay"
 import { Button } from "@/components/ui/button"
 import { Maximize, Minimize } from "lucide-react"
 import { toast } from "sonner"
@@ -31,6 +33,9 @@ type RVFCVideo = HTMLVideoElement & {
 export default function DetectionReplayDialog({ session, open, onOpenChange }: Props) {
   const [detData, setDetData] = useState<RecordingDetections | null>(null)
   const [currentDets, setCurrentDets] = useState<Detection[]>([])
+  // Running accumulated count at the currently displayed frame. Null when the
+  // sidecar predates the per-frame count field (re-count to populate it).
+  const [currentCount, setCurrentCount] = useState<number | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -55,6 +60,7 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
     if (!open || !session.recording_uuid) return
     setDetData(null)
     setCurrentDets([])
+    setCurrentCount(null)
     getRecordingDetections(session.recording_uuid)
       .then(setDetData)
       .catch(() => toast.error("Error al cargar las detecciones"))
@@ -110,6 +116,8 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
           track_id: d.track_id,
         })),
       )
+      const c = frames[idx].count
+      setCurrentCount(c ?? null)
     }
 
     let cancelled = false
@@ -141,6 +149,8 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
     }
   }, [open, detData])
 
+  const cfg = detData?.count_config ?? null
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:w-auto sm:max-w-3xl">
@@ -168,6 +178,43 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
             detections={currentDets}
             visible={true}
           />
+          {/* The line/ROI/direction actually used for this count, so the
+              operator can see where the counting line was — a 0 count with the
+              line off where nothing crosses, or the wrong target class, is then
+              obvious. */}
+          {cfg && cfg.count_mode && cfg.threshold != null && cfg.direction && (
+            <CountingLineOverlay
+              mediaRef={videoRef as MediaRef}
+              mode={cfg.count_mode}
+              threshold={cfg.threshold}
+              direction={cfg.direction}
+              visible={true}
+            />
+          )}
+          {cfg?.roi_mode === "square" && (
+            <RoiOverlay mediaRef={videoRef as MediaRef} visible={true} />
+          )}
+          {cfg && (
+            <div className="absolute bottom-2 right-3 flex flex-col items-end gap-0.5 rounded bg-black/55 px-2 py-1 text-right text-[11px] leading-tight text-white/90">
+              <span>
+                Clase: <span className="font-semibold">{cfg.target_class ?? "—"}</span>
+              </span>
+              <span>
+                Línea: {cfg.count_mode ?? "—"} @ {cfg.threshold != null ? cfg.threshold.toFixed(2) : "—"} · {cfg.direction ?? "—"}
+              </span>
+              <span>ROI: {cfg.roi_mode ?? "—"}</span>
+            </div>
+          )}
+          {currentCount !== null && (
+            <div className="absolute left-3 top-3 flex flex-col items-start gap-0.5 text-white tabular-nums">
+              <span className="text-5xl font-semibold leading-none drop-shadow-md md:text-6xl">
+                {currentCount}
+              </span>
+              <span className="text-xs uppercase tracking-wider text-white/70">
+                contados
+              </span>
+            </div>
+          )}
           <Button
             type="button"
             variant="ghost"

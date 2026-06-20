@@ -2,7 +2,6 @@ import { useState } from "react"
 import { toast } from "sonner"
 import type { Session, Camellon } from "@/types"
 import { deleteSession } from "@/api/sessions"
-import { recountRecording } from "@/api/recordings"
 import { pushSessionNow } from "@/api/sync"
 import { useAppMode } from "@/context/AppModeContext"
 import { Badge } from "@/components/ui/badge"
@@ -26,6 +25,7 @@ import {
 import { Loader2, Pencil, RefreshCw, Trash2, UploadCloud, Video } from "lucide-react"
 import SessionEditDialog from "./SessionEditDialog"
 import DetectionReplayDialog from "./DetectionReplayDialog"
+import RecountConfigDialog from "./RecountConfigDialog"
 
 const PAGE_SIZE = 13
 
@@ -63,8 +63,11 @@ export default function SessionsTable({
   const [replaySession, setReplaySession] = useState<Session | null>(null)
   const [deleting, setDeleting] = useState<Session | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
-  const [recountingId, setRecountingId] = useState<number | null>(null)
   const [syncingId, setSyncingId] = useState<number | null>(null)
+  // Session whose re-process config dialog is open. The dialog shows the params
+  // that will be used, lets the operator review/edit them, and only then runs
+  // the count.
+  const [recountSession, setRecountSession] = useState<Session | null>(null)
 
   const handleSync = async (s: Session) => {
     setSyncingId(s.id)
@@ -88,32 +91,6 @@ export default function SessionsTable({
       toast.error("No se pudo sincronizar la sesión")
     } finally {
       setSyncingId(null)
-    }
-  }
-
-  const handleRecount = async (s: Session) => {
-    if (!s.recording_uuid) return
-    setRecountingId(s.id)
-    // A recording that was never counted has no pinned count_config to
-    // reproduce → count with the currently active model. Otherwise reproduce
-    // the pinned model, but fall back to the active one if the pin is gone
-    // (engine no longer cached → backend returns 409).
-    const useActive = s.count_status === "none"
-    try {
-      let rec
-      try {
-        rec = await recountRecording(s.recording_uuid, useActive)
-      } catch {
-        if (useActive) throw new Error("recount failed")
-        rec = await recountRecording(s.recording_uuid, true)
-      }
-      // Reflect the new counting state immediately (poller fills the number).
-      onSessionUpdated({ ...s, count_status: rec.count_status, count: rec.count })
-      toast.success("Recontando…")
-    } catch {
-      toast.error("No se pudo re-contar")
-    } finally {
-      setRecountingId(null)
     }
   }
 
@@ -219,20 +196,14 @@ export default function SessionsTable({
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7"
-                        title="Re-contar el video"
-                        disabled={
-                          recountingId === s.id || s.count_status === "counting"
-                        }
+                        title="Procesar el video"
+                        disabled={s.count_status === "counting"}
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleRecount(s)
+                          setRecountSession(s)
                         }}
                       >
-                        {recountingId === s.id ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <RefreshCw className="size-3.5" />
-                        )}
+                        <RefreshCw className="size-3.5" />
                       </Button>
                     )}
                     {s.recording_uuid != null && (
@@ -314,6 +285,17 @@ export default function SessionsTable({
           session={replaySession}
           open={!!replaySession}
           onOpenChange={(open) => { if (!open) setReplaySession(null) }}
+        />
+      )}
+
+      {recountSession?.recording_uuid && (
+        <RecountConfigDialog
+          recordingUuid={recountSession.recording_uuid}
+          open={!!recountSession}
+          onOpenChange={(open) => { if (!open) setRecountSession(null) }}
+          onEnqueued={() =>
+            onSessionUpdated({ ...recountSession, count_status: "counting" })
+          }
         />
       )}
 
