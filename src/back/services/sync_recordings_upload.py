@@ -118,6 +118,48 @@ async def _upload_detections(http: aiohttp.ClientSession, row: Recording, base_u
         logger.warning("Detection log %s upload failed: %s", row.uuid, exc)
 
 
+async def upload_single_recording(db: AsyncSession, uuid: str) -> str:
+    """Push one recording's MP4 (+ detections) over the LAN, on demand.
+
+    Mirrors :func:`upload_pending_recordings` but targets a single uuid and
+    returns a status string instead of silently breaking the queue, so a
+    manual trigger (per-session button) can report back to the UI:
+
+    - ``"uploaded"`` — MP4 sent and ``uploaded_at`` set this call.
+    - ``"already"``  — server already had it (``uploaded_at`` already set).
+    - ``"pending"``  — could not upload now (sync disabled, metadata not yet
+      pushed, LAN unreachable, or transfer failed); the loop will retry later.
+    - ``"missing"``  — local MP4 file is gone; nothing to upload.
+    - ``"none"``     — recording not found or still in progress.
+    """
+    if not config.sync.server_url or not config.sync.lan_url:
+        return "pending"
+
+    result = await db.execute(select(Recording).where(Recording.uuid == uuid))
+    row = result.scalar_one_or_none()
+    if row is None or row.ended_at is None:
+        return "none"
+    if row.uploaded_at is not None:
+        return "already"
+    if not os.path.isfile(row.file_path):
+        return "missing"
+    if not await _is_metadata_synced(db, uuid):
+        # Metadata must land first (server resolves FKs from it).
+        return "pending"
+
+    timeout = aiohttp.ClientTimeout(total=600, connect=15)
+    async with aiohttp.ClientSession(timeout=timeout) as http:
+        if not await _probe_lan(http, config.sync.lan_url):
+            logger.warning("LAN no alcanzable (%s) — upload omitido", config.sync.lan_url)
+            return "pending"
+        if not await _upload_one(http, row, config.sync.lan_url):
+            return "pending"
+        await _upload_detections(http, row, config.sync.lan_url)
+        row.uploaded_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        await db.commit()
+        return "uploaded"
+
+
 async def upload_pending_recordings(db: AsyncSession) -> None:
     if not config.sync.server_url:
         return

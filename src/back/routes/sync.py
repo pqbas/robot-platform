@@ -11,7 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import AppMode, config
 from back.database import get_db
-from back.models import DetectionModel, Device, DeviceModel, Empresa, Fundo, Recording
+from back.models import (
+    DetectionModel,
+    Device,
+    DeviceModel,
+    Empresa,
+    Fundo,
+    Recording,
+    Session,
+    SyncLog,
+)
 from back.services.auth import get_device_or_none, verify_device_key
 from back.schemas import (
     SyncCamellon,
@@ -92,6 +101,76 @@ async def force_push(db: AsyncSession = Depends(get_db)):
     from back.services.sync_push import push_all
     await push_all(db)
     return {"ok": True}
+
+
+@router.post("/sessions/{session_id}/push", dependencies=_device_dep)
+async def push_session_now(session_id: int, db: AsyncSession = Depends(get_db)):
+    """Force an immediate sync of one session: metadata + its MP4 (robot only).
+
+    Reuses the regular push pipeline (idempotent — only unsynced rows leave)
+    and then uploads just this session's recording blob. Never raises on a
+    connectivity failure: returns ``metadata``/``mp4`` status so the UI can
+    say "metadata enviada, MP4 pendiente" and let the loop retry.
+    """
+    if config.mode != AppMode.ROBOT:
+        return {"ok": False, "reason": "solo disponible en modo robot"}
+
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    from back.services.sync_push import push_all
+    from back.services.sync_recordings_upload import upload_single_recording
+
+    await push_all(db)
+
+    # push_all is silent on failure → confirm the row actually landed.
+    synced = await db.execute(
+        select(SyncLog).where(
+            (SyncLog.table_name == "sessions") & (SyncLog.record_uuid == session.uuid)
+        )
+    )
+    metadata = "ok" if synced.scalar_one_or_none() is not None else "pending"
+
+    mp4 = "none"
+    if session.recording_uuid:
+        mp4 = await upload_single_recording(db, session.recording_uuid)
+
+    return {"ok": metadata == "ok", "metadata": metadata, "mp4": mp4}
+
+
+@router.post("/recordings/{uuid}/push", dependencies=_device_dep)
+async def push_recording_now(uuid: str, db: AsyncSession = Depends(get_db)):
+    """Force an immediate sync of one recording: metadata + its MP4 (robot only).
+
+    Same shape as :func:`push_session_now` but keyed by recording uuid, for the
+    Grabaciones list. Idempotent and connectivity-safe — reports status instead
+    of raising so the UI can say "metadata enviada, MP4 pendiente".
+    """
+    if config.mode != AppMode.ROBOT:
+        return {"ok": False, "reason": "solo disponible en modo robot"}
+
+    result = await db.execute(select(Recording).where(Recording.uuid == uuid))
+    rec = result.scalar_one_or_none()
+    if rec is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    from back.services.sync_push import push_all
+    from back.services.sync_recordings_upload import upload_single_recording
+
+    await push_all(db)
+
+    synced = await db.execute(
+        select(SyncLog).where(
+            (SyncLog.table_name == "recordings") & (SyncLog.record_uuid == uuid)
+        )
+    )
+    metadata = "ok" if synced.scalar_one_or_none() is not None else "pending"
+
+    mp4 = await upload_single_recording(db, uuid)
+
+    return {"ok": metadata == "ok", "metadata": metadata, "mp4": mp4}
 
 
 # --- Receive endpoints (server mode, protected by device API key) ---

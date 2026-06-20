@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Download, Loader2, MapPin, Pencil, Play, Trash2 } from "lucide-react"
+import { Download, Loader2, MapPin, Pencil, Play, Trash2, UploadCloud } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -8,6 +8,7 @@ import {
   getRecordings,
   getUploadingUuids,
 } from "@/api/recordings"
+import { pushRecordingNow } from "@/api/sync"
 import { getEmpresas, getFundos } from "@/api/admin"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -111,6 +112,7 @@ export default function RecordingsPage() {
   const [editingUuid, setEditingUuid] = useState<string | null>(null)
   const [editingRec, setEditingRec] = useState<Recording | null>(null)
   const [uploadingUuids, setUploadingUuids] = useState<Set<string>>(new Set())
+  const [syncingUuid, setSyncingUuid] = useState<string | null>(null)
 
   // Empresa/Fundo filter cascade
   const [empresas, setEmpresas] = useState<Empresa[]>([])
@@ -276,6 +278,32 @@ export default function RecordingsPage() {
     setDateTo(null)
   }
 
+  const handleSync = async (rec: Recording) => {
+    setSyncingUuid(rec.uuid)
+    try {
+      const res = await pushRecordingNow(rec.uuid)
+      if (res.metadata !== "ok") {
+        toast.error("Servidor no alcanzable — no se pudo sincronizar")
+        return
+      }
+      if (res.mp4 === "uploaded" || res.mp4 === "already") {
+        toast.success("Grabación sincronizada (video incluido)")
+        load()
+      } else if (res.mp4 === "pending") {
+        toast.warning("Metadata enviada — MP4 pendiente (se reintenta solo)")
+      } else if (res.mp4 === "missing") {
+        toast.warning("Metadata enviada — el archivo de video local no existe")
+      } else {
+        toast.success("Grabación sincronizada")
+        load()
+      }
+    } catch {
+      toast.error("No se pudo sincronizar la grabación")
+    } finally {
+      setSyncingUuid(null)
+    }
+  }
+
   const handleConfirmDelete = async () => {
     if (!deleting) return
     setDeleteBusy(true)
@@ -433,6 +461,22 @@ export default function RecordingsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-0.5">
+                        {mode === "robot" && status === "pending" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            title="Sincronizar al servidor (metadata + video)"
+                            disabled={syncingUuid === r.uuid}
+                            onClick={() => handleSync(r)}
+                          >
+                            {syncingUuid === r.uuid ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <UploadCloud className="size-3.5" />
+                            )}
+                          </Button>
+                        )}
                         {status !== "active" && (
                           <Button
                             size="icon"

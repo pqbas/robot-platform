@@ -3,6 +3,8 @@ import { toast } from "sonner"
 import type { Session, Camellon } from "@/types"
 import { deleteSession } from "@/api/sessions"
 import { recountRecording } from "@/api/recordings"
+import { pushSessionNow } from "@/api/sync"
+import { useAppMode } from "@/context/AppModeContext"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -21,7 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Loader2, Pencil, RefreshCw, Trash2, Video } from "lucide-react"
+import { Loader2, Pencil, RefreshCw, Trash2, UploadCloud, Video } from "lucide-react"
 import SessionEditDialog from "./SessionEditDialog"
 import DetectionReplayDialog from "./DetectionReplayDialog"
 
@@ -55,12 +57,39 @@ export default function SessionsTable({
   onSessionUpdated,
   onSessionDeleted,
 }: SessionsTableProps) {
+  const { mode } = useAppMode()
   const [page, setPage] = useState(0)
   const [editingSession, setEditingSession] = useState<Session | null>(null)
   const [replaySession, setReplaySession] = useState<Session | null>(null)
   const [deleting, setDeleting] = useState<Session | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [recountingId, setRecountingId] = useState<number | null>(null)
+  const [syncingId, setSyncingId] = useState<number | null>(null)
+
+  const handleSync = async (s: Session) => {
+    setSyncingId(s.id)
+    try {
+      const res = await pushSessionNow(s.id)
+      if (res.metadata !== "ok") {
+        toast.error("Servidor no alcanzable — no se pudo sincronizar")
+        return
+      }
+      // Metadata landed; the MP4 outcome decides the tone of the message.
+      if (res.mp4 === "uploaded" || res.mp4 === "already") {
+        toast.success("Sesión sincronizada (video incluido)")
+      } else if (res.mp4 === "pending") {
+        toast.warning("Metadata enviada — MP4 pendiente (se reintenta solo)")
+      } else if (res.mp4 === "missing") {
+        toast.warning("Metadata enviada — el archivo de video local no existe")
+      } else {
+        toast.success("Sesión sincronizada (sin video)")
+      }
+    } catch {
+      toast.error("No se pudo sincronizar la sesión")
+    } finally {
+      setSyncingId(null)
+    }
+  }
 
   const handleRecount = async (s: Session) => {
     if (!s.recording_uuid) return
@@ -166,6 +195,25 @@ export default function SessionsTable({
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-0.5">
+                    {mode === "robot" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Sincronizar al servidor (metadata + video)"
+                        disabled={syncingId === s.id}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleSync(s)
+                        }}
+                      >
+                        {syncingId === s.id ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <UploadCloud className="size-3.5" />
+                        )}
+                      </Button>
+                    )}
                     {s.recording_uuid != null && (
                       <Button
                         variant="ghost"
