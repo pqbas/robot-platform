@@ -469,6 +469,18 @@ export default function SettingsPage() {
 
           {activeId === "counting" && config && directions && (
             <SectionPanel title="Conteo" description="Línea virtual que cuenta objetos al cruzarla">
+              {mode === "robot" && (
+                <div className="mb-6 border-b pb-5">
+                  <p className="text-sm font-medium">Método de conteo por objeto</p>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Single (line-crossing) o Tiled (2 tiles, mejor para arándanos).
+                    Cada cambio se guarda solo. La línea y dirección de abajo solo
+                    aplican al método Single.
+                  </p>
+                  <CountingMethodsPanel />
+                </div>
+              )}
+
               <Field label="Modo de conteo" htmlFor="count-mode">
                 <Select value={config.count_mode} onValueChange={handleModeChange}>
                   <SelectTrigger id="count-mode" className="w-full">
@@ -519,17 +531,6 @@ export default function SettingsPage() {
               </Field>
 
               <SaveBar onClick={handleSave} disabled={saving} saving={saving} />
-
-              {mode === "robot" && (
-                <div className="mt-6 border-t pt-5">
-                  <p className="text-sm font-medium">Método de conteo por objeto</p>
-                  <p className="mb-3 text-xs text-muted-foreground">
-                    Single (line-crossing) o Tiled (2 tiles, mejor para arándanos).
-                    Se aplica al reprocesar; default Single.
-                  </p>
-                  <CountingMethodsPanel />
-                </div>
-              )}
             </SectionPanel>
           )}
 
