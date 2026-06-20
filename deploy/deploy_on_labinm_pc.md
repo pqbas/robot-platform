@@ -77,23 +77,37 @@ docker compose -p robot-platform --env-file .env.server -f docker-compose.server
 
 Si el paso 3 no mostró archivos nuevos en `alembic/versions/`, **saltar este paso**.
 
-En esta PC, `docker compose run back ...` arranca un contenedor nuevo cuya `DATABASE_URL` se
-deriva de `POSTGRES_PASSWORD` en `.env.server`. Si esa password está alineada con el rol vivo
-(lo está), funciona directo:
+> ⚠️ **No usar `docker compose run --rm back ...` para migrar en esta PC.** Aunque funciona,
+> Compose trae `postgres` como dependencia (`depends_on`) y **lo recrea/reinicia** — un reinicio
+> innecesario de la base (los datos no se pierden, pero corta conexiones y resetea su uptime).
+
+**Método recomendado: `docker exec` sobre el `back-1` que ya está corriendo.** No toca postgres.
+Como el código está horneado en la imagen, el `back-1` viejo todavía **no** tiene la revisión
+nueva en disco; hay que copiársela primero (o recrear el back antes de migrar). Lo más simple es
+copiar la(s) revisión(es) nueva(s) al contenedor vivo y correr alembic ahí:
 
 ```powershell
-docker compose -p robot-platform --env-file .env.server -f docker-compose.server.yml run --rm back uv run alembic -c back/alembic.ini upgrade head
+# Copiar la(s) revisión(es) nueva(s) del paso 3 al contenedor vivo
+docker cp src/back/alembic/versions/<NUEVA>.py robot-platform-back-1:/app/back/alembic/versions/
+# Aplicar
+docker exec robot-platform-back-1 uv run alembic -c back/alembic.ini upgrade head
+# Confirmar
+docker exec robot-platform-back-1 uv run alembic -c back/alembic.ini current   # debe imprimir "<rev> (head)"
 ```
 
-> Si esto falla con `InvalidPasswordError` / `password authentication failed`, NO recrear nada
-> todavía: la `POSTGRES_PASSWORD` de `.env.server` se desalineó del rol real de Postgres.
-> Workaround sin recrear: copiar la revisión al contenedor `back-1` vivo (que sí tiene
-> credenciales buenas) y correr alembic ahí dentro:
-> ```powershell
-> docker cp src/back/alembic/versions/<NUEVA>.py robot-platform-back-1:/app/back/alembic/versions/
-> docker exec robot-platform-back-1 uv run alembic -c back/alembic.ini upgrade head
-> ```
-> Y después realinear `.env.server` (ver `memory/postgres-volume-restore-password.md`).
+El `back-1` vivo siempre tiene credenciales buenas (arrancó con la password correcta), así que
+este método nunca choca con un eventual desalineo de `POSTGRES_PASSWORD` en `.env.server`.
+
+> **Alternativa (si el back-1 no estuviera corriendo)**: `docker compose run --rm back ... upgrade head`.
+> Acepta que reinicia postgres. Si falla con `InvalidPasswordError` / `password authentication failed`,
+> la `POSTGRES_PASSWORD` de `.env.server` se desalineó del rol real → realinear primero
+> (ver `memory/postgres-volume-restore-password.md`).
+
+Verificar que los datos siguen intactos tras migrar (mismas filas que el paso 1):
+
+```powershell
+docker exec robot-platform-postgres-1 psql -U platform -d robot_platform -t -c "SELECT 'recordings='||count(*) FROM recordings UNION ALL SELECT 'sessions='||count(*) FROM sessions UNION ALL SELECT 'users='||count(*) FROM users;"
+```
 
 ### 6. Recrear los contenedores con el código nuevo
 
