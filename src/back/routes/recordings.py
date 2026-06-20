@@ -16,8 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import AppMode, config
 from back.database import get_db
-from back.models import Camellon, Recording, SyncLog
-from back.schemas import RecordingOut, RecordingPlaceUpdate
+from back.models import Camellon, DetectionModel, Recording, SyncLog
+from back.schemas import (
+    RecordingOut,
+    RecordingPlaceUpdate,
+    RecountConfigOut,
+    RecountRequest,
+)
 from back.services.recording_client import (
     RecordingClient,
     RecordingWorkerUnavailable,
@@ -323,19 +328,72 @@ async def get_recording_detections(uuid: str, db: AsyncSession = Depends(get_db)
     return {"fps": row.fps, "frames": frames, "count_config": count_config}
 
 
+@router.get("/{uuid}/count-config", response_model=RecountConfigOut)
+async def get_recount_config(uuid: str, db: AsyncSession = Depends(get_db)):
+    """Config the re-process dialog prefills for a recording.
+
+    Returns the params last used for this video (from its ``count_config``) if it
+    was counted before, else the current global ``config.counting`` defaults. The
+    operator reviews/edits these and POSTs them back to ``/recount``.
+    """
+    result = await db.execute(select(Recording).where(Recording.uuid == uuid))
+    rec = result.scalar_one_or_none()
+    if rec is None:
+        raise HTTPException(404, "Recording not found")
+
+    cc = {}
+    if rec.count_config:
+        try:
+            cc = json.loads(rec.count_config)
+        except (json.JSONDecodeError, TypeError):
+            cc = {}
+    c = config.counting
+
+    # Model + runtime to prefill: the video's pinned model if counted before,
+    # else the active model. Runtime derived from the pinned engine_path.
+    model_uuid = cc.get("model_uuid")
+    runtime = cc.get("runtime")
+    if runtime is None and cc.get("engine_path"):
+        runtime = "tensorrt" if cc["engine_path"].endswith(".engine") else "pytorch"
+    if model_uuid is None:
+        active = await db.execute(
+            select(DetectionModel)
+            .where(DetectionModel.selected_label.isnot(None))
+            .limit(1)
+        )
+        am = active.scalars().first()
+        if am is not None:
+            model_uuid = am.uuid
+
+    return RecountConfigOut(
+        count_mode=cc.get("count_mode", c.count_mode),
+        threshold=cc.get("threshold", c.threshold),
+        direction=cc.get("direction", c.direction),
+        roi_mode=cc.get("roi_mode", c.roi_mode),
+        confidence=cc.get("confidence", c.confidence_threshold),
+        target_class=cc.get("target_class"),
+        model_uuid=model_uuid,
+        runtime=runtime,
+    )
+
+
 @router.post("/{uuid}/recount", response_model=RecordingOut)
 async def recount(
     uuid: str,
     use_active_model: bool = Query(default=False),
+    body: RecountRequest | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Re-run the offline count for a finished recording.
 
-    Default reproduces the original number with the model pinned in
-    ``count_config`` (deterministic). ``use_active_model=true`` re-pins the
-    currently active model and counts with it (e.g. to re-count old videos with
-    an improved model). 404 if unknown, 409 if the MP4 / required engine is
-    missing.
+    Three modes:
+    - With a request ``body`` of params (the re-process dialog): count with the
+      active model + the reviewed/edited per-video params (line/ROI/class/conf).
+    - ``use_active_model=true``: re-pin the active model, reuse the prior config's
+      target_class (e.g. re-count old videos with an improved model).
+    - Default: reproduce the number with the model pinned in ``count_config``.
+
+    404 if unknown, 409 if the MP4 / required engine is missing.
     """
     result = await db.execute(select(Recording).where(Recording.uuid == uuid))
     rec = result.scalar_one_or_none()
@@ -351,7 +409,35 @@ async def recount(
         enqueue_count,
     )
 
-    if use_active_model:
+    overrides = body.model_dump(exclude_none=True) if body else {}
+
+    if overrides:
+        prev = json.loads(rec.count_config) if rec.count_config else {}
+        target_class = overrides.pop("target_class", None) or prev.get("target_class")
+        model_uuid = overrides.pop("model_uuid", None)
+        runtime = overrides.pop("runtime", None)
+        try:
+            cfg = await build_count_config(
+                db,
+                target_class,
+                overrides=overrides,
+                model_uuid=model_uuid,
+                runtime=runtime,
+            )
+        except RuntimeError:
+            raise HTTPException(409, "No hay un modelo de detección disponible")
+        # Guard: TensorRT chosen but no built engine on disk → tell the operator
+        # clearly instead of silently falling back / counting 0.
+        if runtime == "tensorrt":
+            ep = cfg.get("engine_path") or ""
+            if not ep.endswith(".engine") or (
+                os.sep in ep and not os.path.exists(ep)
+            ):
+                raise HTTPException(
+                    409,
+                    "El modelo no tiene un engine TensorRT construido; usa PyTorch",
+                )
+    elif use_active_model:
         prev = json.loads(rec.count_config) if rec.count_config else {}
         try:
             cfg = await build_count_config(db, prev.get("target_class"))

@@ -23,7 +23,11 @@ from back.services.perception.counting_client import (
     CountingClient,
     CountingWorkerUnavailable,
 )
-from back.services.perception.engine_paths import worker_model_path_for
+from back.services.perception.engine_paths import (
+    actual_pt_path_for,
+    engine_cache_path_for,
+    worker_model_path_for,
+)
 
 logger = logging.getLogger("counting_trigger")
 
@@ -68,39 +72,89 @@ def iso_to_epoch(iso: str | None) -> float | None:
         return None
 
 
-async def build_count_config(db: AsyncSession, target_class: str | None) -> dict:
-    """Snapshot the counting config + the active model's identity.
+def _worker_path_for_runtime(model, runtime: str | None) -> str:
+    """Path to hand the counting worker for ``model`` under the chosen runtime.
 
-    The active model is the one holding ``selected_label`` (the same selection
-    the live inference path / ``model_reconciler`` uses) — NOT the legacy
-    ``is_active`` flag, which the rest of the codebase no longer sets.
+    ``runtime`` forces the format: ``"tensorrt"`` → the cached ``.engine``,
+    ``"pytorch"`` → the ``.pt``. ``None`` keeps the automatic engine-vs-pt
+    decision (``worker_model_path_for``) used by the live/auto count path.
+    Non-bare paths are absolutised (the worker's cwd differs from the backend's).
+    The caller validates that a tensorrt path actually exists.
+    """
+    models_dir = config.storage.models_dir
+    if runtime == "tensorrt" and model.file_hash:
+        path = engine_cache_path_for(model.filename, model.file_hash, models_dir)
+    elif runtime == "pytorch":
+        path = actual_pt_path_for(model.filename, model.source, models_dir)
+    else:
+        return worker_model_path_for(
+            model.filename,
+            model.source,
+            model.file_hash,
+            model.tensorrt_enabled,
+            model.engine_status,
+            models_dir,
+        )
+    if os.sep in path or path.startswith("."):
+        path = os.path.abspath(path)
+    return path
 
-    Raises RuntimeError if there is no active detection model (caller marks the
-    recording as error)."""
-    result = await db.execute(
-        select(DetectionModel)
-        .where(DetectionModel.selected_label.isnot(None))
-        .limit(1)
-    )
+
+async def build_count_config(
+    db: AsyncSession,
+    target_class: str | None,
+    overrides: dict | None = None,
+    *,
+    model_uuid: str | None = None,
+    runtime: str | None = None,
+) -> dict:
+    """Snapshot the counting config + the chosen model's identity.
+
+    By default uses the active model (the one holding ``selected_label``, same as
+    the live inference path / ``model_reconciler``). Pass ``model_uuid`` to count
+    with a specific model instead — the re-process dialog does this so the chosen
+    class fixes its own model. ``runtime`` ("pytorch"/"tensorrt") forces which
+    format of that model to run; ``None`` keeps the automatic engine-vs-pt pick.
+
+    ``overrides`` (count_mode/threshold/direction/roi_mode/confidence) overlay the
+    global ``config.counting`` defaults, so the dialog can run a count with
+    per-video parameters the operator reviewed/edited — without touching the
+    global config. Keys absent from ``overrides`` fall back to the global value.
+
+    Raises RuntimeError("no_active_model") if no model is found.
+    """
+    if model_uuid:
+        result = await db.execute(
+            select(DetectionModel).where(DetectionModel.uuid == model_uuid)
+        )
+    else:
+        result = await db.execute(
+            select(DetectionModel)
+            .where(DetectionModel.selected_label.isnot(None))
+            .limit(1)
+        )
     model = result.scalars().first()
     if model is None:
         raise RuntimeError("no_active_model")
 
-    engine_path = worker_model_path_for(
-        model.filename,
-        model.source,
-        model.file_hash,
-        model.tensorrt_enabled,
-        model.engine_status,
-        config.storage.models_dir,
-    )
+    engine_path = _worker_path_for_runtime(model, runtime)
+    # Record the runtime that path actually represents, so the replay preview can
+    # reconstruct the format selection (derive from the extension, not the input,
+    # so the automatic path is reported correctly too).
+    resolved_runtime = "tensorrt" if engine_path.endswith(".engine") else "pytorch"
     c = config.counting
+    o = overrides or {}
+
+    def _pick(key: str, default):
+        v = o.get(key)
+        return v if v is not None else default
+
     return {
-        "count_mode": c.count_mode,
-        "threshold": c.threshold,
-        "direction": c.direction,
-        "roi_mode": c.roi_mode,
-        "confidence": c.confidence_threshold,
+        "count_mode": _pick("count_mode", c.count_mode),
+        "threshold": _pick("threshold", c.threshold),
+        "direction": _pick("direction", c.direction),
+        "roi_mode": _pick("roi_mode", c.roi_mode),
+        "confidence": _pick("confidence", c.confidence_threshold),
         # target_class stays the system_label for display (replay panel / record).
         # target_model_label is what the worker actually counts on (model.names).
         "target_class": target_class,
@@ -109,6 +163,7 @@ async def build_count_config(db: AsyncSession, target_class: str | None) -> dict
         "model_version": model.version,
         "file_hash": model.file_hash,
         "engine_path": engine_path,
+        "runtime": resolved_runtime,
     }
 
 

@@ -387,6 +387,49 @@ class RecordingPlaceUpdate(BaseModel):
     camellon_id: int | None
 
 
+class RecountRequest(BaseModel):
+    """Per-video counting parameters reviewed in the re-process dialog. All
+    optional: only the fields the operator set override the global defaults. The
+    chosen class fixes the model (``model_uuid``) and the operator picks which
+    runtime of that model to run (``runtime``: pytorch .pt vs tensorrt .engine)."""
+
+    count_mode: str | None = None
+    threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    direction: str | None = None
+    roi_mode: Literal["square", "full"] | None = None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    target_class: str | None = None
+    model_uuid: str | None = None
+    runtime: Literal["pytorch", "tensorrt"] | None = None
+
+
+class RecountConfigOut(BaseModel):
+    """Config the re-process dialog prefills: the video's last-used params if it
+    was counted before, else the current global defaults."""
+
+    count_mode: str
+    threshold: float
+    direction: str
+    roi_mode: Literal["square", "full"]
+    confidence: float
+    target_class: str | None
+    model_uuid: str | None
+    runtime: Literal["pytorch", "tensorrt"] | None
+
+
+class CountingOptionOut(BaseModel):
+    """A selectable model+class for the re-process dialog: each detection model
+    paired with a class it's configured to count, plus whether its TensorRT
+    engine is built (so the dialog can offer/disable that runtime)."""
+
+    label: str
+    model_uuid: str
+    model_version: str
+    model_filename: str
+    source: str
+    tensorrt_available: bool
+
+
 class SyncRecording(BaseModel):
     uuid: str
     device_id: str | None = None

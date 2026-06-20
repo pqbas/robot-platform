@@ -106,3 +106,18 @@ export function updateCountingConfig(
     body: JSON.stringify(data),
   })
 }
+
+// A selectable model+class pair for the re-process dialog: each detection model
+// paired with a class it counts, plus whether its TensorRT engine is built.
+export type CountingOption = {
+  label: string
+  model_uuid: string
+  model_version: string
+  model_filename: string
+  source: string
+  tensorrt_available: boolean
+}
+
+export function getCountingOptions(): Promise<CountingOption[]> {
+  return apiFetch("/api/config/counting-options")
+}
