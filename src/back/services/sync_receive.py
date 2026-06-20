@@ -122,24 +122,34 @@ async def receive_sessions(db: AsyncSession, items: list[SyncSession]) -> SyncRe
     errors: list[str] = []
     ok: list[str] = []
     for item in items:
+        # Resolve camellon_uuid → camellon_id up front (used by both the insert
+        # and the upsert path). A session may carry no location (saved without
+        # one) — accept it with camellon_id=None. If a location is named but its
+        # camellon hasn't synced here yet, skip without acking so the robot
+        # retries next cycle (don't drop the session).
+        camellon_id: int | None = None
+        if item.camellon_uuid is not None:
+            cam = await db.execute(select(Camellon).where(Camellon.uuid == item.camellon_uuid))
+            camellon = cam.scalar_one_or_none()
+            if not camellon:
+                errors.append(f"camellon_uuid {item.camellon_uuid} not found for session {item.uuid}")
+                continue
+            camellon_id = camellon.id
+
         existing = await db.execute(select(Session).where(Session.uuid == item.uuid))
         row = existing.scalar_one_or_none()
         if row is not None:
-            # Already inserted, but the count is recomputed offline after the
-            # first sync, so the robot re-queues the session with the
-            # authoritative number. Upsert total_count instead of skipping.
+            # Upsert. total_count is recomputed offline after the first sync, and
+            # camellon_id may be assigned later via edit — both re-push. Don't
+            # clobber an existing location with None (edit is assign-only).
             row.total_count = item.total_count
+            if camellon_id is not None:
+                row.camellon_id = camellon_id
             skipped += 1
             ok.append(item.uuid)
             continue
-        # Resolve camellon_uuid → camellon_id
-        cam = await db.execute(select(Camellon).where(Camellon.uuid == item.camellon_uuid))
-        camellon = cam.scalar_one_or_none()
-        if not camellon:
-            errors.append(f"camellon_uuid {item.camellon_uuid} not found for session {item.uuid}")
-            continue
         db.add(Session(
-            uuid=item.uuid, device_id=item.device_id, camellon_id=camellon.id,
+            uuid=item.uuid, device_id=item.device_id, camellon_id=camellon_id,
             start_time=item.start_time, end_time=item.end_time,
             target_class=item.target_class, total_count=item.total_count,
             recording_uuid=item.recording_uuid,

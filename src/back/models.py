@@ -154,8 +154,10 @@ class Session(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     uuid: Mapped[str] = mapped_column(Text, unique=True, default=_new_uuid)
     device_id: Mapped[str] = mapped_column(Text, default=get_device_id)
-    camellon_id: Mapped[int] = mapped_column(
-        ForeignKey("camellones.id"), nullable=False
+    # Nullable: a session can be saved without picking a location (the field
+    # operator may not know/have time to set it) and assigned later via edit.
+    camellon_id: Mapped[int | None] = mapped_column(
+        ForeignKey("camellones.id"), nullable=True
     )
     start_time: Mapped[str] = mapped_column(Text, nullable=False)
     end_time: Mapped[str | None] = mapped_column(Text, nullable=True)

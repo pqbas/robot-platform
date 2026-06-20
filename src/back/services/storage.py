@@ -198,7 +198,7 @@ async def create_session(
 
 
 async def create_completed_session(
-    db: AsyncSession, camellon_id: int, target_class: str, total_count: int
+    db: AsyncSession, camellon_id: int | None, target_class: str, total_count: int
 ) -> Session:
     """Create a session that is already finished (start_time == end_time)."""
     now = datetime.now(timezone.utc).isoformat()

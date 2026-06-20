@@ -32,7 +32,10 @@ type Mode = "idle" | "creating" | "renaming"
 
 export default function SessionEditDialog({ session, open, onOpenChange, onSaved }: Props) {
   const [camellones, setCamellones] = useState<Camellon[]>([])
-  const [camellonId, setCamellonId] = useState(String(session.camellon_id))
+  // Empty when the session has no location yet (assign one here).
+  const [camellonId, setCamellonId] = useState(
+    session.camellon_id == null ? "" : String(session.camellon_id),
+  )
   const [mode, setMode] = useState<Mode>("idle")
   const [inputValue, setInputValue] = useState("")
   const [saving, setSaving] = useState(false)
@@ -160,7 +163,7 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
               </Button>
             </>
           )}
-          <Button variant="outline" size="sm" className="ml-auto" onClick={handleSave} disabled={saving || mode !== "idle"}>
+          <Button variant="outline" size="sm" className="ml-auto" onClick={handleSave} disabled={saving || mode !== "idle" || !selectedCamellon}>
             {saving ? "Guardando..." : "Guardar"}
           </Button>
         </DialogFooter>

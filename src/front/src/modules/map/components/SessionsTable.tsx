@@ -142,7 +142,11 @@ export default function SessionsTable({
                 onClick={() => onSelect(s)}
               >
                 <TableCell>
-                  {camellones.get(s.camellon_id)?.nombre ?? `#${s.camellon_id}`}
+                  {s.camellon_id == null ? (
+                    <span className="italic text-muted-foreground">Sin ubicación</span>
+                  ) : (
+                    camellones.get(s.camellon_id)?.nombre ?? `#${s.camellon_id}`
+                  )}
                 </TableCell>
                 <TableCell>{formatDate(s.start_time)}</TableCell>
                 <TableCell className="hidden md:table-cell">

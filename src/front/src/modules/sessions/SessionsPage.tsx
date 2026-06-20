@@ -108,7 +108,8 @@ export default function SessionsPage() {
     const empresaById = new Map(empresas.map((e) => [e.uuid, e]))
     const seen = new Map<string, string>()
     for (const s of sessions) {
-      const empresaUuid = empresaByCamellonId.get(s.camellon_id)
+      const empresaUuid =
+        s.camellon_id == null ? undefined : empresaByCamellonId.get(s.camellon_id)
       if (!empresaUuid || seen.has(empresaUuid)) continue
       const e = empresaById.get(empresaUuid)
       seen.set(empresaUuid, e?.name ?? empresaUuid)
@@ -121,7 +122,9 @@ export default function SessionsPage() {
   const sessionsByEmpresa = useMemo(() => {
     if (empresaFilter === "all") return sessions
     return sessions.filter(
-      (s) => empresaByCamellonId.get(s.camellon_id) === empresaFilter,
+      (s) =>
+        s.camellon_id != null &&
+        empresaByCamellonId.get(s.camellon_id) === empresaFilter,
     )
   }, [sessions, empresaFilter, empresaByCamellonId])
 
@@ -131,7 +134,8 @@ export default function SessionsPage() {
     const fundoById = new Map(fundos.map((f) => [f.uuid, f]))
     const seen = new Map<string, string>()
     for (const s of sessionsByEmpresa) {
-      const fundoUuid = fundoByCamellonId.get(s.camellon_id)
+      const fundoUuid =
+        s.camellon_id == null ? undefined : fundoByCamellonId.get(s.camellon_id)
       if (!fundoUuid || seen.has(fundoUuid)) continue
       const f = fundoById.get(fundoUuid)
       seen.set(fundoUuid, f?.name ?? fundoUuid)
@@ -144,7 +148,9 @@ export default function SessionsPage() {
   const sessionsByFundo = useMemo(() => {
     if (fundoFilter === "all") return sessionsByEmpresa
     return sessionsByEmpresa.filter(
-      (s) => fundoByCamellonId.get(s.camellon_id) === fundoFilter,
+      (s) =>
+        s.camellon_id != null &&
+        fundoByCamellonId.get(s.camellon_id) === fundoFilter,
     )
   }, [sessionsByEmpresa, fundoFilter, fundoByCamellonId])
 
@@ -200,7 +206,9 @@ export default function SessionsPage() {
   }
 
   const camellonName = selectedSession
-    ? (camellones.get(selectedSession.camellon_id)?.nombre ?? `#${selectedSession.camellon_id}`)
+    ? selectedSession.camellon_id == null
+      ? "Sin ubicación"
+      : (camellones.get(selectedSession.camellon_id)?.nombre ?? `#${selectedSession.camellon_id}`)
     : ""
 
   if (loading) {

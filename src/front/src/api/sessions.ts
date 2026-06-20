@@ -54,7 +54,7 @@ export function getSession(id: number): Promise<Session> {
 }
 
 export function saveSession(
-  camellonId: number,
+  camellonId: number | null,
   targetClass: string,
   totalCount: number,
 ): Promise<Session> {

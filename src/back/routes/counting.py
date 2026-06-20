@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import config
 from back.database import get_db
-from back.models import Event, Recording, Session
+from back.models import Event, Recording, Session, SyncLog
 from back.schemas import (
     CountingStartRequest,
     CountingStatusOut,
@@ -225,6 +225,14 @@ async def update_session(
         raise HTTPException(404, "Camellon not found")
     sess.camellon_id = body.camellon_id
     await _link_recording_camellon(db, body.camellon_id)
+    # Re-queue for sync: a session is pushed once (often unlocated), and sync is
+    # insert-only, so drop its sync_log row to re-push the new location. The
+    # server upserts camellon_id for an existing session.
+    await db.execute(
+        delete(SyncLog).where(
+            (SyncLog.table_name == "sessions") & (SyncLog.record_uuid == sess.uuid)
+        )
+    )
     await db.commit()
     await db.refresh(sess)
     return sess
@@ -280,14 +288,19 @@ async def delete_session(session_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/sessions/save", response_model=SessionOut)
 async def save_session(body: SessionSave, db: AsyncSession = Depends(get_db)):
-    """Create a completed session record in the DB."""
-    cam = await storage.get_camellon(db, body.camellon_id)
-    if cam is None:
-        raise HTTPException(404, "Camellon not found")
+    """Create a completed session record in the DB.
+
+    camellon_id is optional: the session can be saved without a location and
+    assigned one later (PATCH /sessions/{id})."""
+    if body.camellon_id is not None:
+        cam = await storage.get_camellon(db, body.camellon_id)
+        if cam is None:
+            raise HTTPException(404, "Camellon not found")
     sess = await storage.create_completed_session(
         db, body.camellon_id, body.target_class, body.total_count
     )
-    await _link_recording_camellon(db, body.camellon_id)
+    if body.camellon_id is not None:
+        await _link_recording_camellon(db, body.camellon_id)
     rec_uuid = counter.get_last_recording_uuid()
     if rec_uuid:
         sess.recording_uuid = rec_uuid

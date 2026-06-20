@@ -127,15 +127,20 @@ async def push_all(db: AsyncSession) -> None:
         if unsynced:
             data = []
             for r in unsynced:
-                # Get camellon uuid
-                cam = await db.execute(select(Camellon).where(Camellon.id == r.camellon_id))
-                camellon = cam.scalar_one_or_none()
-                if not camellon:
-                    logger.warning("Session %s: camellon_id %d not found, skipping", r.uuid, r.camellon_id)
-                    continue
+                # Resolve camellon_id → camellon_uuid. A session may have no
+                # location (saved without one); push it with camellon_uuid=None
+                # instead of stranding it.
+                camellon_uuid: str | None = None
+                if r.camellon_id is not None:
+                    cam = await db.execute(select(Camellon).where(Camellon.id == r.camellon_id))
+                    camellon = cam.scalar_one_or_none()
+                    if not camellon:
+                        logger.warning("Session %s: camellon_id %s not found, skipping", r.uuid, r.camellon_id)
+                        continue
+                    camellon_uuid = camellon.uuid
                 data.append({
                     "uuid": r.uuid, "device_id": r.device_id,
-                    "camellon_uuid": camellon.uuid,
+                    "camellon_uuid": camellon_uuid,
                     "start_time": r.start_time, "end_time": r.end_time,
                     "target_class": r.target_class, "total_count": r.total_count,
                     "recording_uuid": r.recording_uuid,

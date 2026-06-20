@@ -73,7 +73,7 @@ export default function SidePanel({
     if (locationFilter !== "all") {
       const ids = camellonIdsByLocation.get(locationFilter)
       if (ids) {
-        result = result.filter((s) => ids.has(s.camellon_id))
+        result = result.filter((s) => s.camellon_id != null && ids.has(s.camellon_id))
       } else {
         result = []
       }
@@ -99,8 +99,10 @@ export default function SidePanel({
   }
 
   const camellonName = selectedSession
-    ? (camellones.get(selectedSession.camellon_id)?.nombre ??
-      `#${selectedSession.camellon_id}`)
+    ? selectedSession.camellon_id == null
+      ? "Sin ubicación"
+      : (camellones.get(selectedSession.camellon_id)?.nombre ??
+        `#${selectedSession.camellon_id}`)
     : ""
 
   return (

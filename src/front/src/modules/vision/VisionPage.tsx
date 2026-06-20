@@ -239,7 +239,7 @@ export default function VisionPage() {
     }
   }
 
-  const handleSave = async (camellonId: number) => {
+  const handleSave = async (camellonId: number | null) => {
     try {
       await counting.save(camellonId)
       toast.success("Sesion guardada")

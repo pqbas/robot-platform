@@ -14,7 +14,7 @@ export type UseCountingReturn = {
   targetClass: string | null
   startCounting: (targetClass: string) => Promise<void>
   stopCounting: () => Promise<void>
-  save: (camellonId: number) => Promise<void>
+  save: (camellonId: number | null) => Promise<void>
   discard: () => Promise<void>
 }
 
@@ -59,7 +59,7 @@ export function useCounting(): UseCountingReturn {
     setState("SAVING")
   }, [])
 
-  const save = useCallback(async (camellonId: number) => {
+  const save = useCallback(async (camellonId: number | null) => {
     const cls = stopResultRef.current?.target_class ?? targetClassRef.current ?? "person"
     // The authoritative count arrives later (offline worker → poller backfill of
     // Session.total_count), so we save with 0 as a placeholder.

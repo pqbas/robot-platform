@@ -30,7 +30,7 @@ type SaveDialogProps = {
   open: boolean
   duration: string
   deviceContext: DeviceContext | null
-  onSave: (camellonId: number) => void
+  onSave: (camellonId: number | null) => void
   onDiscard: () => void
 }
 
@@ -214,27 +214,31 @@ export default function SaveDialog({
   }
 
   async function handleSave() {
-    if (!selectedCamellon || !selectedEmpresa || !selectedFundo) return
     setSaving(true)
-    try {
-      // Persist the sticky selection before saving the session
-      await setActiveContext({
-        empresa_uuid: selectedEmpresa.uuid,
-        empresa_name: selectedEmpresa.name,
-        fundo_uuid: selectedFundo.uuid,
-        fundo_name: selectedFundo.name,
-        fundo_region: selectedFundo.region,
-      })
-    } catch {
-      // Non-fatal: proceed with save even if context update fails
+    // Location is optional. Only pin the sticky context when both empresa and
+    // fundo are chosen; otherwise just save the session unlocated.
+    if (selectedEmpresa && selectedFundo) {
+      try {
+        await setActiveContext({
+          empresa_uuid: selectedEmpresa.uuid,
+          empresa_name: selectedEmpresa.name,
+          fundo_uuid: selectedFundo.uuid,
+          fundo_name: selectedFundo.name,
+          fundo_region: selectedFundo.region,
+        })
+      } catch {
+        // Non-fatal: proceed with save even if context update fails
+      }
     }
     setSaving(false)
-    onSave(selectedCamellon.id)
+    onSave(selectedCamellon?.id ?? null)
   }
 
+  // Location is optional — you can save with nothing selected and assign the
+  // empresa/fundo/camellón later from the sessions list. Only block while an
+  // inline create/rename is in progress.
   const canSave =
     !saving &&
-    !!selectedCamellon &&
     camMode === "idle" &&
     empMode === "idle" &&
     fundoMode === "idle"
@@ -248,7 +252,8 @@ export default function SaveDialog({
         <DialogHeader>
           <DialogTitle>Resultado del conteo</DialogTitle>
           <DialogDescription>
-            Selecciona empresa, fundo y camellón para guardar la sesión
+            La ubicación es opcional: puedes guardar ahora y asignar
+            empresa/fundo/camellón después desde la lista de sesiones.
           </DialogDescription>
         </DialogHeader>
 

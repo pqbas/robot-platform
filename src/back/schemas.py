@@ -53,7 +53,7 @@ class SessionStart(BaseModel):
 
 class SessionOut(BaseModel):
     id: int
-    camellon_id: int
+    camellon_id: int | None = None
     device_id: str
     start_time: str
     end_time: str | None
@@ -75,7 +75,8 @@ class SessionStopOut(BaseModel):
 
 
 class SessionSave(BaseModel):
-    camellon_id: int
+    # Optional: save now, assign the location later (see SessionUpdate).
+    camellon_id: int | None = None
     target_class: str
     total_count: int
 
@@ -332,7 +333,8 @@ class SyncCamellon(BaseModel):
 class SyncSession(BaseModel):
     uuid: str
     device_id: str | None = None
-    camellon_uuid: str  # resolved on server side
+    # None when the session was saved without a location (resolved on server).
+    camellon_uuid: str | None = None
     start_time: str
     end_time: str | None = None
     target_class: str
