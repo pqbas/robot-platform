@@ -78,3 +78,7 @@
 
 ## Dev
 - Server admin seed: `admin` / `admin`.
+
+## Pendientes (server containerizado .67)
+1. **Password de Postgres desalineada (volumen restaurado).** `POSTGRES_PASSWORD` en `.env.server` NO coincide con la password real del rol `platform` (el compose deriva `DATABASE_URL` de `POSTGRES_PASSWORD`). El `back-1` actual conecta porque arrancó con la password vieja en su entorno; `docker compose run/up back` (contenedor nuevo) falla con `InvalidPasswordError`. **Antes de recrear contenedores** hay que re-alinear (`ALTER ROLE platform PASSWORD ...` vía `\getenv`, o ajustar `POSTGRES_PASSWORD`) o el server se cae. Ver `memory/postgres-volume-restore-password.md`.
+2. **Video 2.17 GB atascado (`1fdfc114-1a4d-426c-a184-ff458081b2b4`).** La migración `019` (file_size_bytes → BIGINT) ya está aplicada, pero el robot dejó de empujarlo (~17:04 del 20-jun): lo tiene marcado en su `sync_log` local como sincronizado aunque nunca llegó al server. El fix BIGINT no lo sube solo — hay que **forzar re-push desde el robot** (borrar su entrada en `sync_log` o usar el botón de sync manual). Robot en `192.168.50.103:80`.
