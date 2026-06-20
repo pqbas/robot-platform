@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, ForeignKey, Float, Integer, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Float, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from back.config import get_device_id
@@ -237,7 +237,10 @@ class Recording(Base):
     ended_at: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
-    file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # BigInteger: file sizes routinely exceed 2 GB (int32 max). SQLite stores
+    # integers as 64-bit dynamically so it never overflowed, but Postgres
+    # INTEGER is 32-bit and rejected uploads >2 GB (see migration 019).
+    file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fps: Mapped[float | None] = mapped_column(Float, nullable=True)
