@@ -20,11 +20,11 @@ import json
 import logging
 import os
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from back.config import config
 from back.database import AsyncSessionLocal
-from back.models import Recording, Session
+from back.models import Recording, Session, SyncLog
 from back.services.perception.counting_client import (
     CountingClient,
     CountingWorkerUnavailable,
@@ -101,6 +101,17 @@ async def _process_worker_result(last_result: dict) -> None:
             ).scalars().all()
             for s in sessions:
                 s.total_count = rec.count
+                # The count is computed after the first sync, and sync is
+                # insert-only — so drop the session's sync_log row to re-queue
+                # it. The next periodic cycle re-pushes it with the
+                # authoritative number automatically (server upserts
+                # total_count); no manual sync-button press needed.
+                await session.execute(
+                    delete(SyncLog).where(
+                        (SyncLog.table_name == "sessions")
+                        & (SyncLog.record_uuid == s.uuid)
+                    )
+                )
             logger.info("Conteo listo %s: %s", uuid, rec.count)
         else:
             rec.count_status = "error"
