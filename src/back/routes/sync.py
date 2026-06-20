@@ -123,16 +123,22 @@ async def push_session_now(session_id: int, db: AsyncSession = Depends(get_db)):
     from back.services.sync_push import push_all
     from back.services.sync_recordings_upload import upload_single_recording
 
-    # The button means "send everything for this session now" — including the
-    # offline count, which is computed after the first sync. Sync is otherwise
-    # insert-only, so drop this session's sync_log row to force a fresh re-push
-    # with the current count (the server upserts total_count). The recording's
-    # MP4 + metadata are handled below by upload_single_recording / push_all.
+    # The button means "send everything for this session now". Sync is
+    # insert-only, but the count (on the session) and count_config (on the
+    # recording) are computed after the first sync — so drop both sync_log rows
+    # to force a fresh re-push with the current values (the server upserts).
     await db.execute(
         delete(SyncLog).where(
             (SyncLog.table_name == "sessions") & (SyncLog.record_uuid == session.uuid)
         )
     )
+    if session.recording_uuid:
+        await db.execute(
+            delete(SyncLog).where(
+                (SyncLog.table_name == "recordings")
+                & (SyncLog.record_uuid == session.recording_uuid)
+            )
+        )
     await db.commit()
 
     await push_all(db)
