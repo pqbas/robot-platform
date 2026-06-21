@@ -39,6 +39,25 @@ def _fundo_scope() -> tuple[bool, str | None]:
     return True, fundo_uuid
 
 
+def _camellon_out(cam) -> CamellonOut:
+    """Serialize a Camellon with its resolved empresa/fundo names.
+
+    Relies on storage.list_camellones eager-loading the fundo → empresa chain;
+    a camellon with no fundo simply yields null names.
+    """
+    fundo = cam.fundo
+    empresa = fundo.empresa if fundo else None
+    return CamellonOut(
+        id=cam.id,
+        nombre=cam.nombre,
+        lat=cam.lat,
+        lng=cam.lng,
+        fundo_uuid=cam.fundo_uuid,
+        fundo_nombre=fundo.name if fundo else None,
+        empresa_nombre=empresa.name if empresa else None,
+    )
+
+
 @router.get("", response_model=list[CamellonOut])
 async def list_camellones(
     fundo_uuid: Optional[str] = Query(default=None),
@@ -49,14 +68,16 @@ async def list_camellones(
         # Unscoped: every camellon this device knows about. Used by cross-fundo
         # views like the sessions history, where the robot legitimately shows
         # every session it captured regardless of the currently selected fundo.
-        return await storage.list_camellones(db)
-    if fundo_uuid is not None:
+        cams = await storage.list_camellones(db)
+    elif fundo_uuid is not None:
         # Explicit fundo_uuid param overrides context scoping
-        return await storage.list_camellones(db, scope_fundo=True, fundo_uuid=fundo_uuid)
-    scope_fundo, ctx_fundo_uuid = _fundo_scope()
-    return await storage.list_camellones(
-        db, scope_fundo=scope_fundo, fundo_uuid=ctx_fundo_uuid
-    )
+        cams = await storage.list_camellones(db, scope_fundo=True, fundo_uuid=fundo_uuid)
+    else:
+        scope_fundo, ctx_fundo_uuid = _fundo_scope()
+        cams = await storage.list_camellones(
+            db, scope_fundo=scope_fundo, fundo_uuid=ctx_fundo_uuid
+        )
+    return [_camellon_out(c) for c in cams]
 
 
 @router.post("", response_model=CamellonOut, status_code=201)

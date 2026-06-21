@@ -3,8 +3,9 @@ from datetime import date, datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from back.models import Camellon, Event, Location, Recording, Session
+from back.models import Camellon, Event, Fundo, Location, Recording, Session
 
 
 # --- Locations ---
@@ -96,7 +97,13 @@ async def list_camellones(
     scope_fundo: bool = False,
     fundo_uuid: str | None = None,
 ) -> list[Camellon]:
-    stmt = select(Camellon).order_by(Camellon.id)
+    # Eager-load the fundo → empresa chain so callers can resolve the location
+    # hierarchy (empresa / fundo / camellon) without per-row lazy IO in async.
+    stmt = (
+        select(Camellon)
+        .options(selectinload(Camellon.fundo).selectinload(Fundo.empresa))
+        .order_by(Camellon.id)
+    )
     if scope_fundo:
         stmt = _scope_by_fundo(stmt, fundo_uuid)
     result = await db.execute(stmt)
@@ -230,9 +237,10 @@ async def finish_session(
 async def _attach_count_status(
     db: AsyncSession, sessions: list[Session]
 ) -> None:
-    """Set transient count_status/count on each session from its linked
-    recording (the offline counting state lives on the Recording, not the
-    Session). Non-mapped attributes read by SessionOut's from_attributes."""
+    """Set transient fields on each session from its linked recording (the
+    offline counting state, plus duration/size/upload status, live on the
+    Recording — the video is the source of truth — not the Session).
+    Non-mapped attributes read by SessionOut's from_attributes."""
     uuids = [s.recording_uuid for s in sessions if s.recording_uuid]
     by_uuid: dict[str, Recording] = {}
     if uuids:
@@ -244,6 +252,9 @@ async def _attach_count_status(
         rec = by_uuid.get(s.recording_uuid) if s.recording_uuid else None
         s.count_status = rec.count_status if rec else "none"
         s.count = rec.count if rec else None
+        s.duration_seconds = rec.duration_seconds if rec else None
+        s.file_size_bytes = rec.file_size_bytes if rec else None
+        s.uploaded_at = rec.uploaded_at if rec else None
 
 
 async def list_sessions(

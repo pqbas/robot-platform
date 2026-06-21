@@ -13,10 +13,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from back.config import AppMode, config
 from back.database import get_db
-from back.models import Camellon, DetectionModel, Recording, SyncLog
+from back.models import Camellon, DetectionModel, Fundo, Recording, SyncLog
 from back.schemas import (
     RecordingOut,
     RecordingPlaceUpdate,
@@ -49,17 +50,25 @@ def _client() -> RecordingClient:
 
 
 async def _build_out(db: AsyncSession, row: Recording) -> RecordingOut:
-    """Build RecordingOut with resolved camellon_nombre and fundo_uuid."""
+    """Build RecordingOut with the resolved empresa → fundo → camellon chain."""
     camellon_nombre: str | None = None
     fundo_uuid: str | None = None
+    fundo_nombre: str | None = None
+    empresa_nombre: str | None = None
     if row.camellon_id is not None:
         cam_result = await db.execute(
-            select(Camellon).where(Camellon.id == row.camellon_id)
+            select(Camellon)
+            .options(selectinload(Camellon.fundo).selectinload(Fundo.empresa))
+            .where(Camellon.id == row.camellon_id)
         )
         camellon = cam_result.scalar_one_or_none()
         if camellon:
             camellon_nombre = camellon.nombre
             fundo_uuid = camellon.fundo_uuid
+            if camellon.fundo:
+                fundo_nombre = camellon.fundo.name
+                if camellon.fundo.empresa:
+                    empresa_nombre = camellon.fundo.empresa.name
     return RecordingOut(
         uuid=row.uuid,
         device_id=row.device_id,
@@ -67,6 +76,8 @@ async def _build_out(db: AsyncSession, row: Recording) -> RecordingOut:
         camellon_id=row.camellon_id,
         camellon_nombre=camellon_nombre,
         fundo_uuid=fundo_uuid,
+        fundo_nombre=fundo_nombre,
+        empresa_nombre=empresa_nombre,
         started_at=row.started_at,
         ended_at=row.ended_at,
         duration_seconds=row.duration_seconds,

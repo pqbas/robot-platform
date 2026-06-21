@@ -22,7 +22,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Loader2, Pencil, RefreshCw, Trash2, UploadCloud, Video } from "lucide-react"
+import { Download, Loader2, Pencil, Play, RefreshCw, Trash2, UploadCloud } from "lucide-react"
+import { getRecordingFileUrl } from "@/api/recordings"
+import { LocationCell } from "@/components/LocationCell"
+import { formatDateTime, formatDuration, formatSize, rowStatus } from "@/lib/recordingFormat"
+import { StatusBadge } from "@/components/StatusBadge"
 import SessionEditDialog from "./SessionEditDialog"
 import DetectionReplayDialog from "./DetectionReplayDialog"
 import RecountConfigDialog from "./RecountConfigDialog"
@@ -36,17 +40,6 @@ type SessionsTableProps = {
   onSelect: (session: Session) => void
   onSessionUpdated: (updated: Session) => void
   onSessionDeleted: (id: number) => void
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleDateString("es", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
 }
 
 export default function SessionsTable({
@@ -123,15 +116,17 @@ export default function SessionsTable({
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-auto">
-        <Table className="table-fixed">
+        <Table className="table-fixed [&_th]:text-center [&_td]:text-center">
           <TableHeader>
             <TableRow>
-              {mode === "server" && <TableHead className="w-[22%]">Camellon</TableHead>}
-              <TableHead className="w-[20%]">Fecha</TableHead>
-              <TableHead className="hidden md:table-cell w-[16%]">Clase</TableHead>
-              <TableHead className="hidden lg:table-cell w-[22%]">Device</TableHead>
-              <TableHead className="w-[8%] text-right">Conteo</TableHead>
-              <TableHead className="w-[12%] text-right">Acciones</TableHead>
+              {mode === "server" && <TableHead>Ubicación</TableHead>}
+              <TableHead>Fecha</TableHead>
+              <TableHead className="hidden md:table-cell">Clase</TableHead>
+              <TableHead>Conteo</TableHead>
+              <TableHead className="hidden md:table-cell">Duración</TableHead>
+              <TableHead className="hidden lg:table-cell">Tamaño</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -143,21 +138,30 @@ export default function SessionsTable({
               >
                 {mode === "server" && (
                   <TableCell>
-                    {s.camellon_id == null ? (
-                      <span className="italic text-muted-foreground">Sin ubicación</span>
-                    ) : (
-                      camellones.get(s.camellon_id)?.nombre ?? `#${s.camellon_id}`
-                    )}
+                    {(() => {
+                      const cam =
+                        s.camellon_id == null
+                          ? undefined
+                          : camellones.get(s.camellon_id)
+                      return (
+                        <LocationCell
+                          camellon={
+                            s.camellon_id == null
+                              ? null
+                              : cam?.nombre ?? `#${s.camellon_id}`
+                          }
+                          fundo={cam?.fundo_nombre ?? null}
+                          empresa={cam?.empresa_nombre ?? null}
+                        />
+                      )
+                    })()}
                   </TableCell>
                 )}
-                <TableCell>{formatDate(s.start_time)}</TableCell>
+                <TableCell>{formatDateTime(s.start_time)}</TableCell>
                 <TableCell className="hidden md:table-cell">
                   <Badge variant="outline">{s.target_class}</Badge>
                 </TableCell>
-                <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
-                  {s.device_id}
-                </TableCell>
-                <TableCell className="text-right">
+                <TableCell>
                   {s.count_status === "counting" || s.count_status === "pending" ? (
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />
@@ -176,8 +180,27 @@ export default function SessionsTable({
                     s.total_count
                   )}
                 </TableCell>
+                <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                  {formatDuration(s.duration_seconds)}
+                </TableCell>
+                <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                  {formatSize(s.file_size_bytes)}
+                </TableCell>
                 <TableCell>
-                  <div className="flex items-center justify-end gap-0.5">
+                  {s.recording_uuid == null ? (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  ) : (
+                    <StatusBadge
+                      status={rowStatus({
+                        uuid: s.recording_uuid,
+                        ended_at: s.end_time,
+                        uploaded_at: s.uploaded_at,
+                      })}
+                    />
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center justify-center gap-0.5">
                     {mode === "robot" && (
                       <Button
                         variant="ghost"
@@ -223,9 +246,27 @@ export default function SessionsTable({
                           setReplaySession(s)
                         }}
                       >
-                        <Video className="size-3.5" />
+                        <Play className="size-3.5" />
                       </Button>
                     )}
+                    {s.recording_uuid != null &&
+                      (mode === "robot" || s.uploaded_at != null) && (
+                        <Button
+                          asChild
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Descargar video"
+                        >
+                          <a
+                            href={getRecordingFileUrl(s.recording_uuid)}
+                            download={`${s.recording_uuid}.mp4`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Download className="size-3.5" />
+                          </a>
+                        </Button>
+                      )}
                     {mode === "server" && (
                       <Button
                         variant="ghost"
@@ -290,7 +331,8 @@ export default function SessionsTable({
 
       {replaySession && (
         <DetectionReplayDialog
-          session={replaySession}
+          recordingUuid={replaySession.recording_uuid}
+          title={`Replay de sesión #${replaySession.id}`}
           open={!!replaySession}
           onOpenChange={(open) => { if (!open) setReplaySession(null) }}
         />

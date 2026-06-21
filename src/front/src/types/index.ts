@@ -32,6 +32,10 @@ export type Session = {
   // Offline counting status/number, derived from the linked recording.
   count_status: CountStatus
   count: number | null
+  // Linked recording's duration/size/upload state (null when no recording).
+  duration_seconds: number | null
+  file_size_bytes: number | null
+  uploaded_at: string | null
 }
 
 export type DetectionFrame = {
@@ -74,6 +78,8 @@ export type Camellon = {
   lat: number | null
   lng: number | null
   fundo_uuid: string | null
+  fundo_nombre: string | null
+  empresa_nombre: string | null
 }
 
 export type CamellonGeoSummary = Camellon & {
@@ -181,6 +187,8 @@ export type Recording = {
   camellon_id: number | null
   camellon_nombre: string | null
   fundo_uuid: string | null
+  fundo_nombre: string | null
+  empresa_nombre: string | null
   started_at: string
   ended_at: string | null
   duration_seconds: number | null

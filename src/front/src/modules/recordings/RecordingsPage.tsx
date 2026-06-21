@@ -10,7 +10,6 @@ import {
 } from "@/api/recordings"
 import { pushRecordingNow } from "@/api/sync"
 import { getEmpresas, getFundos } from "@/api/admin"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -39,26 +38,13 @@ import {
 } from "@/components/ui/table"
 import { useAppMode } from "@/context/AppModeContext"
 import type { Empresa, Fundo, Recording } from "@/types"
+import { LocationCell } from "@/components/LocationCell"
+import { formatDateTime, formatDuration, formatSize, rowStatus } from "@/lib/recordingFormat"
+import { StatusBadge } from "@/components/StatusBadge"
+import DetectionReplayDialog from "@/modules/map/components/DetectionReplayDialog"
 import RecordingPlaceDialog from "@/modules/vision/components/RecordingPlaceDialog"
 
 const POLL_INTERVAL_MS = 30_000
-
-function formatDuration(seconds: number | null): string {
-  if (seconds == null) return "—"
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return m > 0 ? `${m}m ${s.toString().padStart(2, "0")}s` : `${s}s`
-}
-
-function formatSize(bytes: number | null): string {
-  if (bytes == null || bytes === 0) return "—"
-  const mb = bytes / 1_048_576
-  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${(bytes / 1024).toFixed(0)} KB`
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString()
-}
 
 // Local YYYY-MM-DD for date-range filtering (matches the date shown to the user).
 function localDateStr(iso: string): string {
@@ -68,37 +54,13 @@ function localDateStr(iso: string): string {
   return `${d.getFullYear()}-${m}-${day}`
 }
 
-type RowStatus = "active" | "uploaded" | "uploading" | "pending" | "missing"
-
-function rowStatus(rec: Recording, uploadingSet: Set<string>): RowStatus {
-  if (rec.ended_at == null) return "active"
-  if (rec.uploaded_at == null && uploadingSet.has(rec.uuid)) return "uploading"
-  return rec.uploaded_at ? "uploaded" : "pending"
-}
-
-function StatusBadge({ status }: { status: RowStatus }) {
-  switch (status) {
-    case "active":
-      return <Badge variant="destructive">grabando</Badge>
-    case "uploaded":
-      return <Badge variant="default">subido</Badge>
-    case "uploading":
-      return <Badge variant="outline">subiendo</Badge>
-    case "pending":
-      return <Badge variant="secondary">pendiente</Badge>
-    case "missing":
-      return <Badge variant="outline">archivo perdido</Badge>
-  }
-}
-
 function LugarCell({ rec }: { rec: Recording }) {
-  if (!rec.camellon_nombre) {
-    return <span className="text-muted-foreground text-xs">— sin lugar</span>
-  }
   return (
-    <span className="text-xs">
-      {rec.camellon_nombre}
-    </span>
+    <LocationCell
+      camellon={rec.camellon_nombre}
+      fundo={rec.fundo_nombre}
+      empresa={rec.empresa_nombre}
+    />
   )
 }
 
@@ -241,6 +203,9 @@ export default function RecordingsPage() {
 
   const filteredRows = useMemo(() => {
     return rowsByEmpresa.filter((r) => {
+      // "Grabaciones" lists only raw videos: anything with a count attached
+      // (done/counting/pending/error) belongs to the Sessions view.
+      if (r.count_status !== "none") return false
       if (fundoFilter !== "all" && r.fundo_uuid !== fundoFilter) return false
       if (deviceFilter !== "all" && r.device_id !== deviceFilter) return false
       const d = localDateStr(r.started_at)
@@ -414,34 +379,33 @@ export default function RecordingsPage() {
       </div>
 
       <div className="overflow-x-auto rounded-md border">
-        <Table className="min-w-[700px]">
+        <Table className="min-w-[700px] table-fixed [&_th]:text-center [&_td]:text-center">
           <TableHeader>
             <TableRow>
-              <TableHead>Inicio</TableHead>
-              <TableHead>Duración</TableHead>
-              <TableHead>Tamaño</TableHead>
               {mode === "server" && (
                 <TableHead>
-                  <span className="flex items-center gap-1">
-                    <MapPin className="size-3" /> Lugar
+                  <span className="flex items-center justify-center gap-1">
+                    <MapPin className="size-3" /> Ubicación
                   </span>
                 </TableHead>
               )}
-              {mode === "server" && <TableHead>Robot</TableHead>}
+              <TableHead>Fecha</TableHead>
+              <TableHead className="hidden md:table-cell">Duración</TableHead>
+              <TableHead className="hidden lg:table-cell">Tamaño</TableHead>
               <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
+              <TableHead>Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading && rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={mode === "server" ? 7 : 5} className="text-center py-8">
+                <TableCell colSpan={mode === "server" ? 6 : 5} className="text-center py-8">
                   <Loader2 className="size-5 animate-spin inline" />
                 </TableCell>
               </TableRow>
             ) : filteredRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={mode === "server" ? 7 : 5} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={mode === "server" ? 6 : 5} className="text-center py-8 text-muted-foreground">
                   No hay grabaciones todavía.
                 </TableCell>
               </TableRow>
@@ -451,30 +415,35 @@ export default function RecordingsPage() {
                 const canDownload = mode === "robot" || r.uploaded_at != null
                 return (
                   <TableRow key={r.uuid}>
-                    <TableCell className="font-mono text-xs">
-                      {formatDate(r.started_at)}
-                    </TableCell>
-                    <TableCell>{formatDuration(r.duration_seconds)}</TableCell>
-                    <TableCell>{formatSize(r.file_size_bytes)}</TableCell>
                     {mode === "server" && (
                       <TableCell>
                         <LugarCell rec={r} />
                       </TableCell>
                     )}
-                    {mode === "server" && (
-                      <TableCell className="font-mono text-xs">{r.device_id}</TableCell>
-                    )}
+                    <TableCell>
+                      {formatDateTime(r.started_at)}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {formatDuration(r.duration_seconds)}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      {formatSize(r.file_size_bytes)}
+                    </TableCell>
                     <TableCell>
                       <StatusBadge status={status} />
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-0.5">
-                        {mode === "robot" && status === "pending" && (
+                      <div className="flex items-center justify-center gap-0.5">
+                        {mode === "robot" && status !== "active" && status !== "missing" && (
                           <Button
                             size="icon"
                             variant="ghost"
                             className="h-7 w-7"
-                            title="Sincronizar al servidor (metadata + video)"
+                            title={
+                              status === "uploaded"
+                                ? "Re-sincronizar al servidor (video + detecciones)"
+                                : "Sincronizar al servidor (metadata + video)"
+                            }
                             disabled={syncingUuid === r.uuid}
                             onClick={() => handleSync(r)}
                           >
@@ -567,24 +536,14 @@ export default function RecordingsPage() {
 
       {/* Reproductor simple: solo el MP4, sin overlay de detecciones (las
           grabaciones no tienen un conteo/sidecar asociado). */}
-      <Dialog open={playing != null} onOpenChange={(open) => !open && setPlaying(null)}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Reproducir grabación</DialogTitle>
-            <DialogDescription className="font-mono text-xs">
-              {playing ? formatDate(playing.started_at) : ""}
-            </DialogDescription>
-          </DialogHeader>
-          {playing && (
-            <video
-              src={getRecordingFileUrl(playing.uuid)}
-              controls
-              autoPlay
-              className="w-full rounded-md bg-black"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {playing && (
+        <DetectionReplayDialog
+          recordingUuid={playing.uuid}
+          title={`Replay — ${formatDateTime(playing.started_at)}`}
+          open={playing != null}
+          onOpenChange={(open) => { if (!open) setPlaying(null) }}
+        />
+      )}
 
       <RecordingPlaceDialog
         open={editingUuid != null}

@@ -26,6 +26,8 @@ class CamellonOut(BaseModel):
     lat: float | None
     lng: float | None
     fundo_uuid: str | None = None
+    fundo_nombre: str | None = None
+    empresa_nombre: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -64,6 +66,11 @@ class SessionOut(BaseModel):
     # video is the source of truth). 'done' + count once the worker finishes.
     count_status: str = "none"
     count: int | None = None
+    # Linked recording's duration/size/upload state, surfaced so the sessions
+    # table can show the same columns as the recordings table.
+    duration_seconds: float | None = None
+    file_size_bytes: int | None = None
+    uploaded_at: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -369,6 +376,8 @@ class RecordingOut(BaseModel):
     camellon_id: int | None
     camellon_nombre: str | None
     fundo_uuid: str | None
+    fundo_nombre: str | None = None
+    empresa_nombre: str | None = None
     started_at: str
     ended_at: str | None
     duration_seconds: float | None

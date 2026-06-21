@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import type { Session, Detection, RecordingDetections } from "@/types"
+import type { Detection, RecordingDetections } from "@/types"
 import type { MediaRef } from "@/types/stream"
 import { getRecordingDetections, getRecordingFileUrl } from "@/api/recordings"
 import {
@@ -17,7 +17,10 @@ import { Maximize, Minimize } from "lucide-react"
 import { toast } from "sonner"
 
 type Props = {
-  session: Session
+  // Recording to replay. Shared by the sessions and recordings tables, so it
+  // takes a bare recording_uuid + a title instead of a whole Session.
+  recordingUuid: string | null
+  title: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -31,7 +34,7 @@ type RVFCVideo = HTMLVideoElement & {
   cancelVideoFrameCallback?: (handle: number) => void
 }
 
-export default function DetectionReplayDialog({ session, open, onOpenChange }: Props) {
+export default function DetectionReplayDialog({ recordingUuid, title, open, onOpenChange }: Props) {
   const [detData, setDetData] = useState<RecordingDetections | null>(null)
   const [currentDets, setCurrentDets] = useState<Detection[]>([])
   // Running accumulated count at the currently displayed frame. Null when the
@@ -58,14 +61,14 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
   }
 
   useEffect(() => {
-    if (!open || !session.recording_uuid) return
+    if (!open || !recordingUuid) return
     setDetData(null)
     setCurrentDets([])
     setCurrentCount(null)
-    getRecordingDetections(session.recording_uuid)
+    getRecordingDetections(recordingUuid)
       .then(setDetData)
       .catch(() => toast.error("Error al cargar las detecciones"))
-  }, [open, session.recording_uuid])
+  }, [open, recordingUuid])
 
   // Associate detections to the exact video frame. The MP4 is variable-frame-
   // rate, so a frame's position can't be derived from index*fps; instead each
@@ -166,7 +169,7 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:w-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Replay de sesión #{session.id}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         {/* El overlay es hermano del video, así que el fullscreen nativo del
             <video> lo dejaría fuera. Hacemos fullscreen sobre este contenedor
@@ -175,10 +178,10 @@ export default function DetectionReplayDialog({ session, open, onOpenChange }: P
           ref={containerRef}
           className="relative flex items-center justify-center bg-black"
         >
-          {session.recording_uuid && (
+          {recordingUuid && (
             <video
               ref={videoRef}
-              src={getRecordingFileUrl(session.recording_uuid)}
+              src={getRecordingFileUrl(recordingUuid)}
               controls
               controlsList="nofullscreen"
               className={isFullscreen ? "h-full w-full object-contain" : "w-full"}
