@@ -6,11 +6,13 @@ synced (sync_log entry present) but ``uploaded_at`` is still null.
 Separately, pushes the ``{uuid}.jsonl`` detection sidecar, tracked by its own
 ``detections_uploaded_at`` column. The sidecar is decoupled from the MP4 flag
 on purpose: the counting-worker writes it incrementally AFTER recording ends,
-so it is only safe to upload once ``count_status == 'done'`` (a mid-count
-sidecar is partial and would freeze the server replay). The poller clears
-``detections_uploaded_at`` whenever a (re)count finishes, so the complete
-sidecar (re)uploads on the next cycle — this also repairs a server copy left
-truncated by the old mid-count race and propagates re-counts.
+so it is only safe to upload when the count is NOT in progress
+(``count_status`` not in counting/pending) — a mid-count sidecar is partial and
+would freeze the server replay. The poller clears ``detections_uploaded_at``
+whenever a (re)count finishes, so the complete sidecar (re)uploads on the next
+cycle — this also repairs a server copy left truncated by the old mid-count
+race and propagates re-counts. Static none/error sidecars (e.g. old
+live-counted sessions) are covered too.
 
 One recording at a time — large MP4s on a rural link should not run in
 parallel and starve the metadata sync. Uses streaming (file handle, not
@@ -129,29 +131,48 @@ async def _upload_detections(http: aiohttp.ClientSession, row: Recording, base_u
         return False
 
 
+# While the count is in these states the counting-worker is actively (re)writing
+# the JSONL, so a snapshot would be partial — uploading it freezes the server
+# replay at the last logged frame. Every other state (none/done/error) has a
+# static sidecar that is safe to push as-is.
+_COUNTING_IN_PROGRESS = ("counting", "pending")
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _sidecar_needs_upload(count_status: str, detections_uploaded_at: str | None) -> bool:
     """Whether a recording's detection sidecar should be (re)pushed now.
 
-    Complete ⇔ ``count_status == 'done'`` (the counting-worker writes the JSONL
-    incrementally, so a sidecar mid-count is partial — uploading it would freeze
-    the server replay at the last logged frame). Dirty ⇔ ``detections_uploaded_at
-    is None`` (cleared by the poller whenever a (re)count finishes). Decoupled
-    from the MP4's ``uploaded_at`` so re-counts and earlier mid-count
-    truncations get repaired even after the MP4 already landed.
+    Safe ⇔ ``count_status`` is NOT one of ``_COUNTING_IN_PROGRESS`` — i.e. the
+    JSONL is not being written right now (a mid-count file is partial). This
+    deliberately includes ``none``/``error`` recordings: their sidecar (e.g. an
+    old live-counted session) is static and complete locally, and the server's
+    copy may have been truncated by the old mid-count upload race. Dirty ⇔
+    ``detections_uploaded_at is None`` (cleared by the poller on every (re)count,
+    or born NULL after the migration). Decoupled from the MP4's ``uploaded_at``
+    so re-counts and earlier truncations get repaired even after the MP4 landed.
     """
-    return count_status == "done" and detections_uploaded_at is None
+    return count_status not in _COUNTING_IN_PROGRESS and detections_uploaded_at is None
 
 
 async def _push_sidecar_if_ready(
     db: AsyncSession, http: aiohttp.ClientSession, row: Recording, base_url: str
 ) -> None:
-    """(Re)push the detection sidecar only when it is complete and dirty."""
+    """(Re)push the detection sidecar when it is static (not mid-count) and dirty."""
     if not _sidecar_needs_upload(row.count_status, row.detections_uploaded_at):
         return
+    det_path = os.path.join(os.path.dirname(row.file_path), f"{row.uuid}.jsonl")
+    if not os.path.isfile(det_path):
+        # Uncounted recording with no sidecar to push: mark reconciled so the
+        # loop stops re-scanning it. A later (re)count clears this again via the
+        # poller, so a future sidecar still gets pushed.
+        row.detections_uploaded_at = _utcnow_iso()
+        await db.commit()
+        return
     if await _upload_detections(http, row, base_url):
-        row.detections_uploaded_at = datetime.now(timezone.utc).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        row.detections_uploaded_at = _utcnow_iso()
         await db.commit()
 
 
@@ -218,14 +239,15 @@ async def upload_pending_recordings(db: AsyncSession) -> None:
         )
     ).scalars().all()
 
-    # Sidecars whose count finished (complete JSONL) but haven't been pushed yet
-    # — either the count finished after the MP4 was already uploaded, a re-count
-    # re-wrote it, or (after this migration) it predates sidecar tracking and
-    # needs a one-time (re)push to repair an earlier truncated server copy.
+    # Sidecars that are static (not being written right now) but haven't been
+    # pushed yet — the count finished after the MP4 was already uploaded, a
+    # re-count re-wrote it, or (after this migration) it predates sidecar
+    # tracking and needs a one-time (re)push to repair an earlier truncated
+    # server copy. Includes none/error recordings (old live-counted sessions).
     sidecar_rows = (
         await db.execute(
             select(Recording).where(
-                (Recording.count_status == "done")
+                Recording.count_status.notin_(_COUNTING_IN_PROGRESS)
                 & (Recording.detections_uploaded_at.is_(None))
                 & Recording.ended_at.is_not(None)
             ).order_by(Recording.started_at.asc())
@@ -250,7 +272,7 @@ async def upload_pending_recordings(db: AsyncSession) -> None:
                     "%Y-%m-%dT%H:%M:%SZ"
                 )
                 await db.commit()
-                # If its count already finished, push the complete sidecar now.
+                # If its sidecar is static (not mid-count), push it now too.
                 await _push_sidecar_if_ready(db, http, row, config.sync.lan_url)
             else:
                 # One failure short-circuits the rest of the queue: a

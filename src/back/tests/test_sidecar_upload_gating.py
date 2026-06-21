@@ -23,6 +23,15 @@ def test_done_and_never_uploaded_is_pushed():
     assert _sidecar_needs_upload("done", None) is True
 
 
+def test_static_uncounted_sidecars_are_pushed():
+    # none/error are NOT mid-count: their sidecar (e.g. an old live-counted
+    # session) is static and complete locally, while the server copy may be
+    # truncated. Must be eligible — this was the bug where the sync button did
+    # nothing for status='none' recordings.
+    assert _sidecar_needs_upload("none", None) is True
+    assert _sidecar_needs_upload("error", None) is True
+
+
 def test_done_and_already_uploaded_is_not_repushed():
     # Clean: count done and sidecar already sent → nothing to do.
     assert _sidecar_needs_upload("done", "2026-06-20T17:00:00Z") is False
@@ -34,7 +43,8 @@ def test_recount_clears_flag_so_it_repushes():
     assert _sidecar_needs_upload("done", None) is True
 
 
-def test_uncounted_recordings_never_push_a_sidecar():
-    # Live-only / pre-offline recordings (no authoritative JSONL) → never push.
-    assert _sidecar_needs_upload("none", None) is False
-    assert _sidecar_needs_upload("error", None) is False
+def test_already_pushed_static_sidecar_is_not_repushed():
+    # Once any static sidecar is sent, it isn't re-pushed until something
+    # clears the flag (a re-count) — avoids redundant transfers.
+    assert _sidecar_needs_upload("none", "2026-06-20T17:00:00Z") is False
+    assert _sidecar_needs_upload("error", "2026-06-20T17:00:00Z") is False
