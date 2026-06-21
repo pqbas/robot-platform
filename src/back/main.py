@@ -73,6 +73,7 @@ async def lifespan(app: FastAPI):
             reconcile_orphaned_counts,
             run_poller as run_counting_poller,
         )
+        from back.services.perception.counting_trigger import reconcile_categories
         from back.services.perception.model_reconciler import (
             reconcile_active_model_once,
             run_model_reconciler,
@@ -80,6 +81,11 @@ async def lifespan(app: FastAPI):
 
         await reconcile_orphaned_conversions()
         poller_task = asyncio.create_task(run_poller())
+
+        # Seed categories from the legacy counting setup so counting (now resolved
+        # per-category) keeps working across the reframe. Idempotent, never
+        # overwrites server-synced categories.
+        await reconcile_categories()
 
         # Offline counting reconciler + poller (mirror of conversion).
         await reconcile_orphaned_counts()

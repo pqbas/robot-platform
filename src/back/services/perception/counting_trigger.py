@@ -18,8 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import config
-from back.models import DetectionModel, Recording
-from back.services import counting_methods
+from back.models import Category, DetectionModel, Recording
 from back.services.perception.counting_client import (
     CountingClient,
     CountingWorkerUnavailable,
@@ -111,32 +110,47 @@ async def build_count_config(
 ) -> dict:
     """Snapshot the counting config + the chosen model's identity.
 
-    By default uses the active model (the one holding ``selected_label``, same as
-    the live inference path / ``model_reconciler``). Pass ``model_uuid`` to count
+    The category (``target_class``) is the deployment hub: by default the detector
+    AND the full counting geometry (method + line/direction/ROI/confidence) are
+    resolved from ``Category(name=target_class)``. Pass ``model_uuid`` to count
     with a specific model instead — the re-process dialog does this so the chosen
     class fixes its own model. ``runtime`` ("pytorch"/"tensorrt") forces which
     format of that model to run; ``None`` keeps the automatic engine-vs-pt pick.
 
-    ``overrides`` (count_mode/threshold/direction/roi_mode/confidence) overlay the
-    global ``config.counting`` defaults, so the dialog can run a count with
-    per-video parameters the operator reviewed/edited — without touching the
-    global config. Keys absent from ``overrides`` fall back to the global value.
+    ``overrides`` (count_mode/threshold/direction/roi_mode/confidence/method)
+    overlay the resolved geometry, so the re-process dialog can run a count with
+    per-video parameters the operator reviewed/edited. Keys absent from
+    ``overrides`` fall back to the category's geometry, then to the global
+    ``config.counting`` seed default.
 
-    Raises RuntimeError("no_active_model") if no model is found.
+    Raises RuntimeError("no_category") if the category has no detector to count
+    with (default path).
     """
+    category = await db.execute(
+        select(Category).where(Category.name == target_class)
+    )
+    cat = category.scalar_one_or_none()
+
     if model_uuid:
         result = await db.execute(
             select(DetectionModel).where(DetectionModel.uuid == model_uuid)
         )
+        model = result.scalars().first()
+        if model is None:
+            raise RuntimeError("no_category")
     else:
+        # Default path: the category names the detector. Supersedes the old
+        # selected_label resolution — the category is the single config hub.
+        if cat is None or not cat.detection_model_uuid:
+            raise RuntimeError("no_category")
         result = await db.execute(
-            select(DetectionModel)
-            .where(DetectionModel.selected_label.isnot(None))
-            .limit(1)
+            select(DetectionModel).where(
+                DetectionModel.uuid == cat.detection_model_uuid
+            )
         )
-    model = result.scalars().first()
-    if model is None:
-        raise RuntimeError("no_active_model")
+        model = result.scalars().first()
+        if model is None:
+            raise RuntimeError("no_category")
 
     engine_path = _worker_path_for_runtime(model, runtime)
     # Record the runtime that path actually represents, so the replay preview can
@@ -146,22 +160,22 @@ async def build_count_config(
     c = config.counting
     o = overrides or {}
 
-    def _pick(key: str, default):
+    def _pick(key: str, cat_value, default):
+        # override wins, then the category's geometry, then the global seed.
         v = o.get(key)
-        return v if v is not None else default
-
-    # Method default comes from the per-object config (counting_methods), NOT the
-    # global config: each object type carries its own "single"|"tiled" choice
-    # (default "single"). An explicit override (re-process dialog) wins.
-    object_method = counting_methods.read_method(model.uuid, target_class)
+        if v is not None:
+            return v
+        return cat_value if cat_value is not None else default
 
     return {
-        "count_mode": _pick("count_mode", c.count_mode),
-        "threshold": _pick("threshold", c.threshold),
-        "direction": _pick("direction", c.direction),
-        "roi_mode": _pick("roi_mode", c.roi_mode),
-        "confidence": _pick("confidence", c.confidence_threshold),
-        "method": _pick("method", object_method),
+        "count_mode": _pick("count_mode", getattr(cat, "count_mode", None), c.count_mode),
+        "threshold": _pick("threshold", getattr(cat, "threshold", None), c.threshold),
+        "direction": _pick("direction", getattr(cat, "direction", None), c.direction),
+        "roi_mode": _pick("roi_mode", getattr(cat, "roi_mode", None), c.roi_mode),
+        "confidence": _pick(
+            "confidence", getattr(cat, "confidence", None), c.confidence_threshold
+        ),
+        "method": _pick("method", getattr(cat, "method", None), c.method),
         # target_class stays the system_label for display (replay panel / record).
         # target_model_label is what the worker actually counts on (model.names).
         "target_class": target_class,
@@ -172,6 +186,96 @@ async def build_count_config(
         "engine_path": engine_path,
         "runtime": resolved_runtime,
     }
+
+
+def _system_labels(class_mapping_json: str | None) -> list[str]:
+    """system_labels (display labels = category names) declared by a detector."""
+    if not class_mapping_json:
+        return []
+    try:
+        mapping = json.loads(class_mapping_json)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    labels: list[str] = []
+    for entry in mapping:
+        if isinstance(entry, dict):
+            label = entry.get("system_label") or entry.get("model_label")
+            if label and label not in labels:
+                labels.append(label)
+    return labels
+
+
+async def reconcile_categories() -> None:
+    """Idempotently seed ``categories`` from the legacy counting setup.
+
+    build_count_config now resolves the detector + geometry from a Category, so
+    counting only works for classes that have a category row. To preserve "what's
+    countable today" across the reframe, seed one category per currently-countable
+    ``(detector, label)``:
+
+    - For the active detector (``selected_label`` set), one category per
+      ``system_label`` in its ``class_mapping``, with the method from
+      ``counting_methods.json`` (default ``single``) and geometry = column
+      defaults (= ``config.counting`` seed).
+    - Plus any ``{model_uuid}::{label}`` in ``counting_methods.json`` whose model
+      still exists, for labels not already covered.
+
+    Runs in-process at startup (config + the robot-only counting_methods.json
+    resolve here, not inside a migration). Never overwrites an existing category
+    (server-authoritative rows synced down stay intact).
+    """
+    from back.database import AsyncSessionLocal
+    from back.services import counting_methods
+    from back.services import storage
+
+    async with AsyncSessionLocal() as session:
+        existing = {
+            c.name for c in (await session.execute(select(Category))).scalars().all()
+        }
+        created = 0
+
+        # 1) The active detector's classes.
+        active = (
+            await session.execute(
+                select(DetectionModel)
+                .where(DetectionModel.selected_label.isnot(None))
+                .limit(1)
+            )
+        ).scalars().first()
+        if active is not None:
+            for label in _system_labels(active.class_mapping):
+                if label in existing:
+                    continue
+                await storage.create_category(
+                    session,
+                    label,
+                    detection_model_uuid=active.uuid,
+                    method=counting_methods.read_method(active.uuid, label),
+                )
+                existing.add(label)
+                created += 1
+
+        # 2) Explicit per-object method choices pointing at any model.
+        for key, method in counting_methods.read_all().items():
+            model_uuid, _, label = key.partition("::")
+            if not label or label in existing:
+                continue
+            model = (
+                await session.execute(
+                    select(DetectionModel).where(DetectionModel.uuid == model_uuid)
+                )
+            ).scalars().first()
+            if model is None:
+                continue
+            await storage.create_category(
+                session, label, detection_model_uuid=model_uuid, method=method
+            )
+            existing.add(label)
+            created += 1
+
+        if created:
+            await session.commit()
+            logger.info("Seeded %d categories from legacy counting setup", created)
 
 
 def _jsonl_path_for(rec: Recording) -> str:

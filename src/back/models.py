@@ -68,6 +68,61 @@ class DetectionModel(Base):
     selected_label: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class ClassificationModel(Base):
+    """Library of post-counting classifiers (custom PyTorch ``SupervisedModel``).
+
+    Mirrors ``DetectionModel`` as a registry/library; a ``Category`` points at one
+    of these as its chosen classifier. ``class_names`` is the ordered
+    index→name list from training (``discover_classes``) — it travels with the
+    checkpoint so the worker never hardcodes label order.
+    """
+
+    __tablename__ = "classification_models"
+
+    uuid: Mapped[str] = mapped_column(Text, primary_key=True, default=_new_uuid)
+    version: Mapped[str] = mapped_column(Text, nullable=False)
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    file_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(Text, nullable=False, default="uploaded")
+    class_names: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    num_classes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    latent_dim: Mapped[int] = mapped_column(Integer, nullable=False, default=128)
+    imgsz: Mapped[int] = mapped_column(Integer, nullable=False, default=128)
+    created_at: Mapped[str] = mapped_column(Text, default=_now_iso)
+
+
+class Category(Base):
+    """The deployment hub: the object/fruit to detect/count/classify.
+
+    A category (``arandano``, ``persona``…) holds *the best already chosen* for
+    that object — its detector, its (optional) classifier, and the full counting
+    geometry. ``name`` is the counted class (a detector ``system_label``).
+    The platform deploys winners here; experimentation lives elsewhere.
+    """
+
+    __tablename__ = "categories"
+
+    name: Mapped[str] = mapped_column(Text, primary_key=True)
+    detection_model_uuid: Mapped[str | None] = mapped_column(
+        ForeignKey("detection_models.uuid"), nullable=True
+    )
+    classification_model_uuid: Mapped[str | None] = mapped_column(
+        ForeignKey("classification_models.uuid"), nullable=True
+    )
+    # Counting geometry lives per-category: counting blueberries needs one
+    # parameter set, counting people another. config.counting is only the seed
+    # default for new categories; build_count_config reads geometry from here.
+    method: Mapped[str] = mapped_column(Text, nullable=False, default="single")
+    count_mode: Mapped[str] = mapped_column(Text, nullable=False, default="horizontal")
+    threshold: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    direction: Mapped[str] = mapped_column(
+        Text, nullable=False, default="left2right"
+    )
+    roi_mode: Mapped[str] = mapped_column(Text, nullable=False, default="square")
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.25)
+    updated_at: Mapped[str] = mapped_column(Text, default=_now_iso)
+
+
 class Fundo(Base):
     __tablename__ = "fundos"
 
@@ -265,6 +320,22 @@ class Recording(Base):
     count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     count_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     count_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Post-counting classification (classification-worker). Only runs when the
+    # counted category has a classifier assigned; otherwise stays 'none' (zero
+    # cost). classification_config pins the classifier identity for
+    # reproducibility (mirror of count_config). none|pending|classifying|done|error.
+    classification_status: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="none", default="none"
+    )
+    classification_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    classification_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # When classification results+metadata were last pushed (auto sync, like
+    # detections_uploaded_at). NULL + status 'done' ⇒ needs (re)upload.
+    classifications_uploaded_at: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+    # When the crop JPGs were last pushed (manual, with the MP4 — they are heavy).
+    crops_uploaded_at: Mapped[str | None] = mapped_column(Text, nullable=True)
     camellon: Mapped["Camellon | None"] = relationship()
 
 
@@ -272,7 +343,11 @@ class FruitCrop(Base):
     __tablename__ = "fruit_crops"
 
     uuid: Mapped[str] = mapped_column(Text, primary_key=True, default=_new_uuid)
-    session_uuid: Mapped[str] = mapped_column(Text, nullable=False)
+    # The artifact is the video, not the Session (which may not exist when the
+    # count finishes). Crops are produced per Recording; the Session relates via
+    # recording_uuid when saved — so session_uuid is now nullable.
+    session_uuid: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recording_uuid: Mapped[str | None] = mapped_column(Text, nullable=True)
     track_id: Mapped[int] = mapped_column(Integer, nullable=False)
     image_path: Mapped[str] = mapped_column(Text, nullable=False)
     source_frame_uuid: Mapped[str | None] = mapped_column(Text, nullable=True)

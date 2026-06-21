@@ -367,12 +367,25 @@ async def get_recount_config(uuid: str, db: AsyncSession = Depends(get_db)):
             cc = {}
     c = config.counting
 
+    # The category (by target_class) is the deployment hub: it supplies the
+    # default detector + geometry for the dialog when this video wasn't counted
+    # before. Pinned count_config still wins (reproduce what was used).
+    from back.models import Category
+
+    cat = None
+    target_class = cc.get("target_class")
+    if target_class:
+        res = await db.execute(select(Category).where(Category.name == target_class))
+        cat = res.scalar_one_or_none()
+
     # Model + runtime to prefill: the video's pinned model if counted before,
-    # else the active model. Runtime derived from the pinned engine_path.
+    # else the category's detector, else the active model. Runtime from engine_path.
     model_uuid = cc.get("model_uuid")
     runtime = cc.get("runtime")
     if runtime is None and cc.get("engine_path"):
         runtime = "tensorrt" if cc["engine_path"].endswith(".engine") else "pytorch"
+    if model_uuid is None and cat is not None:
+        model_uuid = cat.detection_model_uuid
     if model_uuid is None:
         active = await db.execute(
             select(DetectionModel)
@@ -383,24 +396,24 @@ async def get_recount_config(uuid: str, db: AsyncSession = Depends(get_db)):
         if am is not None:
             model_uuid = am.uuid
 
-    # Method to prefill: the video's last-used method if counted before, else the
-    # per-object default (counting_methods), else single.
-    from back.services import counting_methods
-
-    method = cc.get("method") or counting_methods.read_method(
-        model_uuid, cc.get("target_class")
-    )
+    def _pref(key: str, cat_value, default):
+        v = cc.get(key)
+        if v is not None:
+            return v
+        return cat_value if cat_value is not None else default
 
     return RecountConfigOut(
-        count_mode=cc.get("count_mode", c.count_mode),
-        threshold=cc.get("threshold", c.threshold),
-        direction=cc.get("direction", c.direction),
-        roi_mode=cc.get("roi_mode", c.roi_mode),
-        confidence=cc.get("confidence", c.confidence_threshold),
-        target_class=cc.get("target_class"),
+        count_mode=_pref("count_mode", getattr(cat, "count_mode", None), c.count_mode),
+        threshold=_pref("threshold", getattr(cat, "threshold", None), c.threshold),
+        direction=_pref("direction", getattr(cat, "direction", None), c.direction),
+        roi_mode=_pref("roi_mode", getattr(cat, "roi_mode", None), c.roi_mode),
+        confidence=_pref(
+            "confidence", getattr(cat, "confidence", None), c.confidence_threshold
+        ),
+        target_class=target_class,
         model_uuid=model_uuid,
         runtime=runtime,
-        method=method,  # type: ignore[arg-type]
+        method=_pref("method", getattr(cat, "method", None), c.method),  # type: ignore[arg-type]
     )
 
 
