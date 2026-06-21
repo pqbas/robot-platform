@@ -36,6 +36,47 @@ logger = logging.getLogger("counting_worker.processor")
 
 _HORIZONTAL_DIRECTIONS = ("left2right", "right2left")
 
+# Bottom-tile track_ids are offset by this so they never collide with top-tile
+# ids — the two tiles run independent ByteTrack states, so id 5 can exist in
+# both. The crop filename downstream is ``{track_id}_{frame}.jpg``, so a
+# collision would overwrite one crop with the other's pixels.
+_TILE_ID_OFFSET = 1_000_000
+
+
+def _crossings_path(jsonl_path: str) -> str:
+    """``{dir}/{uuid}.jsonl`` -> ``{dir}/{uuid}.crossings.jsonl``."""
+    base, _ext = os.path.splitext(jsonl_path)
+    return base + ".crossings.jsonl"
+
+
+def _collect_crossings(crossed_ids, dets, frame_idx, pts, *, id_offset=0):
+    """One crossing record per track that crossed in THIS frame.
+
+    ``crossed_ids`` is the delta returned by ``ObjectCounter.update()`` for one
+    tile/counter; ``dets`` are that same tile's detections (full-frame bboxes).
+    We attribute the crossing to the object's bbox at the crossing frame so the
+    classification worker can crop the exact pixels later. ``id_offset`` keeps
+    bottom-tile ids disjoint from top-tile ids (see ``_TILE_ID_OFFSET``).
+    """
+    if not crossed_ids:
+        return []
+    det_by_tid = {d["track_id"]: d for d in dets if d.get("track_id") is not None}
+    records = []
+    for tid in crossed_ids:
+        det = det_by_tid.get(tid)
+        if det is None:
+            continue
+        records.append(
+            {
+                "track_id": tid + id_offset,
+                "frame": frame_idx,
+                "pts": round(pts, 4),
+                "bbox": det["bbox"],
+                "cls": det["cls"],
+            }
+        )
+    return records
+
 
 def count_video(payload: dict) -> dict:
     """Reprocess ``video_path`` and return {total_count, frames}.
@@ -80,10 +121,12 @@ def _count_single(payload: dict) -> dict:
     if not cap.isOpened():
         raise RuntimeError(f"cannot open video: {video_path}")
 
+    crossings_path = _crossings_path(jsonl_path)
     os.makedirs(os.path.dirname(jsonl_path), exist_ok=True)
     frame_idx = 0
+    crossings_total = 0
     try:
-        with open(jsonl_path, "w") as out:
+        with open(jsonl_path, "w") as out, open(crossings_path, "w") as cross_out:
             while True:
                 # Presentation timestamp of the frame about to be read. Captured
                 # BEFORE read() so it refers to *this* frame (verified: frame 0 →
@@ -158,7 +201,10 @@ def _count_single(payload: dict) -> dict:
                     ]
                 else:
                     crossing = tracking_data
-                counter.update(crossing)
+                crossed = counter.update(crossing)
+                for rec in _collect_crossings(crossed, dets, frame_idx, pts):
+                    cross_out.write(json.dumps(rec) + "\n")
+                    crossings_total += 1
 
                 # One dense line per frame (line N ↔ frame N). `pts` is the
                 # frame's own presentation timestamp (seconds, 0-based) — the
@@ -183,13 +229,14 @@ def _count_single(payload: dict) -> dict:
 
     total = counter.get_count()
     logger.info(
-        "Counted %s [single]: total=%d frames=%d (%s)",
+        "Counted %s [single]: total=%d frames=%d crossings=%d (%s)",
         os.path.basename(video_path),
         total,
         frame_idx,
+        crossings_total,
         target_class or "all",
     )
-    return {"total_count": total, "frames": frame_idx}
+    return {"total_count": total, "frames": frame_idx, "crossings": crossings_total}
 
 
 def _count_tiled(payload: dict) -> dict:
@@ -239,10 +286,12 @@ def _count_tiled(payload: dict) -> dict:
     if not cap.isOpened():
         raise RuntimeError(f"cannot open video: {video_path}")
 
+    crossings_path = _crossings_path(jsonl_path)
     os.makedirs(os.path.dirname(jsonl_path), exist_ok=True)
     frame_idx = 0
+    crossings_total = 0
     try:
-        with open(jsonl_path, "w") as out:
+        with open(jsonl_path, "w") as out, open(crossings_path, "w") as cross_out:
             while True:
                 pts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
                 ok, frame = cap.read()
@@ -277,8 +326,17 @@ def _count_tiled(payload: dict) -> dict:
                 bottom_dets, bottom_tracks = _tile_detections(
                     result_bottom, model_bottom, geom, target_class, y_off=geom["tile"]
                 )
-                counter_top.update(top_tracks)
-                counter_bottom.update(bottom_tracks)
+                crossed_top = counter_top.update(top_tracks)
+                crossed_bottom = counter_bottom.update(bottom_tracks)
+                # Attribute each crossing to its own tile's dets; bottom ids are
+                # offset so the two tiles' track_ids stay disjoint downstream.
+                records = _collect_crossings(crossed_top, top_dets, frame_idx, pts)
+                records += _collect_crossings(
+                    crossed_bottom, bottom_dets, frame_idx, pts, id_offset=_TILE_ID_OFFSET
+                )
+                for rec in records:
+                    cross_out.write(json.dumps(rec) + "\n")
+                    crossings_total += 1
                 dets.extend(top_dets)
                 dets.extend(bottom_dets)
 
@@ -300,15 +358,16 @@ def _count_tiled(payload: dict) -> dict:
 
     total = counter_top.get_count() + counter_bottom.get_count()
     logger.info(
-        "Counted %s [tiled]: total=%d (top=%d bottom=%d) frames=%d (%s)",
+        "Counted %s [tiled]: total=%d (top=%d bottom=%d) frames=%d crossings=%d (%s)",
         os.path.basename(video_path),
         total,
         counter_top.get_count(),
         counter_bottom.get_count(),
         frame_idx,
+        crossings_total,
         target_class or "all",
     )
-    return {"total_count": total, "frames": frame_idx}
+    return {"total_count": total, "frames": frame_idx, "crossings": crossings_total}
 
 
 def _tile_geometry(h: int, w: int) -> dict:
