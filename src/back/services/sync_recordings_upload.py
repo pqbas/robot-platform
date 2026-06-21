@@ -3,6 +3,15 @@
 Pushes the MP4 file for each Recording whose metadata has already been
 synced (sync_log entry present) but ``uploaded_at`` is still null.
 
+Separately, pushes the ``{uuid}.jsonl`` detection sidecar, tracked by its own
+``detections_uploaded_at`` column. The sidecar is decoupled from the MP4 flag
+on purpose: the counting-worker writes it incrementally AFTER recording ends,
+so it is only safe to upload once ``count_status == 'done'`` (a mid-count
+sidecar is partial and would freeze the server replay). The poller clears
+``detections_uploaded_at`` whenever a (re)count finishes, so the complete
+sidecar (re)uploads on the next cycle — this also repairs a server copy left
+truncated by the old mid-count race and propagates re-counts.
+
 One recording at a time — large MP4s on a rural link should not run in
 parallel and starve the metadata sync. Uses streaming (file handle, not
 ``read()``) so memory stays bounded.
@@ -86,15 +95,15 @@ async def _upload_one(http: aiohttp.ClientSession, row: Recording, base_url: str
         _uploading_uuids.discard(row.uuid)
 
 
-async def _upload_detections(http: aiohttp.ClientSession, row: Recording, base_url: str) -> None:
-    """Best-effort upload of the {uuid}.jsonl detection log next to the MP4.
+async def _upload_detections(http: aiohttp.ClientSession, row: Recording, base_url: str) -> bool:
+    """Upload the {uuid}.jsonl detection log next to the MP4. Returns success.
 
-    No retry: a failure here is logged but does not block marking the
-    recording uploaded. The MP4 is the primary artifact.
+    A failure is logged but never blocks the MP4 (the primary artifact); the
+    caller leaves ``detections_uploaded_at`` NULL so the next cycle retries.
     """
     det_path = os.path.join(os.path.dirname(row.file_path), f"{row.uuid}.jsonl")
     if not os.path.isfile(det_path):
-        return
+        return False
 
     url = f"{base_url}/api/sync/recordings/{row.uuid}/detections/upload"
     headers = {"Authorization": f"Bearer {config.sync.api_key}"}
@@ -110,12 +119,40 @@ async def _upload_detections(http: aiohttp.ClientSession, row: Recording, base_u
             async with http.post(url, data=data, headers=headers) as resp:
                 if resp.status == 200:
                     logger.info("Detection log %s uploaded", row.uuid)
-                else:
-                    logger.warning(
-                        "Detection log %s: server returned %d", row.uuid, resp.status
-                    )
+                    return True
+                logger.warning(
+                    "Detection log %s: server returned %d", row.uuid, resp.status
+                )
+                return False
     except Exception as exc:
         logger.warning("Detection log %s upload failed: %s", row.uuid, exc)
+        return False
+
+
+def _sidecar_needs_upload(count_status: str, detections_uploaded_at: str | None) -> bool:
+    """Whether a recording's detection sidecar should be (re)pushed now.
+
+    Complete ⇔ ``count_status == 'done'`` (the counting-worker writes the JSONL
+    incrementally, so a sidecar mid-count is partial — uploading it would freeze
+    the server replay at the last logged frame). Dirty ⇔ ``detections_uploaded_at
+    is None`` (cleared by the poller whenever a (re)count finishes). Decoupled
+    from the MP4's ``uploaded_at`` so re-counts and earlier mid-count
+    truncations get repaired even after the MP4 already landed.
+    """
+    return count_status == "done" and detections_uploaded_at is None
+
+
+async def _push_sidecar_if_ready(
+    db: AsyncSession, http: aiohttp.ClientSession, row: Recording, base_url: str
+) -> None:
+    """(Re)push the detection sidecar only when it is complete and dirty."""
+    if not _sidecar_needs_upload(row.count_status, row.detections_uploaded_at):
+        return
+    if await _upload_detections(http, row, base_url):
+        row.detections_uploaded_at = datetime.now(timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+        await db.commit()
 
 
 async def upload_single_recording(db: AsyncSession, uuid: str) -> str:
@@ -139,8 +176,6 @@ async def upload_single_recording(db: AsyncSession, uuid: str) -> str:
     row = result.scalar_one_or_none()
     if row is None or row.ended_at is None:
         return "none"
-    if row.uploaded_at is not None:
-        return "already"
     if not os.path.isfile(row.file_path):
         return "missing"
     if not await _is_metadata_synced(db, uuid):
@@ -152,12 +187,20 @@ async def upload_single_recording(db: AsyncSession, uuid: str) -> str:
         if not await _probe_lan(http, config.sync.lan_url):
             logger.warning("LAN no alcanzable (%s) — upload omitido", config.sync.lan_url)
             return "pending"
-        if not await _upload_one(http, row, config.sync.lan_url):
-            return "pending"
-        await _upload_detections(http, row, config.sync.lan_url)
-        row.uploaded_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        await db.commit()
-        return "uploaded"
+        if row.uploaded_at is None:
+            if not await _upload_one(http, row, config.sync.lan_url):
+                return "pending"
+            row.uploaded_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            await db.commit()
+            status = "uploaded"
+        else:
+            status = "already"
+        # Always (re)push the sidecar when its count is done and dirty — this is
+        # what repairs a server copy truncated by an earlier mid-count upload and
+        # propagates re-counts, even when the MP4 landed long ago. Pressing the
+        # session/recording sync button thus also re-syncs the detection log.
+        await _push_sidecar_if_ready(db, http, row, config.sync.lan_url)
+        return status
 
 
 async def upload_pending_recordings(db: AsyncSession) -> None:
@@ -167,13 +210,29 @@ async def upload_pending_recordings(db: AsyncSession) -> None:
     if not config.sync.lan_url:
         return
 
-    result = await db.execute(
-        select(Recording).where(
-            Recording.uploaded_at.is_(None) & Recording.ended_at.is_not(None)
-        ).order_by(Recording.started_at.asc())
-    )
-    rows = result.scalars().all()
-    if not rows:
+    mp4_rows = (
+        await db.execute(
+            select(Recording).where(
+                Recording.uploaded_at.is_(None) & Recording.ended_at.is_not(None)
+            ).order_by(Recording.started_at.asc())
+        )
+    ).scalars().all()
+
+    # Sidecars whose count finished (complete JSONL) but haven't been pushed yet
+    # — either the count finished after the MP4 was already uploaded, a re-count
+    # re-wrote it, or (after this migration) it predates sidecar tracking and
+    # needs a one-time (re)push to repair an earlier truncated server copy.
+    sidecar_rows = (
+        await db.execute(
+            select(Recording).where(
+                (Recording.count_status == "done")
+                & (Recording.detections_uploaded_at.is_(None))
+                & Recording.ended_at.is_not(None)
+            ).order_by(Recording.started_at.asc())
+        )
+    ).scalars().all()
+
+    if not mp4_rows and not sidecar_rows:
         return
 
     timeout = aiohttp.ClientTimeout(total=600, connect=15)
@@ -181,19 +240,28 @@ async def upload_pending_recordings(db: AsyncSession) -> None:
         if not await _probe_lan(http, config.sync.lan_url):
             logger.warning("LAN no alcanzable (%s) — upload omitido", config.sync.lan_url)
             return
-        for row in rows:
+        for row in mp4_rows:
             if not await _is_metadata_synced(db, row.uuid):
                 # Wait for the metadata push (next cycle) before uploading.
                 continue
             ok = await _upload_one(http, row, config.sync.lan_url)
             if ok:
-                await _upload_detections(http, row, config.sync.lan_url)
                 row.uploaded_at = datetime.now(timezone.utc).strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
                 )
                 await db.commit()
+                # If its count already finished, push the complete sidecar now.
+                await _push_sidecar_if_ready(db, http, row, config.sync.lan_url)
             else:
                 # One failure short-circuits the rest of the queue: a
                 # connectivity blip likely kills all of them, and the
                 # next cycle retries from the top.
                 break
+        for row in sidecar_rows:
+            # May have been pushed already in the MP4 loop above (same session →
+            # same object), so re-check the dirty flag before re-sending.
+            if row.detections_uploaded_at is not None:
+                continue
+            if not await _is_metadata_synced(db, row.uuid):
+                continue
+            await _push_sidecar_if_ready(db, http, row, config.sync.lan_url)

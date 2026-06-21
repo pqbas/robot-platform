@@ -93,6 +93,12 @@ async def _process_worker_result(last_result: dict) -> None:
             rec.count = last_result.get("total_count")
             rec.count_status = "done"
             rec.count_error = None
+            # The sidecar just finished being (re)written in full — mark it dirty
+            # so the upload loop (re)pushes the complete {uuid}.jsonl to the
+            # server, even if the MP4 was already uploaded. Repairs a truncated
+            # server copy from an earlier mid-count upload and propagates
+            # re-counts.
+            rec.detections_uploaded_at = None
             # Re-queue the recording too: its count/count_status/count_config are
             # set after the first sync, so drop its sync_log row to re-push them.
             # The server needs count_config to render the replay overlay

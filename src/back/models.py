@@ -247,6 +247,14 @@ class Recording(Base):
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fps: Mapped[float | None] = mapped_column(Float, nullable=True)
     uploaded_at: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # When the {uuid}.jsonl detection sidecar was last pushed to the server.
+    # Robot-local bookkeeping (never synced) — decoupled from uploaded_at (the
+    # MP4) because the sidecar is written incrementally by the counting-worker
+    # AFTER recording ends, so the MP4 can upload while the JSONL is still
+    # partial. The poller resets this to NULL whenever a (re)count finishes, so
+    # the now-complete sidecar re-uploads on the next cycle. NULL + count_status
+    # 'done' ⇒ needs (re)upload.
+    detections_uploaded_at: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Deferred offline counting (counting-worker). The video is the source of
     # truth; the count is recomputed offline. count_config snapshots the config
     # + model identity (model_uuid/version/file_hash/engine_path) for
