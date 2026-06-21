@@ -5,9 +5,16 @@ JetPack torch). The encoder forward + full ``classify_video`` are validated on
 the robot against a real recording (see spec validation).
 """
 
-import numpy as np
+import json
 
-from classification_worker.processor import _clamp_bbox, _probe_predict
+import numpy as np
+import pytest
+
+from classification_worker.processor import (
+    _clamp_bbox,
+    _probe_predict,
+    _read_crossings,
+)
 
 
 def _probe(n_classes=3, dim=4):
@@ -53,3 +60,43 @@ def test_clamp_bbox_degenerate_returns_none():
     assert _clamp_bbox([50, 50, 50, 60], 100, 100) is None  # zero width
     assert _clamp_bbox([50, 50, 60, 50], 100, 100) is None  # zero height
     assert _clamp_bbox([200, 200, 210, 210], 100, 100) is None  # fully outside
+
+
+def test_read_crossings_parses_jsonl(tmp_path):
+    p = tmp_path / "x.crossings.jsonl"
+    p.write_text(
+        json.dumps({"track_id": 1, "frame": 0, "bbox": [1, 2, 3, 4], "cls": "a"})
+        + "\n\n"  # blank line tolerated
+        + json.dumps({"track_id": 2, "frame": 5, "bbox": [5, 6, 7, 8], "cls": "a"})
+        + "\n"
+    )
+    rows = _read_crossings(str(p))
+    assert [r["track_id"] for r in rows] == [1, 2]
+    assert rows[0]["bbox"] == [1, 2, 3, 4]
+
+
+def test_read_crossings_missing_raises(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        _read_crossings(str(tmp_path / "nope.jsonl"))
+
+
+def test_preprocessing_matches_training_recipe():
+    """Crop BGR→RGB → Resize((128,128)) stretch → ToTensor [0,1], no normalize.
+    Mirrors mlops dataset.py test path. Needs torchvision (Jetson system site)."""
+    torch = pytest.importorskip("torch")
+    transforms = pytest.importorskip("torchvision.transforms")
+    from PIL import Image
+
+    imgsz = 128
+    transform = transforms.Compose(
+        [transforms.Resize((imgsz, imgsz)), transforms.ToTensor()]
+    )
+    # Known non-square crop with a distinct R/B so BGR→RGB is observable.
+    bgr = np.zeros((40, 80, 3), dtype=np.uint8)
+    bgr[:, :, 2] = 255  # red channel in BGR
+    rgb = bgr[:, :, ::-1]
+    t = transform(Image.fromarray(rgb))
+    assert t.shape == (3, imgsz, imgsz)          # stretched to square
+    assert float(t.min()) >= 0.0 and float(t.max()) <= 1.0  # [0,1], no normalize
+    assert torch.allclose(t[0], torch.ones_like(t[0]))   # R==1
+    assert torch.allclose(t[2], torch.zeros_like(t[2]))  # B==0 (proves RGB order)

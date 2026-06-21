@@ -20,7 +20,6 @@ from back.database import get_db
 from back.models import (
     Camellon,
     DetectionModel,
-    FruitClassification,
     FruitCrop,
     Fundo,
     Recording,

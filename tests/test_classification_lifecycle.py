@@ -22,7 +22,11 @@ from back.models import (
     Recording,
 )
 from back.services import storage
-from back.services.perception.classification_poller import _transcribe_results
+from back.services.perception.classification_poller import (
+    _process_worker_result,
+    _transcribe_results,
+    reconcile_orphaned_classifications,
+)
 from back.services.perception.classification_trigger import (
     build_classification_config,
 )
@@ -165,3 +169,103 @@ async def test_transcribe_results_creates_crops_and_is_idempotent(setup_db, tmp_
         cls2 = (await s.execute(select(FruitClassification))).scalars().all()
     assert len(crops2) == 3
     assert len(cls2) == 3
+
+
+async def _persist_rec(uuid: str, *, file_path: str, status: str, cfg: dict | None) -> None:
+    async with AsyncSessionLocal() as s:
+        await s.execute(delete(Recording).where(Recording.uuid == uuid))
+        s.add(
+            Recording(
+                uuid=uuid,
+                started_at="2026-06-20T00:00:00Z",
+                file_path=file_path,
+                count_status="done",
+                classification_status=status,
+                classification_config=json.dumps(cfg) if cfg else None,
+            )
+        )
+        await s.commit()
+
+
+@pytest.mark.asyncio
+async def test_process_worker_result_ok_marks_done_and_creates_rows(setup_db, tmp_path):
+    await _wipe()
+    uuid = "p-ok"
+    mp4 = tmp_path / f"{uuid}.mp4"
+    mp4.write_bytes(b"")
+    (tmp_path / f"{uuid}.classifications.jsonl").write_text(
+        json.dumps(
+            {
+                "track_id": 1,
+                "frame": 0,
+                "bbox": [0, 0, 10, 10],
+                "label": "AZUL",
+                "confidence": 0.8,
+                "crop": "1_0.jpg",
+            }
+        )
+        + "\n"
+    )
+    await _persist_rec(uuid, file_path=str(mp4), status="classifying", cfg={"model_uuid": "m-1"})
+
+    await _process_worker_result({"ok": True, "uuid": uuid, "finished_at": "x"})
+
+    async with AsyncSessionLocal() as s:
+        rec = (
+            await s.execute(select(Recording).where(Recording.uuid == uuid))
+        ).scalar_one()
+        crops = (
+            await s.execute(select(FruitCrop).where(FruitCrop.recording_uuid == uuid))
+        ).scalars().all()
+    assert rec.classification_status == "done"
+    assert rec.classification_error is None
+    assert rec.classifications_uploaded_at is None  # dirty → needs upload
+    assert len(crops) == 1
+
+
+@pytest.mark.asyncio
+async def test_process_worker_result_error_sets_error(setup_db, tmp_path):
+    await _wipe()
+    uuid = "p-err"
+    await _persist_rec(uuid, file_path=str(tmp_path / f"{uuid}.mp4"), status="classifying", cfg={"model_uuid": "m"})
+    await _process_worker_result({"ok": False, "uuid": uuid, "error": "boom"})
+    async with AsyncSessionLocal() as s:
+        rec = (
+            await s.execute(select(Recording).where(Recording.uuid == uuid))
+        ).scalar_one()
+    assert rec.classification_status == "error"
+    assert rec.classification_error == "boom"
+
+
+@pytest.mark.asyncio
+async def test_process_worker_result_does_not_touch_done_rows(setup_db, tmp_path):
+    await _wipe()
+    uuid = "p-done"
+    await _persist_rec(uuid, file_path=str(tmp_path / f"{uuid}.mp4"), status="done", cfg={"model_uuid": "m"})
+    # An error result for an already-done row must be ignored (guard on status).
+    await _process_worker_result({"ok": False, "uuid": uuid, "error": "late"})
+    async with AsyncSessionLocal() as s:
+        rec = (
+            await s.execute(select(Recording).where(Recording.uuid == uuid))
+        ).scalar_one()
+    assert rec.classification_status == "done"
+    assert rec.classification_error is None
+
+
+@pytest.mark.asyncio
+async def test_reconcile_orphaned_classification_missing_mp4_errors(setup_db, tmp_path):
+    await _wipe()
+    uuid = "orph"
+    await _persist_rec(
+        uuid,
+        file_path=str(tmp_path / "does-not-exist.mp4"),
+        status="classifying",
+        cfg={"model_uuid": "m", "model_path": str(tmp_path / "m.npz")},
+    )
+    await reconcile_orphaned_classifications()
+    async with AsyncSessionLocal() as s:
+        rec = (
+            await s.execute(select(Recording).where(Recording.uuid == uuid))
+        ).scalar_one()
+    assert rec.classification_status == "error"
+    assert "MP4" in (rec.classification_error or "")
