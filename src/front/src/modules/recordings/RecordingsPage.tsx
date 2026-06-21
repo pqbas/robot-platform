@@ -45,6 +45,7 @@ import DetectionReplayDialog from "@/modules/map/components/DetectionReplayDialo
 import RecordingPlaceDialog from "@/modules/vision/components/RecordingPlaceDialog"
 
 const POLL_INTERVAL_MS = 30_000
+const PAGE_SIZE = 13
 
 // Local YYYY-MM-DD for date-range filtering (matches the date shown to the user).
 function localDateStr(iso: string): string {
@@ -84,6 +85,7 @@ export default function RecordingsPage() {
   const [deviceFilter, setDeviceFilter] = useState("all")
   const [dateFrom, setDateFrom] = useState<string | null>(null)
   const [dateTo, setDateTo] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
 
   const loadBase = useCallback(async () => {
     try {
@@ -214,6 +216,13 @@ export default function RecordingsPage() {
       return true
     })
   }, [rowsByEmpresa, fundoFilter, deviceFilter, dateFrom, dateTo])
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages - 1)
+  const pagedRows = filteredRows.slice(
+    safePage * PAGE_SIZE,
+    (safePage + 1) * PAGE_SIZE,
+  )
 
   // Reset child filter when parent filter changes and selection is no longer valid
   useEffect(() => {
@@ -410,7 +419,7 @@ export default function RecordingsPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredRows.map((r) => {
+              pagedRows.map((r) => {
                 const status = rowStatus(r, uploadingUuids)
                 const canDownload = mode === "robot" || r.uploaded_at != null
                 return (
@@ -506,6 +515,22 @@ export default function RecordingsPage() {
           </TableBody>
         </Table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex shrink-0 items-center justify-center gap-1 border-t pt-2">
+          {Array.from({ length: totalPages }, (_, i) => (
+            <Button
+              key={i}
+              variant={i === safePage ? "default" : "ghost"}
+              size="sm"
+              className="h-7 w-7 p-0 text-xs"
+              onClick={() => setPage(i)}
+            >
+              {i + 1}
+            </Button>
+          ))}
+        </div>
+      )}
 
       <Dialog open={deleting != null} onOpenChange={(open) => !open && setDeleting(null)}>
         <DialogContent>
