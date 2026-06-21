@@ -390,6 +390,8 @@ class RecordingOut(BaseModel):
     count_status: str = "none"
     count: int | None = None
     count_error: str | None = None
+    classification_status: str = "none"
+    classification_error: str | None = None
 
     model_config = {"from_attributes": True}
 

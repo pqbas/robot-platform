@@ -64,7 +64,12 @@ async def lifespan(app: FastAPI):
     poller_task = None
     reconciler_task = None
     counting_poller_task = None
+    classification_poller_task = None
     if app_config.mode == AppMode.ROBOT:
+        from back.services.perception.classification_poller import (
+            reconcile_orphaned_classifications,
+            run_poller as run_classification_poller,
+        )
         from back.services.perception.conversion_poller import (
             reconcile_orphaned_conversions,
             run_poller,
@@ -91,6 +96,13 @@ async def lifespan(app: FastAPI):
         await reconcile_orphaned_counts()
         counting_poller_task = asyncio.create_task(run_counting_poller())
 
+        # Offline ripeness classification reconciler + poller (chained after a
+        # count; no-op for categories without a classifier).
+        await reconcile_orphaned_classifications()
+        classification_poller_task = asyncio.create_task(
+            run_classification_poller()
+        )
+
         # Restore the worker's model from the DB selection: after a worker
         # restart it boots on the default .pt, so re-push the .engine if the
         # active model has one ready. Periodic loop also heals later drift.
@@ -105,6 +117,8 @@ async def lifespan(app: FastAPI):
         poller_task.cancel()
     if counting_poller_task:
         counting_poller_task.cancel()
+    if classification_poller_task:
+        classification_poller_task.cancel()
     if reconciler_task:
         reconciler_task.cancel()
     await close_all_connections()

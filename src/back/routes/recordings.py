@@ -17,7 +17,15 @@ from sqlalchemy.orm import selectinload
 
 from back.config import AppMode, config
 from back.database import get_db
-from back.models import Camellon, DetectionModel, Fundo, Recording, SyncLog
+from back.models import (
+    Camellon,
+    DetectionModel,
+    FruitClassification,
+    FruitCrop,
+    Fundo,
+    Recording,
+    SyncLog,
+)
 from back.schemas import (
     RecordingOut,
     RecordingPlaceUpdate,
@@ -90,6 +98,8 @@ async def _build_out(db: AsyncSession, row: Recording) -> RecordingOut:
         count_status=row.count_status,
         count=row.count,
         count_error=row.count_error,
+        classification_status=row.classification_status,
+        classification_error=row.classification_error,
     )
 
 
@@ -499,6 +509,104 @@ async def recount(
     await db.flush()
     await db.refresh(rec)
     return await _build_out(db, rec)
+
+
+@router.post("/{uuid}/reclassify", response_model=RecordingOut)
+async def reclassify(
+    uuid: str,
+    use_pinned: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-run offline ripeness classification for a counted recording.
+
+    Needs the recording counted (so ``{uuid}.crossings.jsonl`` exists). By default
+    rebuilds the classifier pin from the category; ``use_pinned=true`` reproduces
+    the ``classification_config`` already on the row.
+
+    404 if unknown; 409 if not counted, the MP4 is missing, or the category has no
+    classifier assigned.
+    """
+    rec = (
+        await db.execute(select(Recording).where(Recording.uuid == uuid))
+    ).scalar_one_or_none()
+    if rec is None:
+        raise HTTPException(404, "Recording not found")
+    if not os.path.isfile(rec.file_path):
+        raise HTTPException(409, "El MP4 no está en disco")
+    if rec.count_status != "done":
+        raise HTTPException(409, "La grabación no está contada; cuenta primero")
+
+    from back.services.perception.classification_trigger import (
+        build_classification_config,
+        enqueue_classification,
+    )
+
+    if use_pinned:
+        if not rec.classification_config:
+            raise HTTPException(
+                409, "No hay classification_config para reproducir; reclasifica normal"
+            )
+        cfg = json.loads(rec.classification_config)
+    else:
+        cfg = await build_classification_config(db, rec)
+        if cfg is None:
+            raise HTTPException(409, "La categoría no tiene un clasificador asignado")
+
+    await enqueue_classification(db, rec, cfg)
+    await db.flush()
+    await db.refresh(rec)
+    return await _build_out(db, rec)
+
+
+@router.get("/{uuid}/classifications")
+async def get_recording_classifications(
+    uuid: str, db: AsyncSession = Depends(get_db)
+):
+    """Ripeness classification results for a recording — summary + crop gallery.
+
+    Returns ``{status, error, distribution, crops}`` where ``distribution`` is a
+    per-class count and each crop carries its predicted label/confidence, bbox and
+    crop image filename. Available in robot and server mode. Empty crop list while
+    classification hasn't produced results yet.
+    """
+    rec = (
+        await db.execute(select(Recording).where(Recording.uuid == uuid))
+    ).scalar_one_or_none()
+    if rec is None:
+        raise HTTPException(404, "Recording not found")
+
+    crops = (
+        await db.execute(
+            select(FruitCrop)
+            .options(selectinload(FruitCrop.classifications))
+            .where(FruitCrop.recording_uuid == uuid)
+            .order_by(FruitCrop.track_id)
+        )
+    ).scalars().all()
+
+    distribution: dict[str, int] = {}
+    out_crops = []
+    for crop in crops:
+        cl = crop.classifications[0] if crop.classifications else None
+        label = cl.class_name if cl else None
+        if label is not None:
+            distribution[label] = distribution.get(label, 0) + 1
+        out_crops.append(
+            {
+                "track_id": crop.track_id,
+                "label": label,
+                "confidence": cl.confidence if cl else None,
+                "bbox": [crop.bbox_x, crop.bbox_y, crop.bbox_w, crop.bbox_h],
+                "crop": os.path.basename(crop.image_path),
+            }
+        )
+
+    return {
+        "status": rec.classification_status,
+        "error": rec.classification_error,
+        "distribution": distribution,
+        "crops": out_crops,
+    }
 
 
 @router.delete("/{uuid}")

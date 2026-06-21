@@ -129,6 +129,15 @@ async def _process_worker_result(last_result: dict) -> None:
                     )
                 )
             logger.info("Conteo listo %s: %s", uuid, rec.count)
+            # Chain post-count ripeness classification. No-op when the counted
+            # category has no classifier assigned (the common case) — so this is
+            # free for plain counting. Never raises; a classifier failure is
+            # recorded on the row, it does not undo the count.
+            from back.services.perception.classification_trigger import (
+                enqueue_classification,
+            )
+
+            await enqueue_classification(session, rec)
         else:
             rec.count_status = "error"
             rec.count_error = last_result.get("error") or "unknown"

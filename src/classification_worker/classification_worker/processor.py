@@ -265,6 +265,7 @@ def _classify_frame(
                     "track_id": cr["track_id"],
                     "frame": cr["frame"],
                     "pts": cr.get("pts"),
+                    "bbox": cr.get("bbox"),    # full-frame [x1,y1,x2,y2] (for FruitCrop)
                     "det_cls": cr.get("cls"),  # YOLO detector label (NOT ripeness)
                     "label": label,            # predicted ripeness class
                     "confidence": round(confidence, 4),
