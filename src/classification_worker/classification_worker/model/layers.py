@@ -1,0 +1,48 @@
+"""CNN building blocks — vendored verbatim from
+``mlops-classification-blueberry/src/nn/layers.py``.
+
+Workers are isolated uv projects; the backend never imports worker code and the
+worker never imports the training repo. We copy the few nn modules the frozen
+Encoder needs (ConvBNAct, ResBlock) so the architecture matches the trained
+weights exactly. Keep in sync with the training repo if the backbone changes.
+Only the encoder path is vendored — the Decoder/UpBlock (used for
+reconstruction during training) are not needed at inference.
+"""
+
+from __future__ import annotations
+
+import torch
+from torch import nn
+
+
+class ConvBNAct(nn.Module):
+    """Conv 3x3 + BatchNorm + SiLU. Bloque base de downsampling/refinamiento."""
+
+    def __init__(self, in_ch: int, out_ch: int, stride: int = 1) -> None:
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=stride, padding=1, bias=False),
+            nn.BatchNorm2d(out_ch),
+            nn.SiLU(inplace=True),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.block(x)
+
+
+class ResBlock(nn.Module):
+    """BasicBlock residual: dos conv 3x3 a resolucion constante + identidad."""
+
+    def __init__(self, channels: int) -> None:
+        super().__init__()
+        self.conv1 = nn.Conv2d(channels, channels, 3, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.conv2 = nn.Conv2d(channels, channels, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(channels)
+        self.act = nn.SiLU(inplace=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = x
+        x = self.act(self.bn1(self.conv1(x)))
+        x = self.bn2(self.conv2(x))
+        return self.act(x + residual)

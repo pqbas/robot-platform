@@ -1,0 +1,30 @@
+[project]
+name = "classification-worker"
+version = "0.1.0"
+# Runs against the Jetson system Python (3.8) like the counting/inference workers
+# so it can use JetPack's CUDA PyTorch. The frozen Encoder runs on the GPU (the
+# JetPack torch 1.12 CPU conv path produces non-finite output for this backbone);
+# the linear probe is pure numpy.
+description = "Offline blueberry ripeness classification worker — crops crossings + Encoder embedding + linear probe over a Unix socket"
+requires-python = ">=3.8"
+dependencies = [
+    "opencv-python>=4.13.0.90",
+    "pillow>=9.0",
+]
+# torch + torchvision are NOT declared: on the Jetson they come from the system
+# site-packages (JetPack CUDA builds; the .venv has include-system-site-packages
+# = true) so uv never tries to resolve an aarch64 CUDA wheel. Mirrors how the
+# counting worker gets torch transitively. numpy likewise comes from the system
+# on the Jetson; the dev group pins a modern numpy for laptop/CI.
+
+[project.scripts]
+classification-worker = "classification_worker.main:main"
+
+[dependency-groups]
+dev = [
+    "numpy>=2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
