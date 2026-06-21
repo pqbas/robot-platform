@@ -1,9 +1,9 @@
 /**
- * Stacked location cell shared by the sessions and recordings tables.
+ * Single-line location cell shared by the sessions and recordings tables.
  *
- * Shows the camellon as the primary line and "Empresa · Fundo" muted below it,
- * so a single "Ubicación" column carries the full empresa → fundo → camellon
- * hierarchy. Any missing parent level is simply omitted.
+ * Joins the available levels of the empresa → fundo → camellon hierarchy with
+ * " · " on one line; missing levels are omitted. Truncates with a title
+ * tooltip so a long path never wraps to a second line.
  */
 export function LocationCell({
   camellon,
@@ -19,13 +19,10 @@ export function LocationCell({
       <span className="italic text-muted-foreground text-xs">Sin ubicación</span>
     )
   }
-  const parent = [empresa, fundo].filter(Boolean).join(" · ")
+  const path = [empresa, fundo, camellon].filter(Boolean).join(" · ")
   return (
-    <div className="flex flex-col leading-tight">
-      <span className="text-sm">{camellon}</span>
-      {parent && (
-        <span className="text-xs text-muted-foreground">{parent}</span>
-      )}
-    </div>
+    <span className="block truncate text-xs" title={path}>
+      {path}
+    </span>
   )
 }
