@@ -168,7 +168,10 @@ class CameraStreamTrack(VideoStreamTrack):
             except Exception:
                 logger.debug("Data channel send failed", exc_info=True)
 
-        video_frame = av.VideoFrame.from_ndarray(frame, format="bgr24")
+        # Frame llega YUYV crudo (H, W, 2) desde el camera worker; nvvidconv (VIC)
+        # hace YUY2→NV12 en el encoder. submit_frame() pasó el mismo YUYV a la
+        # inferencia, que convierte a BGR en inference_client.detect().
+        video_frame = av.VideoFrame.from_ndarray(frame, format="yuyv422")
         video_frame.pts = pts
         video_frame.time_base = time_base
         return video_frame
