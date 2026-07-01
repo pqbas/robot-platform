@@ -5,7 +5,9 @@ Fan-out: opens the camera once, broadcasts each frame to every connected client
 
 Two sockets:
 - frames socket (default ``/tmp/camera.sock``) — handshake + length-prefixed
-  raw BGR frames. Consumers: WebRTC backend + recording-worker.
+  raw YUYV (YUY2 4:2:2, 2 bytes/px) frames. Color conversion to NV12 happens
+  downstream in hardware (nvvidconv/VIC). Consumers: WebRTC backend +
+  recording-worker.
 - control socket (default ``/tmp/camera-control.sock``) — JSON length-prefixed
   request/response. Used by the backend to swap the active resolution preset
   without restarting the systemd unit (Phase 11).
@@ -148,6 +150,11 @@ def open_camera(args):
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
             cap.set(cv2.CAP_PROP_FPS, args.fps)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            # Ask V4L2 for the raw YUYV buffer (2 bytes/px, shape (H, W, 2))
+            # instead of letting OpenCV decode it to BGR on the CPU. The single
+            # color conversion then happens downstream in hardware (nvvidconv /
+            # VIC), never per-frame on a CPU core.
+            cap.set(cv2.CAP_PROP_CONVERT_RGB, 0)
             if cap.isOpened():
                 actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -156,10 +163,24 @@ def open_camera(args):
                 fourcc_str = "".join(
                     chr((actual_fourcc >> 8 * i) & 0xFF) for i in range(4)
                 )
+                convert_rgb = cap.get(cv2.CAP_PROP_CONVERT_RGB)
                 logger.info(
-                    "Camera opened (index=%d) — actual %dx%d @ %.1ffps fourcc=%s",
-                    args.index, actual_width, actual_height, actual_fps, fourcc_str,
+                    "Camera opened (index=%d) — actual %dx%d @ %.1ffps "
+                    "fourcc=%s convert_rgb=%s",
+                    args.index, actual_width, actual_height, actual_fps,
+                    fourcc_str, convert_rgb,
                 )
+                # If the driver ignored CONVERT_RGB=0 it will hand us decoded
+                # BGR (3 bytes/px) while the handshake advertises YUYV (2 bytes).
+                # Abort loudly rather than serve mislabeled frames.
+                if convert_rgb >= 0.5:
+                    cap.release()
+                    raise RuntimeError(
+                        "camera driver ignored CAP_PROP_CONVERT_RGB=0 "
+                        "(get() returned %s); the fan-out expects raw YUYV. "
+                        "Re-enable the CPU BGR path or use a driver that "
+                        "honors the flag." % convert_rgb
+                    )
                 return cap, actual_width, actual_height, actual_fps
             cap.release()
             logger.warning("Camera not available — retrying in 1s")
@@ -225,9 +246,11 @@ class FrameBroadcaster:
             self._actual_fps,
         ) = await loop.run_in_executor(None, open_camera, self._args)
         crop = self._args.crop
+        # Force an even output width: a YUYV macropixel spans 2 columns, so an
+        # odd crop would split it and corrupt the chroma. No-op at 1920.
         self._out_width = (
             min(crop, self._actual_width) if crop > 0 else self._actual_width
-        )
+        ) & ~1
         self._out_height = self._actual_height
         self._produce_task = asyncio.create_task(self._produce(), name="frame-producer")
 
@@ -313,7 +336,7 @@ class FrameBroadcaster:
                         min(crop, self._actual_width)
                         if crop > 0
                         else self._actual_width
-                    )
+                    ) & ~1
                     self._out_height = self._actual_height
                 finally:
                     self._reload_request.clear()
@@ -379,7 +402,7 @@ async def handle_client(
         {
             "width": broadcaster.out_width,
             "height": broadcaster.out_height,
-            "channels": 3,
+            "channels": 2,
             "fps": broadcaster.out_fps,
         }
     ).encode()
