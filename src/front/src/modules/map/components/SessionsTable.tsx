@@ -176,8 +176,18 @@ export default function SessionsTable({
                     >
                       error
                     </span>
-                  ) : (
+                  ) : s.total_count > 0 ? (
+                    // Sesiones viejas con conteo en vivo real.
                     s.total_count
+                  ) : (
+                    // El conteo offline es bajo demanda: aún sin contar (el
+                    // conteo en vivo ya no incrementa, solo dibuja overlay).
+                    <span
+                      className="text-xs text-muted-foreground"
+                      title="Aún sin contar — usa Re-contar"
+                    >
+                      sin contar
+                    </span>
                   )}
                 </TableCell>
                 <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
