@@ -173,32 +173,28 @@ if HAS_GSTREAMER:
             bitrate_kbps = self.target_bitrate // 1000
             self._applied_bitrate = self.target_bitrate
 
+            # The camera worker now serves raw YUYV (YUY2 4:2:2, 2 bytes/px), so
+            # the appsrc declares YUY2 for every backend. nvvidconv (HW VIC)
+            # accepts YUY2 in system memory directly, so the Jetson path needs
+            # no CPU videoconvert at all. The nvh264enc/x264enc dev branches keep
+            # their videoconvert, which now converts from YUY2 instead of BGR.
             appsrc_caps = (
                 "appsrc name=src is-live=true format=time do-timestamp=false "
-                f"caps=video/x-raw,format=BGR,width={width},height={height},"
+                f"caps=video/x-raw,format=YUY2,width={width},height={height},"
                 "framerate=30/1"
             )
 
             if self._encoder_element == "nvv4l2h264enc":
-                # Pipeline split intentionally:
-                #   videoconvert: BGR → BGRx (system memory). Only adds an
-                #     alpha byte; no color-matrix math. Cheap on CPU.
-                #   nvvidconv: BGRx (sysmem) → NV12 (NVMM) on the HW VIC.
-                #     The recording_worker uses 'BGR → NV12 → nvvidconv' but
-                #     that path runs the full color conversion on CPU and at
-                #     1080p caps the synchronous WebRTC encode at ~11 fps.
-                #     BGRx→NV12 stays in the HW VIC.
-                # nvvidconv on Jetson does not accept 'video/x-raw,format=BGR'
-                # in system memory reliably (returns black frames); BGRx is
-                # the cheapest input format it does accept.
+                # Zero CPU color conversion: YUY2 (sysmem) → NV12 (NVMM) happens
+                # entirely on the HW VIC in nvvidconv. (Previously BGR needed a
+                # CPU videoconvert to BGRx first, because nvvidconv does not
+                # accept BGR in system memory reliably — it does accept YUY2.)
                 # do-timestamp stays false because aiortc sets pts/time_base
                 # on the av.VideoFrame upstream (CameraStreamTrack.recv);
                 # letting GStreamer overwrite them breaks RTP sync.
                 pipeline_str = (
                     f"{appsrc_caps} "
                     "! queue "
-                    "! videoconvert "
-                    "! video/x-raw,format=BGRx "
                     "! nvvidconv "
                     "! video/x-raw(memory:NVMM),format=NV12 "
                     f"! nvv4l2h264enc name=enc bitrate={self.target_bitrate} "
@@ -328,7 +324,7 @@ if HAS_GSTREAMER:
             # object; Gst.Buffer.new_wrapped takes ownership without a second
             # memcpy. Saves ~6 MB/frame at 1080p vs new_allocate + fill
             # (~10-15 ms/frame on Jetson ARM).
-            raw = frame.to_ndarray(format="bgr24").tobytes()
+            raw = frame.to_ndarray(format="yuyv422").tobytes()
             buf = Gst.Buffer.new_wrapped(raw)
             duration = Gst.SECOND // 30
             buf.pts = self._frame_count * duration

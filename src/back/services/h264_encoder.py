@@ -52,21 +52,24 @@ class H264AnnexBEncoder:
         if self._pipeline is not None:
             self._pipeline.set_state(Gst.State.NULL)
 
+        # El camera worker sirve YUYV crudo (YUY2 4:2:2), así que el appsrc
+        # declara YUY2 en todos los backends. nvvidconv (VIC) acepta YUY2 en
+        # system memory directo → el path Jetson no necesita videoconvert de CPU.
+        # Las ramas nvh264enc/x264enc (dev) conservan su videoconvert, que ahora
+        # parte de YUY2.
         appsrc_caps = (
             "appsrc name=src is-live=true format=time do-timestamp=false "
-            f"caps=video/x-raw,format=BGR,width={width},height={height},"
+            f"caps=video/x-raw,format=YUY2,width={width},height={height},"
             "framerate=30/1"
         )
 
         if self._encoder_element == "nvv4l2h264enc":
-            # BGR → BGRx (videoconvert, system mem) → NV12 NVMM (nvvidconv on
-            # the HW VIC) → nvv4l2h264enc. h264parse re-emite SPS+PPS antes
+            # YUY2 (sysmem) → NV12 NVMM en nvvidconv (HW VIC), sin conversión de
+            # color en CPU → nvv4l2h264enc. h264parse re-emite SPS+PPS antes
             # de cada IDR para clientes que reconectan mid-stream.
             pipeline_str = (
                 f"{appsrc_caps} "
                 "! queue "
-                "! videoconvert "
-                "! video/x-raw,format=BGRx "
                 "! nvvidconv "
                 "! video/x-raw(memory:NVMM),format=NV12 "
                 f"! nvv4l2h264enc name=enc bitrate={BITRATE_BPS} "
@@ -129,8 +132,8 @@ class H264AnnexBEncoder:
             IFRAME_INTERVAL,
         )
 
-    def push_frame(self, bgr: np.ndarray) -> Iterator[tuple[bool, bytes]]:
-        """Empuja un frame BGR; yieldea 0 o 1 tuples (is_keyframe, nal_bytes).
+    def push_frame(self, frame: np.ndarray) -> Iterator[tuple[bool, bytes]]:
+        """Empuja un frame YUYV; yieldea 0 o 1 tuples (is_keyframe, nal_bytes).
 
         1-frame pipelining (igual que `nvenc_codec.py`): push del frame N,
         pull del frame N-1. Después de yieldear NO intentamos pullear otra
@@ -138,13 +141,13 @@ class H264AnnexBEncoder:
         sale en el próximo push, capando el throughput a ~20fps. La primera
         call típicamente yieldea 0 (warmup); las siguientes yieldean 1.
         """
-        h, w = bgr.shape[:2]
+        h, w = frame.shape[:2]
         if self._pipeline is None or w != self._width or h != self._height:
             self._build_pipeline(w, h)
 
         assert self._src is not None and self._sink is not None
 
-        raw = bgr.tobytes()
+        raw = frame.tobytes()
         buf = Gst.Buffer.new_wrapped(raw)
         duration = Gst.SECOND // 30
         buf.pts = self._frame_count * duration
@@ -224,16 +227,20 @@ class H264AnnexBEncoderPyAV:
         self._frame_count = 0
         logger.info("libx264 codec opened (%dx%d @ %d kbps)", width, height, self._bitrate_bps // 1000)
 
-    def push_frame(self, bgr: np.ndarray) -> Iterator[tuple[bool, bytes]]:
-        h, w = bgr.shape[:2]
+    def push_frame(self, frame_arr: np.ndarray) -> Iterator[tuple[bool, bytes]]:
+        h, w = frame_arr.shape[:2]
         if self._codec is None or w != self._width or h != self._height:
             self._open_codec(w, h)
         assert self._codec is not None
 
         force_keyframe = (self._frame_count % _PYAV_KEYFRAME_INTERVAL) == 0
 
-        rgb = bgr[:, :, ::-1]
-        frame = av.VideoFrame.from_ndarray(rgb, format="rgb24")
+        # El camera worker sirve YUYV (H, W, 2). PyAV convierte YUYV→yuv420p
+        # en la ruta dev (sin GStreamer); no hay HW VIC aquí.
+        if frame_arr.ndim == 3 and frame_arr.shape[2] == 2:
+            frame = av.VideoFrame.from_ndarray(frame_arr, format="yuyv422")
+        else:
+            frame = av.VideoFrame.from_ndarray(frame_arr[:, :, ::-1], format="rgb24")
         frame = frame.reformat(format="yuv420p")
         frame.pts = self._frame_count
         frame.time_base = fractions.Fraction(1, _PYAV_FRAMERATE)

@@ -139,6 +139,14 @@ class StreamBroadcaster:
                     time.sleep(_READ_RETRY_DELAY)
                     continue
 
+                # El camera worker sirve YUYV crudo (H, W, 2). Este transporte es
+                # MJPEG: cv2.imencode(".jpg") exige BGR, así que aquí la conversión
+                # YUYV→BGR es inevitable (a diferencia de los paths HW). Es el
+                # fallback, rara vez usado. Convertir una vez cubre tanto el JPEG
+                # como el submit a inferencia (que verá 3 canales y no reconvierte).
+                if frame.ndim == 3 and frame.shape[2] == 2:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_YUYV)
+
                 self._frame_id += 1
 
                 session = counter.get_active_session()

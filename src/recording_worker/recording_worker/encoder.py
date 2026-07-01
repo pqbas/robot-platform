@@ -149,20 +149,18 @@ class GstMp4Encoder(Encoder):
             "GStreamer encoder — %dx%d @ %.1ffps bitrate=%d (auto)",
             width, height, fps, self._bitrate,
         )
-        # nvv4l2h264enc only accepts NVMM-tagged buffers; bridge system memory
-        # (BGR from the camera worker) → NV12 in NVMM via videoconvert + nvvidconv.
-        # Without nvvidconv the encoder silently drops every buffer and mp4mux
-        # writes a 0-byte file. PTS is set explicitly per buffer in write_frame()
-        # from time.monotonic(); do-timestamp=true is removed and framerate=0/1
-        # marks variable framerate so downstream honours the buffer PTS instead
-        # of the encoder's declared-fps timer.
+        # nvv4l2h264enc only accepts NVMM-tagged buffers; the camera worker now
+        # serves raw YUYV (YUY2), which nvvidconv (HW VIC) converts to NV12 NVMM
+        # directly — no CPU videoconvert. Without nvvidconv the encoder silently
+        # drops every buffer and mp4mux writes a 0-byte file. PTS is set
+        # explicitly per buffer in write_frame() from time.monotonic();
+        # do-timestamp=true is removed and framerate=0/1 marks variable framerate
+        # so downstream honours the buffer PTS instead of the declared-fps timer.
         pipeline_str = (
             "appsrc name=src is-live=true format=time "
-            f"caps=video/x-raw,format=BGR,width={width},height={height},"
+            f"caps=video/x-raw,format=YUY2,width={width},height={height},"
             f"framerate=0/1 "
             "! queue "
-            "! videoconvert "
-            "! video/x-raw,format=NV12 "
             "! nvvidconv "
             "! video/x-raw(memory:NVMM),format=NV12 "
             # NVENC tuning (gst-inspect-1.0 nvv4l2h264enc):
@@ -326,7 +324,12 @@ class PyAvEncoder(Encoder):
             return
         import av
 
-        av_frame = av.VideoFrame.from_ndarray(frame, format="bgr24")
+        # El camera worker sirve YUYV crudo (H, W, 2); PyAV convierte a yuv420p
+        # al encodear. Frames BGR (3 canales) siguen soportados para robustez.
+        if frame.ndim == 3 and frame.shape[2] == 2:
+            av_frame = av.VideoFrame.from_ndarray(frame, format="yuyv422")
+        else:
+            av_frame = av.VideoFrame.from_ndarray(frame, format="bgr24")
         # Explicit PTS from real arrival time; without it PyAV assigns
         # 0,1,2,... in the stream time_base (1/fps), playing back at the
         # declared fps rather than the real capture rate.

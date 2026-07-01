@@ -1,8 +1,9 @@
 """Recording worker — encodes frames from camera socket to MP4 on demand.
 
 Two Unix sockets:
-- camera socket (default ``/tmp/camera.sock``) — read-only consumer of raw BGR
-  frames from the camera-worker fan-out. We do NOT connect until a ``start``
+- camera socket (default ``/tmp/camera.sock``) — read-only consumer of raw YUYV
+  (YUY2 4:2:2) frames from the camera-worker fan-out; nvvidconv (VIC) converts to
+  NV12 in the encoder. We do NOT connect until a ``start``
   command arrives — idle = no CPU, no NVENC, no socket.
 - control socket (default ``/tmp/recording.sock``) — JSON length-prefixed
   request/response. Backend FastAPI is the only client.

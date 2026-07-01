@@ -72,6 +72,13 @@ class InferenceClient:
             logger.warning("Inference worker not available")
             return None
 
+        # El camera worker sirve YUYV crudo (H, W, 2); el inference worker espera
+        # un JPEG BGR. Convertir aquí (única conversión de color para inferencia,
+        # solo con sesión de conteo activa). Frames ya-BGR (3 canales) pasan tal
+        # cual — p. ej. el broadcaster MJPEG ya convirtió antes de submittear.
+        if frame.ndim == 3 and frame.shape[2] == 2:
+            frame = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_YUYV)
+
         _, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
         header = {
             "target_class": target_class,

@@ -9,11 +9,12 @@
 ## Invariantes
 - Backend NO importa `ultralytics`, `torch`, `av`, `gi`, `cv2`. Esos viven en workers.
 - Inference worker: NumPy `<1.24` + monkey-patch de `np.bool/np.float/np.int/np.object` (TensorRT 8.5 los referencia). Ver `inference/inference_worker/main.py`.
-- Camera worker: una sola apertura V4L2, fan-out a todos los clientes (drop-oldest por cliente).
+- Camera worker: una sola apertura V4L2 (`CAP_PROP_CONVERT_RGB=0` → YUYV crudo), fan-out a todos los clientes (drop-oldest por cliente).
 - WebRTC: `RTCPeerConnection` sin ICE servers → solo host candidates (asume LAN/localhost).
+- Color: el socket de cámara sirve **YUYV** (YUY2 4:2:2, `channels=2`). La conversión a NV12 es 100% hardware (nvvidconv/VIC) en los tres pipelines HW (WebRTC `nvenc_codec`, WebCodecs `h264_encoder`, grabación). Único `cvtColor` en CPU: MJPEG (`stream_broadcaster`, JPEG exige BGR) e inferencia en vivo (`inference_client`, solo con sesión activa).
 
 ## Sockets Unix
-- `/tmp/camera.sock` — frames raw BGR. Control: `/tmp/camera-control.sock`.
+- `/tmp/camera.sock` — frames raw YUYV (YUY2, 2 bytes/px). Control: `/tmp/camera-control.sock`.
 - `/tmp/inference.sock` — JPEG → JSON detecciones.
 - `/tmp/recording.sock` — control start/stop/status.
 - `/tmp/conversion.sock` — control convert/status.
