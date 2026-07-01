@@ -1,11 +1,16 @@
-"""Synchronous Unix socket client for the inference worker."""
+"""Synchronous Unix socket client for the inference worker.
+
+La serialización del frame a JPEG es por hardware (`nvjpegenc` vía
+`jpeg_encoder.make_jpeg_encoder`) en Jetson, con fallback a `cv2` en dev/no-Jetson.
+El inference-worker recibe el mismo JPEG (contrato del socket sin cambios).
+"""
 
 import logging
 import socket
 
-import cv2
 import numpy as np
 
+from back.services.perception.jpeg_encoder import make_jpeg_encoder
 from back.services.perception.protocol import recv_response, send_request
 
 logger = logging.getLogger("inference_client")
@@ -15,6 +20,9 @@ class InferenceClient:
     def __init__(self, socket_path: str):
         self._socket_path = socket_path
         self._sock: socket.socket | None = None
+        # Lazy: no construir el pipeline HW hasta el primer detect() (en reposo,
+        # sin sesión de conteo, no se reserva hardware).
+        self._jpeg = None
 
     def _connect(self) -> None:
         """Connect to the inference worker socket."""
@@ -36,6 +44,13 @@ class InferenceClient:
             except OSError:
                 pass
             self._sock = None
+
+    def close(self) -> None:
+        """Cierra el socket y libera el encoder JPEG HW (pipeline GStreamer)."""
+        self._disconnect()
+        if self._jpeg is not None:
+            self._jpeg.close()
+            self._jpeg = None
 
     def send_command(self, command: str, **kwargs) -> dict | None:
         """Send a control command to the worker (no JPEG payload)."""
@@ -73,13 +88,16 @@ class InferenceClient:
             return None
 
         # El camera worker sirve YUYV crudo (H, W, 2); el inference worker espera
-        # un JPEG BGR. Convertir aquí (única conversión de color para inferencia,
-        # solo con sesión de conteo activa). Frames ya-BGR (3 canales) pasan tal
-        # cual — p. ej. el broadcaster MJPEG ya convirtió antes de submittear.
-        if frame.ndim == 3 and frame.shape[2] == 2:
-            frame = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_YUYV)
+        # un JPEG BGR. La serialización (YUYV→I420→JPEG) corre en hardware
+        # (nvjpegenc) en Jetson y en cv2 como fallback dev. Frames ya-BGR
+        # (3 canales) los maneja el encoder por CPU. Solo con sesión activa.
+        if self._jpeg is None:
+            self._jpeg = make_jpeg_encoder()
+        jpeg_bytes = self._jpeg.encode(frame)
+        if jpeg_bytes is None:
+            logger.warning("Fallo al serializar el frame a JPEG (encoder HW)")
+            return None
 
-        _, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
         header = {
             "target_class": target_class,
             "confidence": conf,
@@ -87,7 +105,7 @@ class InferenceClient:
         }
 
         try:
-            send_request(self._sock, header, jpeg.tobytes())
+            send_request(self._sock, header, jpeg_bytes)
             return recv_response(self._sock)
         except (ConnectionError, OSError):
             logger.warning("Lost connection to inference worker, will reconnect")

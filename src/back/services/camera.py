@@ -52,6 +52,8 @@ class _InferenceWorker:
         self._event.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
+        # Libera el socket y el pipeline JPEG HW (nvjpegenc) tras parar el thread.
+        self._client.close()
         logger.info("Inference worker stopped")
 
     def submit_frame(self, frame: np.ndarray) -> None:
