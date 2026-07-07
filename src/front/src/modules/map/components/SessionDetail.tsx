@@ -1,4 +1,5 @@
 import type { Session } from "@/types"
+import { useAppMode } from "@/context/AppModeContext"
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -7,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import ExportButton from "./ExportButton"
+import RipenessSection from "./RipenessSection"
 
 type SessionDetailProps = {
   session: Session
@@ -40,6 +42,7 @@ export default function SessionDetail({
   camellonName,
   showCamellon = true,
 }: SessionDetailProps) {
+  const { mode } = useAppMode()
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -76,6 +79,13 @@ export default function SessionDetail({
           <span className="text-muted-foreground">Conteo total</span>
           <span className="text-lg font-semibold">{session.total_count}</span>
         </div>
+
+        {session.recording_uuid != null && (
+          <RipenessSection
+            recordingUuid={session.recording_uuid}
+            mode={mode}
+          />
+        )}
       </CardContent>
     </Card>
   )

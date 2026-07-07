@@ -123,6 +123,7 @@ export default function SessionsTable({
               <TableHead>Fecha</TableHead>
               <TableHead className="hidden md:table-cell">Clase</TableHead>
               <TableHead>Conteo</TableHead>
+              <TableHead className="hidden lg:table-cell">Madurez</TableHead>
               <TableHead className="hidden md:table-cell">Duración</TableHead>
               <TableHead className="hidden lg:table-cell">Tamaño</TableHead>
               <TableHead>Estado</TableHead>
@@ -188,6 +189,26 @@ export default function SessionsTable({
                     >
                       sin contar
                     </span>
+                  )}
+                </TableCell>
+                <TableCell className="hidden lg:table-cell">
+                  {s.classification_status === "classifying" ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <Loader2 className="size-3 animate-spin" />
+                      clasificando…
+                    </span>
+                  ) : s.classification_status === "done" ? (
+                    <Badge variant="outline">madurez ✓</Badge>
+                  ) : s.classification_status === "error" ? (
+                    <span
+                      className="text-xs text-destructive"
+                      title="Error al clasificar la madurez"
+                    >
+                      error
+                    </span>
+                  ) : (
+                    // 'none' — la categoría no tiene clasificador (opt-in). Silencioso.
+                    <span className="text-muted-foreground">—</span>
                   )}
                 </TableCell>
                 <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
