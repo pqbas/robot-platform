@@ -608,6 +608,35 @@ async def get_recording_classifications(
     }
 
 
+@router.get("/{uuid}/crops/{filename}")
+async def get_recording_crop(
+    uuid: str, filename: str, db: AsyncSession = Depends(get_db)
+):
+    """Serve a single ripeness crop JPG for a recording.
+
+    ``filename`` is the bare basename the ``/classifications`` payload carries
+    (e.g. ``7_214.jpg``); this resolves it under the recording's crops dir. Any
+    path separator / ``..`` is rejected so the route can never escape that dir.
+    Available in robot and server mode (the server has the synced crops).
+    """
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(400, "Invalid crop filename")
+
+    rec = (
+        await db.execute(select(Recording).where(Recording.uuid == uuid))
+    ).scalar_one_or_none()
+    if rec is None:
+        raise HTTPException(404, "Recording not found")
+
+    from back.services.perception.classification_trigger import crops_dir_for
+
+    path = os.path.join(crops_dir_for(rec), filename)
+    if not os.path.isfile(path):
+        raise HTTPException(404, "Crop image not found")
+
+    return FileResponse(path, media_type="image/jpeg", filename=filename)
+
+
 @router.delete("/{uuid}")
 async def delete_recording(uuid: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Recording).where(Recording.uuid == uuid))

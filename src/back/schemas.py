@@ -66,6 +66,10 @@ class SessionOut(BaseModel):
     # video is the source of truth). 'done' + count once the worker finishes.
     count_status: str = "none"
     count: int | None = None
+    # Ripeness classification status derived from the same linked recording
+    # (second stage of the offline pipeline). 'none' when the category has no
+    # classifier assigned — classification is opt-in per category.
+    classification_status: str = "none"
     # Linked recording's duration/size/upload state, surfaced so the sessions
     # table can show the same columns as the recordings table.
     duration_seconds: float | None = None

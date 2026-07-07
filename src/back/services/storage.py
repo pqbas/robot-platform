@@ -262,6 +262,7 @@ async def _attach_count_status(
         rec = by_uuid.get(s.recording_uuid) if s.recording_uuid else None
         s.count_status = rec.count_status if rec else "none"
         s.count = rec.count if rec else None
+        s.classification_status = rec.classification_status if rec else "none"
         s.duration_seconds = rec.duration_seconds if rec else None
         s.file_size_bytes = rec.file_size_bytes if rec else None
         s.uploaded_at = rec.uploaded_at if rec else None
