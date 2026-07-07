@@ -9,6 +9,7 @@ set -u
 SERVICES=(
   robot-platform
   recording-worker
+  classification-worker
   counting-worker
   conversion-worker
   inference-worker

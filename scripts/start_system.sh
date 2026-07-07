@@ -5,13 +5,16 @@
 # Uso: ./scripts/start_system.sh
 set -u
 
-# Orden de arranque. camera/inference/conversion/counting son base;
+# Orden de arranque. camera/inference/conversion/counting/classification son base;
 # recording-worker depende de camera; robot-platform depende de camera+inference.
+# classification-worker es offline (reprocesa el MP4 tras el conteo), sin deps de
+# arranque; va junto a counting-worker.
 SERVICES=(
   camera-worker
   inference-worker
   conversion-worker
   counting-worker
+  classification-worker
   recording-worker
   robot-platform
 )
