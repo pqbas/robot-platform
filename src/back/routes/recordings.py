@@ -608,6 +608,20 @@ async def get_recording_classifications(
     }
 
 
+def _resolve_crop_path(crops_dir: str, filename: str) -> str:
+    """Resolve a crop filename under ``crops_dir``, or raise 400/404.
+
+    Rejects any path separator / ``..`` so a request can never escape the crops
+    dir (path traversal). 404 when the file doesn't exist. Pure so it's unit
+    testable without an HTTP/DB harness."""
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(400, "Invalid crop filename")
+    path = os.path.join(crops_dir, filename)
+    if not os.path.isfile(path):
+        raise HTTPException(404, "Crop image not found")
+    return path
+
+
 @router.get("/{uuid}/crops/{filename}")
 async def get_recording_crop(
     uuid: str, filename: str, db: AsyncSession = Depends(get_db)
@@ -619,9 +633,6 @@ async def get_recording_crop(
     path separator / ``..`` is rejected so the route can never escape that dir.
     Available in robot and server mode (the server has the synced crops).
     """
-    if "/" in filename or "\\" in filename or ".." in filename:
-        raise HTTPException(400, "Invalid crop filename")
-
     rec = (
         await db.execute(select(Recording).where(Recording.uuid == uuid))
     ).scalar_one_or_none()
@@ -630,10 +641,7 @@ async def get_recording_crop(
 
     from back.services.perception.classification_trigger import crops_dir_for
 
-    path = os.path.join(crops_dir_for(rec), filename)
-    if not os.path.isfile(path):
-        raise HTTPException(404, "Crop image not found")
-
+    path = _resolve_crop_path(crops_dir_for(rec), filename)
     return FileResponse(path, media_type="image/jpeg", filename=filename)
 
 
