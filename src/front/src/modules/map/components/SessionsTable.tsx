@@ -243,8 +243,14 @@ export default function SessionsTable({
                       error
                     </span>
                   ) : (
-                    // 'none', la categoría no tiene clasificador (opt-in). Silencioso.
-                    <span className="text-muted-foreground">-</span>
+                    // 'none': aún sin clasificar (o la categoría no tiene un
+                    // clasificador asignado, en cuyo caso nunca se clasifica).
+                    <span
+                      className="text-xs text-muted-foreground"
+                      title="Sin clasificar (la categoría puede no tener un clasificador asignado)"
+                    >
+                      sin clasificar
+                    </span>
                   )}
                 </TableCell>
                 <TableCell>
