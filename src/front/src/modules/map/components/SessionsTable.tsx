@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Download, Grape, Loader2, Pencil, Play, RefreshCw, Trash2, UploadCloud } from "lucide-react"
+import { BarChart3, Download, Loader2, Pencil, Play, RefreshCw, Trash2, UploadCloud } from "lucide-react"
 import { getRecordingFileUrl } from "@/api/recordings"
 import { LocationCell } from "@/components/LocationCell"
 import { formatDateTime, formatDuration, formatSize, rowStatus } from "@/lib/recordingFormat"
@@ -126,11 +126,11 @@ export default function SessionsTable({
               {mode === "server" && <TableHead>Ubicación</TableHead>}
               <TableHead>Fecha</TableHead>
               <TableHead className="hidden md:table-cell">Clase</TableHead>
-              <TableHead>Conteo</TableHead>
-              <TableHead className="hidden lg:table-cell">Clasificación</TableHead>
               <TableHead className="hidden md:table-cell">Duración</TableHead>
               <TableHead className="hidden lg:table-cell">Tamaño</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead>Conteo</TableHead>
+              <TableHead className="hidden lg:table-cell">Clasificación</TableHead>
               <TableHead>Acciones</TableHead>
             </TableRow>
           </TableHeader>
@@ -165,6 +165,25 @@ export default function SessionsTable({
                 <TableCell>{formatDateTime(s.start_time)}</TableCell>
                 <TableCell className="hidden md:table-cell">
                   <Badge variant="outline">{s.target_class}</Badge>
+                </TableCell>
+                <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                  {formatDuration(s.duration_seconds)}
+                </TableCell>
+                <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                  {formatSize(s.file_size_bytes)}
+                </TableCell>
+                <TableCell>
+                  {s.recording_uuid == null ? (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  ) : (
+                    <StatusBadge
+                      status={rowStatus({
+                        uuid: s.recording_uuid,
+                        ended_at: s.end_time,
+                        uploaded_at: s.uploaded_at,
+                      })}
+                    />
+                  )}
                 </TableCell>
                 <TableCell>
                   {s.count_status === "counting" || s.count_status === "pending" ? (
@@ -202,7 +221,20 @@ export default function SessionsTable({
                       clasificando…
                     </span>
                   ) : s.classification_status === "done" ? (
-                    <Badge variant="outline">clasificado ✓</Badge>
+                    // Terminó: el botón de info abre el detalle de clasificación.
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mx-auto h-7 gap-1 px-2 text-xs"
+                      title="Ver clasificación"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setRipenessSession(s)
+                      }}
+                    >
+                      <BarChart3 className="size-3.5" />
+                      ver
+                    </Button>
                   ) : s.classification_status === "error" ? (
                     <span
                       className="text-xs text-destructive"
@@ -213,25 +245,6 @@ export default function SessionsTable({
                   ) : (
                     // 'none' — la categoría no tiene clasificador (opt-in). Silencioso.
                     <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                  {formatDuration(s.duration_seconds)}
-                </TableCell>
-                <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
-                  {formatSize(s.file_size_bytes)}
-                </TableCell>
-                <TableCell>
-                  {s.recording_uuid == null ? (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  ) : (
-                    <StatusBadge
-                      status={rowStatus({
-                        uuid: s.recording_uuid,
-                        ended_at: s.end_time,
-                        uploaded_at: s.uploaded_at,
-                      })}
-                    />
                   )}
                 </TableCell>
                 <TableCell>
@@ -284,21 +297,6 @@ export default function SessionsTable({
                         <Play className="size-3.5" />
                       </Button>
                     )}
-                    {s.recording_uuid != null &&
-                      s.classification_status !== "none" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          title="Ver clasificación"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setRipenessSession(s)
-                          }}
-                        >
-                          <Grape className="size-3.5" />
-                        </Button>
-                      )}
                     {s.recording_uuid != null &&
                       (mode === "robot" || s.uploaded_at != null) && (
                         <Button
