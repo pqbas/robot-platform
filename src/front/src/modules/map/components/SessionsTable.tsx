@@ -125,10 +125,10 @@ export default function SessionsTable({
             <TableRow>
               {mode === "server" && <TableHead>Ubicación</TableHead>}
               <TableHead>Fecha</TableHead>
-              <TableHead className="hidden md:table-cell">Clase</TableHead>
               <TableHead className="hidden md:table-cell">Duración</TableHead>
               <TableHead className="hidden lg:table-cell">Tamaño</TableHead>
               <TableHead>Sincronización</TableHead>
+              <TableHead className="hidden md:table-cell">Clase</TableHead>
               <TableHead>Conteo</TableHead>
               <TableHead className="hidden lg:table-cell">Clasificación</TableHead>
               <TableHead>Acciones</TableHead>
@@ -163,9 +163,6 @@ export default function SessionsTable({
                   </TableCell>
                 )}
                 <TableCell>{formatDateTime(s.start_time)}</TableCell>
-                <TableCell className="hidden md:table-cell">
-                  <Badge variant="outline">{s.target_class}</Badge>
-                </TableCell>
                 <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                   {formatDuration(s.duration_seconds)}
                 </TableCell>
@@ -184,6 +181,9 @@ export default function SessionsTable({
                       })}
                     />
                   )}
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  <Badge variant="outline">{s.target_class}</Badge>
                 </TableCell>
                 <TableCell>
                   {s.count_status === "counting" || s.count_status === "pending" ? (
