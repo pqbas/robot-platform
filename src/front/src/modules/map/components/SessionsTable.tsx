@@ -127,7 +127,7 @@ export default function SessionsTable({
               <TableHead>Fecha</TableHead>
               <TableHead className="hidden md:table-cell">Clase</TableHead>
               <TableHead>Conteo</TableHead>
-              <TableHead className="hidden lg:table-cell">Madurez</TableHead>
+              <TableHead className="hidden lg:table-cell">Clasificación</TableHead>
               <TableHead className="hidden md:table-cell">Duración</TableHead>
               <TableHead className="hidden lg:table-cell">Tamaño</TableHead>
               <TableHead>Estado</TableHead>
@@ -202,11 +202,11 @@ export default function SessionsTable({
                       clasificando…
                     </span>
                   ) : s.classification_status === "done" ? (
-                    <Badge variant="outline">madurez ✓</Badge>
+                    <Badge variant="outline">clasificado ✓</Badge>
                   ) : s.classification_status === "error" ? (
                     <span
                       className="text-xs text-destructive"
-                      title="Error al clasificar la madurez"
+                      title="Error al clasificar"
                     >
                       error
                     </span>
@@ -290,7 +290,7 @@ export default function SessionsTable({
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
-                          title="Ver madurez"
+                          title="Ver clasificación"
                           onClick={(e) => {
                             e.stopPropagation()
                             setRipenessSession(s)
@@ -402,7 +402,7 @@ export default function SessionsTable({
       {ripenessSession && (
         <RipenessDialog
           recordingUuid={ripenessSession.recording_uuid}
-          title={`Madurez — sesión #${ripenessSession.id}`}
+          title={`Clasificación — sesión #${ripenessSession.id}`}
           open={!!ripenessSession}
           onOpenChange={(open) => { if (!open) setRipenessSession(null) }}
         />

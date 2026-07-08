@@ -128,20 +128,20 @@ export default function RipenessDialog({
         {loading ? (
           <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            Cargando madurez…
+            Cargando clasificación…
           </div>
         ) : !data || data.status === "none" ? (
           <p className="py-12 text-center text-sm text-muted-foreground">
-            Esta sesión no tiene clasificación de madurez.
+            Esta sesión no tiene clasificación.
           </p>
         ) : data.status === "classifying" ? (
           <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            Clasificando madurez…
+            Clasificando…
           </div>
         ) : data.status === "error" ? (
           <p className="py-12 text-center text-sm text-destructive">
-            {data.error ?? "Error al clasificar la madurez"}
+            {data.error ?? "Error al clasificar"}
           </p>
         ) : crops.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">
