@@ -24,7 +24,7 @@ import os
 from datetime import datetime, timezone
 
 import aiohttp
-from sqlalchemy import or_, select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import config
@@ -45,12 +45,18 @@ def get_uploading_uuids() -> list[str]:
 
 
 async def _is_metadata_synced(db: AsyncSession, uuid: str) -> bool:
+    # Existence check only: tolerate duplicate sync_log rows for the same
+    # (table_name, record_uuid). `_mark_synced` inserts without a uniqueness
+    # guard, so overlapping push passes can create >1 marker; scalar_one_or_none
+    # would raise MultipleResultsFound on those. exists() sidesteps it entirely.
     result = await db.execute(
-        select(SyncLog).where(
-            (SyncLog.table_name == "recordings") & (SyncLog.record_uuid == uuid)
+        select(
+            exists().where(
+                (SyncLog.table_name == "recordings") & (SyncLog.record_uuid == uuid)
+            )
         )
     )
-    return result.scalar_one_or_none() is not None
+    return bool(result.scalar())
 
 
 async def _probe_lan(http: aiohttp.ClientSession, lan_url: str) -> bool:
