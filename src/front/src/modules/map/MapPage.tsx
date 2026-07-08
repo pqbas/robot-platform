@@ -67,17 +67,23 @@ export default function MapPage() {
     loadSessions()
   }, [loadSessions])
 
-  // While an offline count is still running, the backend fills the number
-  // asynchronously (worker → poller → DB). Poll until every row settles so the
-  // "procesando…" cell flips to the final count without a manual reload.
-  const hasPendingCount = sessions.some(
-    (s) => s.count_status === "counting" || s.count_status === "pending",
+  // While an offline count OR classification is still running, the backend fills
+  // the result asynchronously (worker → poller → DB). Poll until every row
+  // settles so the "procesando…"/"clasificando…" cells flip without a manual
+  // reload. Classification chains after the count, so 'classifying' must keep the
+  // poll alive — otherwise it stops when the count finishes and the ripeness
+  // badge stays stuck.
+  const hasPending = sessions.some(
+    (s) =>
+      s.count_status === "counting" ||
+      s.count_status === "pending" ||
+      s.classification_status === "classifying",
   )
   useEffect(() => {
-    if (!hasPendingCount) return
+    if (!hasPending) return
     const id = setInterval(loadSessions, 3000)
     return () => clearInterval(id)
-  }, [hasPendingCount, loadSessions])
+  }, [hasPending, loadSessions])
 
   const handleSessionDeleted = useCallback((id: number) => {
     setSessions((prev) => prev.filter((s) => s.id !== id))
