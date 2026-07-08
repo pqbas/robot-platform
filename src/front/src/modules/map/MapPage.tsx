@@ -71,7 +71,7 @@ export default function MapPage() {
   // the result asynchronously (worker → poller → DB). Poll until every row
   // settles so the "procesando…"/"clasificando…" cells flip without a manual
   // reload. Classification chains after the count, so 'classifying' must keep the
-  // poll alive — otherwise it stops when the count finishes and the ripeness
+  // poll alive, otherwise it stops when the count finishes and the ripeness
   // badge stays stuck.
   const hasPending = sessions.some(
     (s) =>

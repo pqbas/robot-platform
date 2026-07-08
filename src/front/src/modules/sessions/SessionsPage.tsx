@@ -13,10 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import { useAppMode } from "@/context/AppModeContext"
 import SessionsTable from "@/modules/map/components/SessionsTable"
-import SessionDetail from "@/modules/map/components/SessionDetail"
 
 export default function SessionsPage() {
   const { mode } = useAppMode()
@@ -71,7 +69,7 @@ export default function SessionsPage() {
   // Poll while an offline count OR classification is still running so the
   // "procesando…"/"clasificando…" badges flip to their final state without a
   // manual reload (worker → poller → DB is async). Classification chains AFTER
-  // the count, so we must keep polling on 'classifying' too — otherwise the poll
+  // the count, so we must keep polling on 'classifying' too, otherwise the poll
   // stops the moment the count finishes and the ripeness badge stays stuck.
   const hasPending = sessions.some(
     (s) =>
@@ -213,11 +211,6 @@ export default function SessionsPage() {
     setDateTo(null)
   }
 
-  const camellonName = selectedSession
-    ? selectedSession.camellon_id == null
-      ? "Sin ubicación"
-      : (camellones.get(selectedSession.camellon_id)?.nombre ?? `#${selectedSession.camellon_id}`)
-    : ""
 
   if (loading) {
     return (
@@ -348,17 +341,6 @@ export default function SessionsPage() {
           }}
         />
       </div>
-
-      {selectedSession && (
-        <>
-          <Separator />
-          <SessionDetail
-            session={selectedSession}
-            camellonName={camellonName}
-            showCamellon={mode === "server"}
-          />
-        </>
-      )}
     </div>
   )
 }

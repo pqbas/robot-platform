@@ -3,7 +3,6 @@ import type { Session, Camellon, MapLocation } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
 import {
   Select,
   SelectContent,
@@ -12,7 +11,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import SessionsTable from "./SessionsTable"
-import SessionDetail from "./SessionDetail"
 
 type SidePanelProps = {
   sessions: Session[]
@@ -98,12 +96,6 @@ export default function SidePanel({
     onDateChange(null, null)
   }
 
-  const camellonName = selectedSession
-    ? selectedSession.camellon_id == null
-      ? "Sin ubicación"
-      : (camellones.get(selectedSession.camellon_id)?.nombre ??
-        `#${selectedSession.camellon_id}`)
-    : ""
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden border-l">
@@ -216,18 +208,6 @@ export default function SidePanel({
           />
         </div>
       </div>
-
-      {selectedSession && (
-        <>
-          <Separator />
-          <div className="shrink-0 p-4">
-            <SessionDetail
-              session={selectedSession}
-              camellonName={camellonName}
-            />
-          </div>
-        </>
-      )}
     </div>
   )
 }

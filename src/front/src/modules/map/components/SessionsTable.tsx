@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Download, Loader2, Pencil, Play, RefreshCw, Trash2, UploadCloud } from "lucide-react"
+import { BarChart3, Download, Loader2, Pencil, Play, RefreshCw, Trash2, UploadCloud } from "lucide-react"
 import { getRecordingFileUrl } from "@/api/recordings"
 import { LocationCell } from "@/components/LocationCell"
 import { formatDateTime, formatDuration, formatSize, rowStatus } from "@/lib/recordingFormat"
@@ -30,6 +30,7 @@ import { StatusBadge } from "@/components/StatusBadge"
 import SessionEditDialog from "./SessionEditDialog"
 import DetectionReplayDialog from "./DetectionReplayDialog"
 import RecountConfigDialog from "./RecountConfigDialog"
+import RipenessDialog from "./RipenessDialog"
 
 const PAGE_SIZE = 13
 
@@ -54,6 +55,9 @@ export default function SessionsTable({
   const [page, setPage] = useState(0)
   const [editingSession, setEditingSession] = useState<Session | null>(null)
   const [replaySession, setReplaySession] = useState<Session | null>(null)
+  // Session whose ripeness (madurez) modal is open, the classification detail
+  // now lives in a centered popup, opened per row, instead of a detail panel.
+  const [ripenessSession, setRipenessSession] = useState<Session | null>(null)
   const [deleting, setDeleting] = useState<Session | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [syncingId, setSyncingId] = useState<number | null>(null)
@@ -67,16 +71,16 @@ export default function SessionsTable({
     try {
       const res = await pushSessionNow(s.id)
       if (res.metadata !== "ok") {
-        toast.error("Servidor no alcanzable — no se pudo sincronizar")
+        toast.error("Servidor no alcanzable, no se pudo sincronizar")
         return
       }
       // Metadata landed; the MP4 outcome decides the tone of the message.
       if (res.mp4 === "uploaded" || res.mp4 === "already") {
         toast.success("Sesión sincronizada (video incluido)")
       } else if (res.mp4 === "pending") {
-        toast.warning("Metadata enviada — MP4 pendiente (se reintenta solo)")
+        toast.warning("Metadata enviada, MP4 pendiente (se reintenta solo)")
       } else if (res.mp4 === "missing") {
-        toast.warning("Metadata enviada — el archivo de video local no existe")
+        toast.warning("Metadata enviada, el archivo de video local no existe")
       } else {
         toast.success("Sesión sincronizada (sin video)")
       }
@@ -121,12 +125,12 @@ export default function SessionsTable({
             <TableRow>
               {mode === "server" && <TableHead>Ubicación</TableHead>}
               <TableHead>Fecha</TableHead>
-              <TableHead className="hidden md:table-cell">Clase</TableHead>
-              <TableHead>Conteo</TableHead>
-              <TableHead className="hidden lg:table-cell">Madurez</TableHead>
               <TableHead className="hidden md:table-cell">Duración</TableHead>
               <TableHead className="hidden lg:table-cell">Tamaño</TableHead>
-              <TableHead>Estado</TableHead>
+              <TableHead>Sincronización</TableHead>
+              <TableHead className="hidden md:table-cell">Clase</TableHead>
+              <TableHead>Conteo</TableHead>
+              <TableHead className="hidden lg:table-cell">Clasificación</TableHead>
               <TableHead>Acciones</TableHead>
             </TableRow>
           </TableHeader>
@@ -159,6 +163,25 @@ export default function SessionsTable({
                   </TableCell>
                 )}
                 <TableCell>{formatDateTime(s.start_time)}</TableCell>
+                <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                  {formatDuration(s.duration_seconds)}
+                </TableCell>
+                <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                  {formatSize(s.file_size_bytes)}
+                </TableCell>
+                <TableCell>
+                  {s.recording_uuid == null ? (
+                    <span className="text-xs text-muted-foreground">-</span>
+                  ) : (
+                    <StatusBadge
+                      status={rowStatus({
+                        uuid: s.recording_uuid,
+                        ended_at: s.end_time,
+                        uploaded_at: s.uploaded_at,
+                      })}
+                    />
+                  )}
+                </TableCell>
                 <TableCell className="hidden md:table-cell">
                   <Badge variant="outline">{s.target_class}</Badge>
                 </TableCell>
@@ -185,7 +208,7 @@ export default function SessionsTable({
                     // conteo en vivo ya no incrementa, solo dibuja overlay).
                     <span
                       className="text-xs text-muted-foreground"
-                      title="Aún sin contar — usa Re-contar"
+                      title="Aún sin contar, usa Re-contar"
                     >
                       sin contar
                     </span>
@@ -198,36 +221,36 @@ export default function SessionsTable({
                       clasificando…
                     </span>
                   ) : s.classification_status === "done" ? (
-                    <Badge variant="outline">madurez ✓</Badge>
+                    // Terminó: el botón de info abre el detalle de clasificación.
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mx-auto h-7 gap-1 px-2 text-xs"
+                      title="Ver clasificación"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setRipenessSession(s)
+                      }}
+                    >
+                      <BarChart3 className="size-3.5" />
+                      ver
+                    </Button>
                   ) : s.classification_status === "error" ? (
                     <span
                       className="text-xs text-destructive"
-                      title="Error al clasificar la madurez"
+                      title="Error al clasificar"
                     >
                       error
                     </span>
                   ) : (
-                    // 'none' — la categoría no tiene clasificador (opt-in). Silencioso.
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                  {formatDuration(s.duration_seconds)}
-                </TableCell>
-                <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
-                  {formatSize(s.file_size_bytes)}
-                </TableCell>
-                <TableCell>
-                  {s.recording_uuid == null ? (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  ) : (
-                    <StatusBadge
-                      status={rowStatus({
-                        uuid: s.recording_uuid,
-                        ended_at: s.end_time,
-                        uploaded_at: s.uploaded_at,
-                      })}
-                    />
+                    // 'none': aún sin clasificar (o la categoría no tiene un
+                    // clasificador asignado, en cuyo caso nunca se clasifica).
+                    <span
+                      className="text-xs text-muted-foreground"
+                      title="Sin clasificar (la categoría puede no tener un clasificador asignado)"
+                    >
+                      sin clasificar
+                    </span>
                   )}
                 </TableCell>
                 <TableCell>
@@ -377,6 +400,15 @@ export default function SessionsTable({
           onEnqueued={() =>
             onSessionUpdated({ ...recountSession, count_status: "counting" })
           }
+        />
+      )}
+
+      {ripenessSession && (
+        <RipenessDialog
+          recordingUuid={ripenessSession.recording_uuid}
+          title={`Clasificación de sesión #${ripenessSession.id}`}
+          open={!!ripenessSession}
+          onOpenChange={(open) => { if (!open) setRipenessSession(null) }}
         />
       )}
 
