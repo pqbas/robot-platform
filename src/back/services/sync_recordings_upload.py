@@ -24,11 +24,16 @@ import os
 from datetime import datetime, timezone
 
 import aiohttp
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from back.config import config
 from back.models import Recording, SyncLog
+from back.services.perception.classification_trigger import (
+    classifications_path_for,
+    crops_dir_for,
+    crossings_path_for,
+)
 
 logger = logging.getLogger("sync_recordings_upload")
 
@@ -176,6 +181,156 @@ async def _push_sidecar_if_ready(
         await db.commit()
 
 
+# Ripeness classification artifacts — mirror of the detection sidecar flow, but
+# split across two dirty flags: ``classifications_uploaded_at`` (the jsonl the
+# server transcribes into fruit_crops/fruit_classifications) and
+# ``crops_uploaded_at`` (the heavy JPGs). Both require the MP4 to have landed
+# first, because the server derives the sidecar/crops paths from the recording's
+# server-side ``file_path`` (only rewritten on MP4 upload).
+_CLASSIFYING_IN_PROGRESS = ("pending", "classifying")
+
+
+def _classifications_need_upload(
+    classification_status: str,
+    classifications_uploaded_at: str | None,
+    uploaded_at: str | None,
+) -> bool:
+    """Whether a recording's classification jsonl should be (re)pushed now.
+
+    Requires ``uploaded_at`` set (server path resolved via the MP4 upload),
+    a static classify (``classification_status`` ∉ pending/classifying — a
+    mid-classify jsonl is partial) and a dirty flag
+    (``classifications_uploaded_at is None``). Includes ``none``/``error`` rows:
+    their (absent) sidecar is reconciled once so the loop stops re-scanning them.
+    """
+    return (
+        uploaded_at is not None
+        and classification_status not in _CLASSIFYING_IN_PROGRESS
+        and classifications_uploaded_at is None
+    )
+
+
+async def _upload_classification_sidecars(
+    http: aiohttp.ClientSession, row: Recording, base_url: str
+) -> bool:
+    """Push ``{uuid}.classifications.jsonl`` (+ ``{uuid}.crossings.jsonl`` for
+    completeness). Returns success of the classifications file — the one the
+    server transcribes; crossings is best-effort and never gates the flag."""
+    cls_path = classifications_path_for(row)
+    if not os.path.isfile(cls_path):
+        return False
+    headers = {"Authorization": f"Bearer {config.sync.api_key}"}
+
+    ok = False
+    try:
+        with open(cls_path, "rb") as f:
+            data = aiohttp.FormData()
+            data.add_field(
+                "file",
+                f,
+                filename=f"{row.uuid}.classifications.jsonl",
+                content_type="application/x-ndjson",
+            )
+            url = f"{base_url}/api/sync/recordings/{row.uuid}/classifications/upload"
+            async with http.post(url, data=data, headers=headers) as resp:
+                ok = resp.status == 200
+                if ok:
+                    logger.info("Classifications %s uploaded", row.uuid)
+                else:
+                    logger.warning(
+                        "Classifications %s: server returned %d", row.uuid, resp.status
+                    )
+    except Exception as exc:
+        logger.warning("Classifications %s upload failed: %s", row.uuid, exc)
+        return False
+
+    # crossings.jsonl is not needed for the server's ripeness view; push it for
+    # future re-classification but never let its failure block the flag.
+    crossings = crossings_path_for(row)
+    if os.path.isfile(crossings):
+        try:
+            with open(crossings, "rb") as f:
+                data = aiohttp.FormData()
+                data.add_field(
+                    "file",
+                    f,
+                    filename=f"{row.uuid}.crossings.jsonl",
+                    content_type="application/x-ndjson",
+                )
+                url = f"{base_url}/api/sync/recordings/{row.uuid}/crossings/upload"
+                async with http.post(url, data=data, headers=headers) as resp:
+                    if resp.status != 200:
+                        logger.warning(
+                            "Crossings %s: server returned %d", row.uuid, resp.status
+                        )
+        except Exception as exc:
+            logger.warning("Crossings %s upload failed: %s", row.uuid, exc)
+
+    return ok
+
+
+async def _upload_crops(
+    http: aiohttp.ClientSession, row: Recording, base_url: str
+) -> bool:
+    """Push every crop JPG under ``crops_dir_for(row)``, one at a time. Returns
+    True only if all present crops uploaded (a partial failure keeps the dirty
+    flag so the next cycle retries). No crops dir ⇒ nothing to do ⇒ True."""
+    crops_dir = crops_dir_for(row)
+    if not os.path.isdir(crops_dir):
+        return True
+    names = sorted(n for n in os.listdir(crops_dir) if n.lower().endswith(".jpg"))
+    if not names:
+        return True
+    headers = {"Authorization": f"Bearer {config.sync.api_key}"}
+    for name in names:
+        path = os.path.join(crops_dir, name)
+        try:
+            with open(path, "rb") as f:
+                data = aiohttp.FormData()
+                data.add_field("file", f, filename=name, content_type="image/jpeg")
+                url = f"{base_url}/api/sync/recordings/{row.uuid}/crops/upload"
+                async with http.post(url, data=data, headers=headers) as resp:
+                    if resp.status != 200:
+                        logger.warning(
+                            "Crop %s/%s: server returned %d", row.uuid, name, resp.status
+                        )
+                        return False
+        except Exception as exc:
+            logger.warning("Crop %s/%s upload failed: %s", row.uuid, name, exc)
+            return False
+    logger.info("Crops %s uploaded (%d files)", row.uuid, len(names))
+    return True
+
+
+async def _push_classifications_if_ready(
+    db: AsyncSession, http: aiohttp.ClientSession, row: Recording, base_url: str
+) -> None:
+    """(Re)push the classification jsonl and crop JPGs when static, dirty and the
+    MP4 has already landed. The two flags are handled independently so a crop
+    failure retries without re-sending the (already-landed) jsonl."""
+    if row.uploaded_at is None or row.classification_status in _CLASSIFYING_IN_PROGRESS:
+        return
+
+    # 1. classifications jsonl (+ crossings) → server transcribes to fruit_* rows.
+    if row.classifications_uploaded_at is None:
+        if not os.path.isfile(classifications_path_for(row)):
+            # No sidecar (e.g. category has no classifier → status 'none'): mark
+            # reconciled so the loop stops re-scanning. A future (re)classify
+            # clears this again via the poller.
+            row.classifications_uploaded_at = _utcnow_iso()
+            await db.commit()
+        elif await _upload_classification_sidecars(http, row, base_url):
+            row.classifications_uploaded_at = _utcnow_iso()
+            await db.commit()
+
+    # 2. crop JPGs (heavy) — own flag so a partial failure retries without
+    #    re-sending the jsonl.
+    if row.crops_uploaded_at is None:
+        if await _upload_crops(http, row, base_url):
+            row.crops_uploaded_at = _utcnow_iso()
+            await db.commit()
+
+
 async def upload_single_recording(db: AsyncSession, uuid: str) -> str:
     """Push one recording's MP4 (+ detections) over the LAN, on demand.
 
@@ -221,6 +376,9 @@ async def upload_single_recording(db: AsyncSession, uuid: str) -> str:
         # propagates re-counts, even when the MP4 landed long ago. Pressing the
         # session/recording sync button thus also re-syncs the detection log.
         await _push_sidecar_if_ready(db, http, row, config.sync.lan_url)
+        # Same for the ripeness classification (jsonl + crops) — one manual click
+        # carries the full session: MP4 + detections + classification.
+        await _push_classifications_if_ready(db, http, row, config.sync.lan_url)
         return status
 
 
@@ -254,7 +412,24 @@ async def upload_pending_recordings(db: AsyncSession) -> None:
         )
     ).scalars().all()
 
-    if not mp4_rows and not sidecar_rows:
+    # Classification artifacts (jsonl + crops) that are static and dirty, with the
+    # MP4 already landed. Either flag dirty pulls the row in — the crops flag can
+    # outlive the jsonl one when a crop upload failed on an earlier cycle.
+    classification_rows = (
+        await db.execute(
+            select(Recording).where(
+                Recording.classification_status.notin_(_CLASSIFYING_IN_PROGRESS)
+                & Recording.uploaded_at.is_not(None)
+                & Recording.ended_at.is_not(None)
+                & or_(
+                    Recording.classifications_uploaded_at.is_(None),
+                    Recording.crops_uploaded_at.is_(None),
+                )
+            ).order_by(Recording.started_at.asc())
+        )
+    ).scalars().all()
+
+    if not mp4_rows and not sidecar_rows and not classification_rows:
         return
 
     timeout = aiohttp.ClientTimeout(total=600, connect=15)
@@ -274,6 +449,8 @@ async def upload_pending_recordings(db: AsyncSession) -> None:
                 await db.commit()
                 # If its sidecar is static (not mid-count), push it now too.
                 await _push_sidecar_if_ready(db, http, row, config.sync.lan_url)
+                # And its classification (jsonl + crops), now that the MP4 landed.
+                await _push_classifications_if_ready(db, http, row, config.sync.lan_url)
             else:
                 # One failure short-circuits the rest of the queue: a
                 # connectivity blip likely kills all of them, and the
@@ -287,3 +464,9 @@ async def upload_pending_recordings(db: AsyncSession) -> None:
             if not await _is_metadata_synced(db, row.uuid):
                 continue
             await _push_sidecar_if_ready(db, http, row, config.sync.lan_url)
+        for row in classification_rows:
+            # May have been pushed in the MP4 loop above (same object); the
+            # helper re-checks both dirty flags, so a redundant call is a no-op.
+            if not await _is_metadata_synced(db, row.uuid):
+                continue
+            await _push_classifications_if_ready(db, http, row, config.sync.lan_url)
