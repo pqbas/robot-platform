@@ -47,7 +47,7 @@ export type DetectionFrame = {
   // Video frame index (0-based), one line per frame.
   frame: number
   // The frame's own presentation timestamp (seconds, 0-based). Used to match
-  // the player's mediaTime to the exact frame — robust to variable frame rate.
+  // the player's mediaTime to the exact frame, robust to variable frame rate.
   pts: number
   // Running accumulated count up to this frame. Optional: sidecars written
   // before this field lack it (re-count to populate them).
@@ -78,7 +78,7 @@ export type RecordingDetections = {
 }
 
 // One counted object's ripeness crop. `crop` is the bare JPG filename (not a
-// URL) — build the URL with getCropImageUrl. `label`/`confidence` are null while
+// URL), build the URL with getCropImageUrl. `label`/`confidence` are null while
 // the crop exists but hasn't been classified yet.
 export type RipenessCrop = {
   track_id: number

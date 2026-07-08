@@ -69,7 +69,7 @@ export default function SessionsPage() {
   // Poll while an offline count OR classification is still running so the
   // "procesando…"/"clasificando…" badges flip to their final state without a
   // manual reload (worker → poller → DB is async). Classification chains AFTER
-  // the count, so we must keep polling on 'classifying' too — otherwise the poll
+  // the count, so we must keep polling on 'classifying' too, otherwise the poll
   // stops the moment the count finishes and the ripeness badge stays stuck.
   const hasPending = sessions.some(
     (s) =>

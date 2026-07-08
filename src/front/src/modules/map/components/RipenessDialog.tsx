@@ -33,7 +33,7 @@ type Props = {
   onOpenChange: (open: boolean) => void
 }
 
-// Cap the initial gallery render — a session can have hundreds of crops.
+// Cap the initial gallery render, a session can have hundreds of crops.
 const INITIAL_GALLERY = 60
 
 export default function RipenessDialog({
@@ -206,7 +206,7 @@ export default function RipenessDialog({
                     className="h-20 w-full rounded object-cover"
                   />
                   <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                    {c.label ?? "—"}
+                    {c.label ?? "-"}
                     {c.confidence != null &&
                       ` ${Math.round(c.confidence * 100)}%`}
                   </div>

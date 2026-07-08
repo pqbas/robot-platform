@@ -55,7 +55,7 @@ export default function SessionsTable({
   const [page, setPage] = useState(0)
   const [editingSession, setEditingSession] = useState<Session | null>(null)
   const [replaySession, setReplaySession] = useState<Session | null>(null)
-  // Session whose ripeness (madurez) modal is open — the classification detail
+  // Session whose ripeness (madurez) modal is open, the classification detail
   // now lives in a centered popup, opened per row, instead of a detail panel.
   const [ripenessSession, setRipenessSession] = useState<Session | null>(null)
   const [deleting, setDeleting] = useState<Session | null>(null)
@@ -71,16 +71,16 @@ export default function SessionsTable({
     try {
       const res = await pushSessionNow(s.id)
       if (res.metadata !== "ok") {
-        toast.error("Servidor no alcanzable — no se pudo sincronizar")
+        toast.error("Servidor no alcanzable, no se pudo sincronizar")
         return
       }
       // Metadata landed; the MP4 outcome decides the tone of the message.
       if (res.mp4 === "uploaded" || res.mp4 === "already") {
         toast.success("Sesión sincronizada (video incluido)")
       } else if (res.mp4 === "pending") {
-        toast.warning("Metadata enviada — MP4 pendiente (se reintenta solo)")
+        toast.warning("Metadata enviada, MP4 pendiente (se reintenta solo)")
       } else if (res.mp4 === "missing") {
-        toast.warning("Metadata enviada — el archivo de video local no existe")
+        toast.warning("Metadata enviada, el archivo de video local no existe")
       } else {
         toast.success("Sesión sincronizada (sin video)")
       }
@@ -174,7 +174,7 @@ export default function SessionsTable({
                 </TableCell>
                 <TableCell>
                   {s.recording_uuid == null ? (
-                    <span className="text-xs text-muted-foreground">—</span>
+                    <span className="text-xs text-muted-foreground">-</span>
                   ) : (
                     <StatusBadge
                       status={rowStatus({
@@ -208,7 +208,7 @@ export default function SessionsTable({
                     // conteo en vivo ya no incrementa, solo dibuja overlay).
                     <span
                       className="text-xs text-muted-foreground"
-                      title="Aún sin contar — usa Re-contar"
+                      title="Aún sin contar, usa Re-contar"
                     >
                       sin contar
                     </span>
@@ -243,8 +243,8 @@ export default function SessionsTable({
                       error
                     </span>
                   ) : (
-                    // 'none' — la categoría no tiene clasificador (opt-in). Silencioso.
-                    <span className="text-muted-foreground">—</span>
+                    // 'none', la categoría no tiene clasificador (opt-in). Silencioso.
+                    <span className="text-muted-foreground">-</span>
                   )}
                 </TableCell>
                 <TableCell>
@@ -400,7 +400,7 @@ export default function SessionsTable({
       {ripenessSession && (
         <RipenessDialog
           recordingUuid={ripenessSession.recording_uuid}
-          title={`Clasificación — sesión #${ripenessSession.id}`}
+          title={`Clasificación de sesión #${ripenessSession.id}`}
           open={!!ripenessSession}
           onOpenChange={(open) => { if (!open) setRipenessSession(null) }}
         />
