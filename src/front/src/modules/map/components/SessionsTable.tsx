@@ -128,7 +128,7 @@ export default function SessionsTable({
               <TableHead className="hidden md:table-cell">Clase</TableHead>
               <TableHead className="hidden md:table-cell">Duración</TableHead>
               <TableHead className="hidden lg:table-cell">Tamaño</TableHead>
-              <TableHead>Estado</TableHead>
+              <TableHead>Sincronización</TableHead>
               <TableHead>Conteo</TableHead>
               <TableHead className="hidden lg:table-cell">Clasificación</TableHead>
               <TableHead>Acciones</TableHead>
