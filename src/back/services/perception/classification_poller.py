@@ -20,20 +20,17 @@ import json
 import logging
 import os
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from back.config import config
 from back.database import AsyncSessionLocal
-from back.models import FruitClassification, FruitCrop, Recording
+from back.models import Recording
 from back.services.perception.classification_client import (
     ClassificationClient,
     ClassificationWorkerUnavailable,
 )
-from back.services.perception.classification_trigger import (
-    classifications_path_for,
-    crops_dir_for,
-    enqueue_classification,
-)
+from back.services.perception.classification_ingest import transcribe_classifications
+from back.services.perception.classification_trigger import enqueue_classification
 
 logger = logging.getLogger("classification_poller")
 
@@ -72,74 +69,6 @@ async def reconcile_orphaned_classifications() -> None:
         await session.commit()
 
 
-async def _transcribe_results(rec: Recording) -> int:
-    """Read ``{uuid}.classifications.jsonl`` and (re)create crop + classification
-    rows for ``rec``. Returns the number of crops written. Deletes any prior
-    crops/classifications for this recording first so a reclassify is idempotent.
-    """
-    path = classifications_path_for(rec)
-    crops_dir = crops_dir_for(rec)
-    model_uuid = None
-    if rec.classification_config:
-        try:
-            model_uuid = json.loads(rec.classification_config).get("model_uuid")
-        except (json.JSONDecodeError, TypeError):
-            model_uuid = None
-
-    async with AsyncSessionLocal() as session:
-        # Idempotent reclassify: drop the prior crops (and their classifications)
-        # for this recording before inserting the new batch.
-        old = (
-            await session.execute(
-                select(FruitCrop.uuid).where(FruitCrop.recording_uuid == rec.uuid)
-            )
-        ).scalars().all()
-        if old:
-            await session.execute(
-                delete(FruitClassification).where(
-                    FruitClassification.crop_uuid.in_(old)
-                )
-            )
-            await session.execute(
-                delete(FruitCrop).where(FruitCrop.recording_uuid == rec.uuid)
-            )
-
-        written = 0
-        if os.path.isfile(path):
-            with open(path) as fh:
-                for line in fh:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    d = json.loads(line)
-                    bbox = d.get("bbox") or [0, 0, 0, 0]
-                    x1, y1, x2, y2 = bbox
-                    crop_name = d.get("crop") or f"{d['track_id']}_{d['frame']}.jpg"
-                    crop = FruitCrop(
-                        recording_uuid=rec.uuid,
-                        session_uuid=None,  # set when the recording is saved to a session
-                        track_id=int(d["track_id"]),
-                        image_path=os.path.join(crops_dir, crop_name),
-                        bbox_x=float(x1),
-                        bbox_y=float(y1),
-                        bbox_w=float(x2 - x1),
-                        bbox_h=float(y2 - y1),
-                    )
-                    session.add(crop)
-                    await session.flush()  # assign crop.uuid before classification
-                    session.add(
-                        FruitClassification(
-                            crop_uuid=crop.uuid,
-                            model_uuid=model_uuid,
-                            class_name=d["label"],
-                            confidence=float(d.get("confidence") or 0.0),
-                        )
-                    )
-                    written += 1
-        await session.commit()
-    return written
-
-
 async def _process_worker_result(last_result: dict) -> None:
     """Transcribe a worker last_result into the matching Recording (by uuid)."""
     uuid = last_result.get("uuid")
@@ -155,7 +84,7 @@ async def _process_worker_result(last_result: dict) -> None:
             return
 
     if last_result.get("ok"):
-        written = await _transcribe_results(rec)
+        written = await transcribe_classifications(rec)
         async with AsyncSessionLocal() as session:
             row = (
                 await session.execute(
@@ -166,9 +95,11 @@ async def _process_worker_result(last_result: dict) -> None:
                 return
             row.classification_status = "done"
             row.classification_error = None
-            # Results just (re)written — mark dirty so the upload loop (G5) pushes
-            # the classifications metadata. NULL + status 'done' ⇒ needs upload.
+            # Results just (re)written — mark dirty so the upload loop pushes the
+            # classifications metadata AND the regenerated crops. NULL + status
+            # 'done' ⇒ needs upload.
             row.classifications_uploaded_at = None
+            row.crops_uploaded_at = None
             await session.commit()
         logger.info("Clasificación lista %s: %d crops", uuid, written)
     else:
