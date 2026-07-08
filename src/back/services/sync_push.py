@@ -192,6 +192,9 @@ async def push_all(db: AsyncSession) -> None:
                     "width": r.width, "height": r.height, "fps": r.fps,
                     "count": r.count, "count_status": r.count_status,
                     "count_config": r.count_config,
+                    "classification_status": r.classification_status,
+                    "classification_error": r.classification_error,
+                    "classification_config": r.classification_config,
                 })
             result = await _post_batch(http, "recordings", data)
             if result and result.get("successful_uuids"):
