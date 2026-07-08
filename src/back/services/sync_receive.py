@@ -220,6 +220,11 @@ async def receive_recordings(
             existing.count = item.count
             existing.count_status = item.count_status
             existing.count_config = item.count_config
+            # Classification is computed after the first sync too (mirror of the
+            # count fields), so upsert it on every re-push.
+            existing.classification_status = item.classification_status
+            existing.classification_error = item.classification_error
+            existing.classification_config = item.classification_config
             skipped += 1
             ok.append(item.uuid)
             continue
@@ -241,6 +246,9 @@ async def receive_recordings(
             count=item.count,
             count_status=item.count_status,
             count_config=item.count_config,
+            classification_status=item.classification_status,
+            classification_error=item.classification_error,
+            classification_config=item.classification_config,
         ))
         inserted += 1
         ok.append(item.uuid)

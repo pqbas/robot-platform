@@ -35,10 +35,28 @@ async def _get_unsynced_uuids(db: AsyncSession, table_name: str, model_class: ty
 
 
 async def _mark_synced(db: AsyncSession, table_name: str, uuids: list[str]) -> None:
-    """Mark records as synced in sync_log."""
+    """Mark records as synced in sync_log (idempotent).
+
+    sync_log has no unique constraint on (table_name, record_uuid), so a plain
+    insert would create duplicate markers when two push passes overlap. Skip
+    uuids that already have a marker so the ledger stays one-row-per-record.
+    """
+    if not uuids:
+        return
+    existing = await db.execute(
+        select(SyncLog.record_uuid).where(
+            (SyncLog.table_name == table_name) & (SyncLog.record_uuid.in_(uuids))
+        )
+    )
+    already = {row[0] for row in existing.fetchall()}
+    added = False
     for uuid in uuids:
-        db.add(SyncLog(table_name=table_name, record_uuid=uuid))
-    await db.commit()
+        if uuid not in already:
+            db.add(SyncLog(table_name=table_name, record_uuid=uuid))
+            already.add(uuid)
+            added = True
+    if added:
+        await db.commit()
 
 
 async def _post_batch(session: aiohttp.ClientSession, endpoint: str, data: list[dict]) -> dict | None:
@@ -192,6 +210,9 @@ async def push_all(db: AsyncSession) -> None:
                     "width": r.width, "height": r.height, "fps": r.fps,
                     "count": r.count, "count_status": r.count_status,
                     "count_config": r.count_config,
+                    "classification_status": r.classification_status,
+                    "classification_error": r.classification_error,
+                    "classification_config": r.classification_config,
                 })
             result = await _post_batch(http, "recordings", data)
             if result and result.get("successful_uuids"):

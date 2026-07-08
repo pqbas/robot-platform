@@ -485,3 +485,6 @@ class SyncRecording(BaseModel):
     count: int | None = None
     count_status: str = "none"
     count_config: str | None = None
+    classification_status: str = "none"
+    classification_error: str | None = None
+    classification_config: str | None = None

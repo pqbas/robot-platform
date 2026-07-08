@@ -410,3 +410,76 @@ if config.mode == AppMode.SERVER:
                 out.write(chunk)
                 size += len(chunk)
         return {"ok": True, "uuid": uuid, "size_bytes": size}
+
+    async def _recording_for_device(uuid: str, device: Device, db: AsyncSession) -> Recording:
+        """Fetch a recording owned by the authenticated device, or 404."""
+        result = await db.execute(select(Recording).where(Recording.uuid == uuid))
+        row = result.scalar_one_or_none()
+        if row is None or row.device_id != device.id:
+            raise HTTPException(404, "Recording not found")
+        return row
+
+    async def _save_upload(file: UploadFile, out_path: str) -> int:
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        size = 0
+        with open(out_path, "wb") as out:
+            while chunk := await file.read(1_048_576):
+                out.write(chunk)
+                size += len(chunk)
+        return size
+
+    @router.post("/recordings/{uuid}/classifications/upload")
+    async def upload_recording_classifications(
+        uuid: str,
+        file: UploadFile = File(...),
+        db: AsyncSession = Depends(get_db),
+        device: Device = Depends(verify_device_key),
+    ):
+        """Receive {uuid}.classifications.jsonl and transcribe it into
+        fruit_crops/fruit_classifications so the server's ripeness view matches
+        the robot's. Same transcription the robot poller runs."""
+        from back.services.perception.classification_ingest import (
+            transcribe_classifications,
+        )
+        from back.services.perception.classification_trigger import (
+            classifications_path_for,
+        )
+
+        row = await _recording_for_device(uuid, device, db)
+        await _save_upload(file, classifications_path_for(row))
+        written = await transcribe_classifications(row)
+        return {"ok": True, "uuid": uuid, "crops": written}
+
+    @router.post("/recordings/{uuid}/crossings/upload")
+    async def upload_recording_crossings(
+        uuid: str,
+        file: UploadFile = File(...),
+        db: AsyncSession = Depends(get_db),
+        device: Device = Depends(verify_device_key),
+    ):
+        """Receive {uuid}.crossings.jsonl. Stored for completeness / future
+        re-classification; the ripeness view doesn't read it."""
+        from back.services.perception.classification_trigger import crossings_path_for
+
+        row = await _recording_for_device(uuid, device, db)
+        size = await _save_upload(file, crossings_path_for(row))
+        return {"ok": True, "uuid": uuid, "size_bytes": size}
+
+    @router.post("/recordings/{uuid}/crops/upload")
+    async def upload_recording_crop(
+        uuid: str,
+        file: UploadFile = File(...),
+        db: AsyncSession = Depends(get_db),
+        device: Device = Depends(verify_device_key),
+    ):
+        """Receive one crop JPG into the recording's crops dir. The bare filename
+        rides on the multipart part; reject any path separator / .. so a client
+        can never escape the crops dir (path traversal)."""
+        from back.services.perception.classification_trigger import crops_dir_for
+
+        row = await _recording_for_device(uuid, device, db)
+        name = os.path.basename(file.filename or "")
+        if not name or "/" in file.filename or "\\" in file.filename or ".." in file.filename:
+            raise HTTPException(400, "Invalid crop filename")
+        size = await _save_upload(file, os.path.join(crops_dir_for(row), name))
+        return {"ok": True, "uuid": uuid, "filename": name, "size_bytes": size}
