@@ -1,0 +1,17 @@
+[Unit]
+Description=Classification Worker (offline blueberry ripeness classification via Unix socket)
+Before=robot-platform.service
+After=network.target
+
+[Service]
+Type=simple
+User=DEPLOY_USER
+WorkingDirectory=DEPLOY_DIR
+ExecStartPre=/bin/rm -f /tmp/classification.sock
+ExecStart=/opt/robot-platform/src/classification_worker/.venv/bin/classification-worker
+Restart=on-failure
+RestartSec=2
+Environment=CLASSIFICATION_SOCKET=/tmp/classification.sock
+
+[Install]
+WantedBy=multi-user.target

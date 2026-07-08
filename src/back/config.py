@@ -96,6 +96,15 @@ class CountingWorkerConfig:
 
 
 @dataclass
+class ClassificationWorkerConfig:
+    # Offline classification worker control socket (post-count ripeness
+    # classification). Mirrors CountingWorkerConfig: socket path only.
+    control_socket_path: str = os.getenv(
+        "CLASSIFICATION_SOCKET", "/tmp/classification.sock"
+    )
+
+
+@dataclass
 class EncoderConfig:
     bitrate: int = 1_000_000        # target bitrate in bps (1 Mbps)
     preset: str = "low-latency"     # "low-latency" | "high-quality"
@@ -129,6 +138,9 @@ class Config:
     recording: RecordingConfig = field(default_factory=RecordingConfig)
     conversion: ConversionConfig = field(default_factory=ConversionConfig)
     counting_worker: CountingWorkerConfig = field(default_factory=CountingWorkerConfig)
+    classification_worker: ClassificationWorkerConfig = field(
+        default_factory=ClassificationWorkerConfig
+    )
     sync: SyncConfig = field(default_factory=SyncConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
     public_url: str = field(default_factory=lambda: os.getenv("SERVER_PUBLIC_URL", ""))

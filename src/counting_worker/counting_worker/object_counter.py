@@ -35,16 +35,23 @@ class ObjectCounter:
         else:
             raise ValueError(f"Invalid direction: {direction}")
 
-    def update(self, tracking_data: list[dict]) -> None:
+    def update(self, tracking_data: list[dict]) -> list[int]:
+        """Advance the counter; return the track_ids that crossed (counted) in
+        THIS call — i.e. newly added to set_1. Empty list if none. The offline
+        processor uses this delta to attribute a crossing event (bbox at the
+        crossing frame) to each counted object, for post-count classification.
+        """
         if not tracking_data:
-            return
+            return []
 
         set_0, set_1 = set(self.LIST_0), set(self.LIST_1)
+        before = set(set_1)
 
         for obj in tracking_data:
             self._process_object(obj["track_id"], obj["cx"], obj["cy"], set_0, set_1)
 
         self.LIST_0, self.LIST_1 = list(set_0), list(set_1)
+        return list(set_1 - before)
 
     def _process_object(self, obj_id: int, x: float, y: float, set_0: set, set_1: set) -> None:
         # set_0: tracks ever seen on the "before" side (legitimate crossers).

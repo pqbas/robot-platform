@@ -3,7 +3,7 @@
 ## Topología
 - Backend FastAPI: `back/` (un solo codebase, modo robot/server por `ROBOT_MODE` en `.env.{robot,server}`).
 - Frontend React + Vite: `front/` (dev en `:5173`, proxy a `localhost:8080`).
-- Workers uv separados (Unix socket): `camera_worker/`, `inference/`, `recording_worker/`, `conversion_worker/`.
+- Workers uv separados (Unix socket): `camera_worker/`, `inference/`, `recording_worker/`, `conversion_worker/`, `counting_worker/`, `classification_worker/`.
 - Puertos: robot `8080`, server `9090`.
 
 ## Invariantes
@@ -19,6 +19,7 @@
 - `/tmp/recording.sock` — control start/stop/status.
 - `/tmp/conversion.sock` — control convert/status.
 - `/tmp/counting.sock` — control count/status (conteo diferido offline).
+- `/tmp/classification.sock` — control classify/status (clasificación de madurez diferida, post-conteo).
 
 ## Archivos clave
 
@@ -54,7 +55,8 @@
 - `inference/inference_worker/main.py` + `detector.py` + `protocol.py` — inferencia + timing.
 - `recording_worker/recording_worker/encoder.py` — bitrate/preset/profile por backend.
 - `conversion_worker/conversion_worker/main.py` + `converter.py` — `.pt` → FP16 `.engine`.
-- `counting_worker/counting_worker/main.py` + `processor.py` + `object_counter.py` — conteo diferido: reprocesa el MP4 (detect + ByteTrack + cruce de línea) → conteo + sidecar `{uuid}.jsonl` alineado.
+- `counting_worker/counting_worker/main.py` + `processor.py` + `object_counter.py` — conteo diferido: reprocesa el MP4 (detect + ByteTrack + cruce de línea) → conteo + sidecar `{uuid}.jsonl` alineado + cruces `{uuid}.crossings.jsonl` (un objeto por objeto contado).
+- `classification_worker/classification_worker/main.py` + `processor.py` + `model/` — clasificación de madurez diferida: por cada cruce recorta el bbox del MP4 → Encoder (CUDA) + sonda lineal numpy → crop JPG + `{uuid}.classifications.jsonl`. Modelo: `classifier.npz` autocontenido (`enc__*` + sonda). NO usa sklearn/torch-cu124.
 
 ### Specs / planning
 - `spec/<fecha>-<feature>/{plan,requirements,validation}.md` — convención por feature.
@@ -67,7 +69,7 @@
 - TensorRT engines cache: `data/robot/models/`.
 
 ## Comandos
-- Workers: `make run-{camera,inference,recording,conversion,counting}`.
+- Workers: `make run-{camera,inference,recording,conversion,counting,classification}`.
 - Backend: `make run-{robot,server}`. Frontend: `make run-front`.
 - Deploy: `make deploy-{robot,server}`. Update: `make update`.
 - Logs: `make logs[-{inference,camera,recording,conversion}]`. Status/restart: `make {status,restart}`.

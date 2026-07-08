@@ -273,6 +273,43 @@ if [[ "$MODE" == "robot" ]]; then
     fi
     cd "$INSTALL_DIR"
 
+    info "Installing Python dependencies (classification worker)..."
+    cd "$INSTALL_DIR/src/classification_worker"
+    if venv_exists "$INSTALL_DIR/src/classification_worker"; then
+        info "classification worker venv ya existe — saltando (usa --force para reconstruir)"
+    elif [[ "$(uname -m)" == "aarch64" ]]; then
+        # The classification worker runs the frozen Encoder on CUDA (the JetPack
+        # torch CPU conv path produces non-finite output for this backbone) + a
+        # numpy linear probe. It needs CUDA torch + torchvision + system cv2/PIL
+        # via --system-site-packages, like the counting worker. It does NOT use
+        # ultralytics/lap/tensorrt.
+        #
+        #   JP5 (Python 3.8): torch + torchvision come from the system
+        #     site-packages (inherited); we only pin numpy (last so it wins) for
+        #     the system cv2/PIL ABI. opencv-python/pillow are NOT installed — the
+        #     worker uses system cv2 (VideoCapture) and system PIL.
+        #   JP6 (Python 3.10): no system torch — install the CUDA build from the
+        #     Jetson AI Lab index, numpy pinned for the system ABI.
+        PYVER="$(/usr/bin/python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+        info "Jetson detected (aarch64): system Python ${PYVER} — installing classification worker against system Python (torch + torchvision)"
+        uv venv --clear --system-site-packages --python /usr/bin/python3
+        if [[ "$PYVER" == "3.8" ]]; then
+            # JP5: torch + torchvision come from system site-packages (inherited).
+            uv pip install --no-deps hatchling
+            uv pip install "numpy==1.24.4"
+        else
+            # JP6: install CUDA torch + torchvision from the Jetson index.
+            uv pip install torch==2.8.0 torchvision==0.23.0 \
+                --index-url https://pypi.jetson-ai-lab.io/jp6/cu126/+simple
+            uv pip install --no-deps hatchling
+            uv pip install "numpy==1.26.4"
+        fi
+        uv pip install -e . --no-deps
+    else
+        uv sync
+    fi
+    cd "$INSTALL_DIR"
+
     info "Creating recordings directory..."
     mkdir -p "$INSTALL_DIR/data/robot/recordings"
 fi
@@ -428,6 +465,11 @@ if [[ "$MODE" == "robot" ]]; then
         -e "s|DEPLOY_DIR|${INSTALL_DIR}/src/counting_worker|g" \
         "$INSTALL_DIR/deploy/counting-worker.service" \
         | sudo tee /etc/systemd/system/counting-worker.service > /dev/null
+
+    sed -e "s|DEPLOY_USER|${DEPLOY_USER}|g" \
+        -e "s|DEPLOY_DIR|${INSTALL_DIR}/src/classification_worker|g" \
+        "$INSTALL_DIR/deploy/classification-worker.service" \
+        | sudo tee /etc/systemd/system/classification-worker.service > /dev/null
 fi
 
 sudo systemctl daemon-reload
@@ -452,6 +494,10 @@ if [[ "$MODE" == "robot" ]]; then
     sudo systemctl enable counting-worker
     sudo systemctl restart counting-worker
     info "Counting worker service enabled and started"
+
+    sudo systemctl enable classification-worker
+    sudo systemctl restart classification-worker
+    info "Classification worker service enabled and started"
 fi
 
 sudo systemctl enable robot-platform

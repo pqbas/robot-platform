@@ -154,7 +154,7 @@ async def test_reconcile_marks_error_when_no_config(setup_db):
 async def test_recount_404_unknown_uuid(setup_db):
     async with AsyncSessionLocal() as s:
         with pytest.raises(HTTPException) as ei:
-            await recount("nope", False, s)
+            await recount("nope", False, None, s)
     assert ei.value.status_code == 404
 
 
@@ -163,5 +163,5 @@ async def test_recount_409_mp4_missing(setup_db):
     await _add_recording("rec-recount", count_status="done", count=1)
     async with AsyncSessionLocal() as s:
         with pytest.raises(HTTPException) as ei:
-            await recount("rec-recount", False, s)
+            await recount("rec-recount", False, None, s)
     assert ei.value.status_code == 409

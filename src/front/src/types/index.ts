@@ -19,6 +19,8 @@ export type FrameData = {
 
 export type CountStatus = "none" | "pending" | "counting" | "done" | "error"
 
+export type ClassificationStatus = "none" | "classifying" | "done" | "error"
+
 export type Session = {
   id: number
   // Null when saved without a location; assignable later via edit.
@@ -32,6 +34,9 @@ export type Session = {
   // Offline counting status/number, derived from the linked recording.
   count_status: CountStatus
   count: number | null
+  // Ripeness classification status, derived from the same linked recording.
+  // 'none' when the counted category has no classifier (opt-in per category).
+  classification_status: ClassificationStatus
   // Linked recording's duration/size/upload state (null when no recording).
   duration_seconds: number | null
   file_size_bytes: number | null
@@ -70,6 +75,26 @@ export type RecordingDetections = {
   fps: number | null
   frames: DetectionFrame[]
   count_config: ReplayCountConfig | null
+}
+
+// One counted object's ripeness crop. `crop` is the bare JPG filename (not a
+// URL) — build the URL with getCropImageUrl. `label`/`confidence` are null while
+// the crop exists but hasn't been classified yet.
+export type RipenessCrop = {
+  track_id: number
+  label: string | null
+  confidence: number | null
+  bbox: [number, number, number, number]
+  crop: string
+}
+
+// Response of GET /api/recordings/{uuid}/classifications: per-class counts plus
+// the crop gallery. `distribution` maps ripeness label → count.
+export type RecordingClassifications = {
+  status: ClassificationStatus
+  error: string | null
+  distribution: Record<string, number>
+  crops: RipenessCrop[]
 }
 
 export type Camellon = {

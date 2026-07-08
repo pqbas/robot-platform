@@ -1,4 +1,4 @@
-.PHONY: start run-robot run-server run-front run-inference run-conversion logs-conversion run-counting run-counting-dev logs-counting db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update create-admin compose-build compose-up compose-down compose-logs compose-migrate compose-create-admin
+.PHONY: start run-robot run-server run-front run-inference run-conversion logs-conversion run-counting run-counting-dev logs-counting run-classification run-classification-dev logs-classification db-up db-down db-migrate build-front deploy-robot deploy-server restart logs logs-inference status update create-admin compose-build compose-up compose-down compose-logs compose-migrate compose-create-admin
 
 start:
 	PYTHONPATH=src uv run uvicorn back.main:app --host 0.0.0.0 --port 8080 --reload
@@ -43,6 +43,15 @@ run-counting-dev:
 logs-counting:
 	sudo journalctl -u counting-worker -f
 
+run-classification:
+	cd src/classification_worker && VIRTUAL_ENV= .venv/bin/classification-worker --control-socket /tmp/classification.sock
+
+run-classification-dev:
+	cd src/classification_worker && uv run --group dev classification-worker --control-socket /tmp/classification.sock
+
+logs-classification:
+	sudo journalctl -u classification-worker -f
+
 create-admin:
 	ENV_FILE=.env.server PYTHONPATH=src uv run python -m back.scripts.create_admin
 
@@ -76,6 +85,7 @@ restart:
 	-sudo systemctl restart recording-worker
 	-sudo systemctl restart conversion-worker
 	-sudo systemctl restart counting-worker
+	-sudo systemctl restart classification-worker
 	sudo systemctl restart robot-platform
 
 logs:
@@ -126,4 +136,5 @@ update:
 	-sudo systemctl restart recording-worker
 	-sudo systemctl restart conversion-worker
 	-sudo systemctl restart counting-worker
+	-sudo systemctl restart classification-worker
 	sudo systemctl restart robot-platform

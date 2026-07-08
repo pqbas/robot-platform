@@ -17,7 +17,14 @@ from sqlalchemy.orm import selectinload
 
 from back.config import AppMode, config
 from back.database import get_db
-from back.models import Camellon, DetectionModel, Fundo, Recording, SyncLog
+from back.models import (
+    Camellon,
+    DetectionModel,
+    FruitCrop,
+    Fundo,
+    Recording,
+    SyncLog,
+)
 from back.schemas import (
     RecordingOut,
     RecordingPlaceUpdate,
@@ -90,6 +97,8 @@ async def _build_out(db: AsyncSession, row: Recording) -> RecordingOut:
         count_status=row.count_status,
         count=row.count,
         count_error=row.count_error,
+        classification_status=row.classification_status,
+        classification_error=row.classification_error,
     )
 
 
@@ -367,12 +376,25 @@ async def get_recount_config(uuid: str, db: AsyncSession = Depends(get_db)):
             cc = {}
     c = config.counting
 
+    # The category (by target_class) is the deployment hub: it supplies the
+    # default detector + geometry for the dialog when this video wasn't counted
+    # before. Pinned count_config still wins (reproduce what was used).
+    from back.models import Category
+
+    cat = None
+    target_class = cc.get("target_class")
+    if target_class:
+        res = await db.execute(select(Category).where(Category.name == target_class))
+        cat = res.scalar_one_or_none()
+
     # Model + runtime to prefill: the video's pinned model if counted before,
-    # else the active model. Runtime derived from the pinned engine_path.
+    # else the category's detector, else the active model. Runtime from engine_path.
     model_uuid = cc.get("model_uuid")
     runtime = cc.get("runtime")
     if runtime is None and cc.get("engine_path"):
         runtime = "tensorrt" if cc["engine_path"].endswith(".engine") else "pytorch"
+    if model_uuid is None and cat is not None:
+        model_uuid = cat.detection_model_uuid
     if model_uuid is None:
         active = await db.execute(
             select(DetectionModel)
@@ -383,24 +405,24 @@ async def get_recount_config(uuid: str, db: AsyncSession = Depends(get_db)):
         if am is not None:
             model_uuid = am.uuid
 
-    # Method to prefill: the video's last-used method if counted before, else the
-    # per-object default (counting_methods), else single.
-    from back.services import counting_methods
-
-    method = cc.get("method") or counting_methods.read_method(
-        model_uuid, cc.get("target_class")
-    )
+    def _pref(key: str, cat_value, default):
+        v = cc.get(key)
+        if v is not None:
+            return v
+        return cat_value if cat_value is not None else default
 
     return RecountConfigOut(
-        count_mode=cc.get("count_mode", c.count_mode),
-        threshold=cc.get("threshold", c.threshold),
-        direction=cc.get("direction", c.direction),
-        roi_mode=cc.get("roi_mode", c.roi_mode),
-        confidence=cc.get("confidence", c.confidence_threshold),
-        target_class=cc.get("target_class"),
+        count_mode=_pref("count_mode", getattr(cat, "count_mode", None), c.count_mode),
+        threshold=_pref("threshold", getattr(cat, "threshold", None), c.threshold),
+        direction=_pref("direction", getattr(cat, "direction", None), c.direction),
+        roi_mode=_pref("roi_mode", getattr(cat, "roi_mode", None), c.roi_mode),
+        confidence=_pref(
+            "confidence", getattr(cat, "confidence", None), c.confidence_threshold
+        ),
+        target_class=target_class,
         model_uuid=model_uuid,
         runtime=runtime,
-        method=method,  # type: ignore[arg-type]
+        method=_pref("method", getattr(cat, "method", None), c.method),  # type: ignore[arg-type]
     )
 
 
@@ -486,6 +508,141 @@ async def recount(
     await db.flush()
     await db.refresh(rec)
     return await _build_out(db, rec)
+
+
+@router.post("/{uuid}/reclassify", response_model=RecordingOut)
+async def reclassify(
+    uuid: str,
+    use_pinned: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-run offline ripeness classification for a counted recording.
+
+    Needs the recording counted (so ``{uuid}.crossings.jsonl`` exists). By default
+    rebuilds the classifier pin from the category; ``use_pinned=true`` reproduces
+    the ``classification_config`` already on the row.
+
+    404 if unknown; 409 if not counted, the MP4 is missing, or the category has no
+    classifier assigned.
+    """
+    rec = (
+        await db.execute(select(Recording).where(Recording.uuid == uuid))
+    ).scalar_one_or_none()
+    if rec is None:
+        raise HTTPException(404, "Recording not found")
+    if not os.path.isfile(rec.file_path):
+        raise HTTPException(409, "El MP4 no está en disco")
+    if rec.count_status != "done":
+        raise HTTPException(409, "La grabación no está contada; cuenta primero")
+
+    from back.services.perception.classification_trigger import (
+        build_classification_config,
+        enqueue_classification,
+    )
+
+    if use_pinned:
+        if not rec.classification_config:
+            raise HTTPException(
+                409, "No hay classification_config para reproducir; reclasifica normal"
+            )
+        cfg = json.loads(rec.classification_config)
+    else:
+        cfg = await build_classification_config(db, rec)
+        if cfg is None:
+            raise HTTPException(409, "La categoría no tiene un clasificador asignado")
+
+    await enqueue_classification(db, rec, cfg)
+    await db.flush()
+    await db.refresh(rec)
+    return await _build_out(db, rec)
+
+
+@router.get("/{uuid}/classifications")
+async def get_recording_classifications(
+    uuid: str, db: AsyncSession = Depends(get_db)
+):
+    """Ripeness classification results for a recording — summary + crop gallery.
+
+    Returns ``{status, error, distribution, crops}`` where ``distribution`` is a
+    per-class count and each crop carries its predicted label/confidence, bbox and
+    crop image filename. Available in robot and server mode. Empty crop list while
+    classification hasn't produced results yet.
+    """
+    rec = (
+        await db.execute(select(Recording).where(Recording.uuid == uuid))
+    ).scalar_one_or_none()
+    if rec is None:
+        raise HTTPException(404, "Recording not found")
+
+    crops = (
+        await db.execute(
+            select(FruitCrop)
+            .options(selectinload(FruitCrop.classifications))
+            .where(FruitCrop.recording_uuid == uuid)
+            .order_by(FruitCrop.track_id)
+        )
+    ).scalars().all()
+
+    distribution: dict[str, int] = {}
+    out_crops = []
+    for crop in crops:
+        cl = crop.classifications[0] if crop.classifications else None
+        label = cl.class_name if cl else None
+        if label is not None:
+            distribution[label] = distribution.get(label, 0) + 1
+        out_crops.append(
+            {
+                "track_id": crop.track_id,
+                "label": label,
+                "confidence": cl.confidence if cl else None,
+                "bbox": [crop.bbox_x, crop.bbox_y, crop.bbox_w, crop.bbox_h],
+                "crop": os.path.basename(crop.image_path),
+            }
+        )
+
+    return {
+        "status": rec.classification_status,
+        "error": rec.classification_error,
+        "distribution": distribution,
+        "crops": out_crops,
+    }
+
+
+def _resolve_crop_path(crops_dir: str, filename: str) -> str:
+    """Resolve a crop filename under ``crops_dir``, or raise 400/404.
+
+    Rejects any path separator / ``..`` so a request can never escape the crops
+    dir (path traversal). 404 when the file doesn't exist. Pure so it's unit
+    testable without an HTTP/DB harness."""
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(400, "Invalid crop filename")
+    path = os.path.join(crops_dir, filename)
+    if not os.path.isfile(path):
+        raise HTTPException(404, "Crop image not found")
+    return path
+
+
+@router.get("/{uuid}/crops/{filename}")
+async def get_recording_crop(
+    uuid: str, filename: str, db: AsyncSession = Depends(get_db)
+):
+    """Serve a single ripeness crop JPG for a recording.
+
+    ``filename`` is the bare basename the ``/classifications`` payload carries
+    (e.g. ``7_214.jpg``); this resolves it under the recording's crops dir. Any
+    path separator / ``..`` is rejected so the route can never escape that dir.
+    Available in robot and server mode (the server has the synced crops).
+    """
+    rec = (
+        await db.execute(select(Recording).where(Recording.uuid == uuid))
+    ).scalar_one_or_none()
+    if rec is None:
+        raise HTTPException(404, "Recording not found")
+
+    from back.services.perception.classification_trigger import crops_dir_for
+
+    path = _resolve_crop_path(crops_dir_for(rec), filename)
+    return FileResponse(path, media_type="image/jpeg", filename=filename)
 
 
 @router.delete("/{uuid}")

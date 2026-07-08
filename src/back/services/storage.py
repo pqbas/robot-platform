@@ -5,7 +5,17 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from back.models import Camellon, Event, Fundo, Location, Recording, Session
+from back.models import (
+    Camellon,
+    Category,
+    ClassificationModel,
+    Event,
+    Fundo,
+    Location,
+    Recording,
+    Session,
+    _now_iso,
+)
 
 
 # --- Locations ---
@@ -252,6 +262,7 @@ async def _attach_count_status(
         rec = by_uuid.get(s.recording_uuid) if s.recording_uuid else None
         s.count_status = rec.count_status if rec else "none"
         s.count = rec.count if rec else None
+        s.classification_status = rec.classification_status if rec else "none"
         s.duration_seconds = rec.duration_seconds if rec else None
         s.file_size_bytes = rec.file_size_bytes if rec else None
         s.uploaded_at = rec.uploaded_at if rec else None
@@ -410,3 +421,150 @@ async def get_dashboard_stats(
             {"target_class": r.target_class, "count": r.count} for r in cls_rows
         ],
     }
+
+
+# --- Categories (the deployment hub) ---
+
+_CATEGORY_GEOMETRY = (
+    "method",
+    "count_mode",
+    "threshold",
+    "direction",
+    "roi_mode",
+    "confidence",
+)
+
+
+async def list_categories(db: AsyncSession) -> list[Category]:
+    result = await db.execute(select(Category).order_by(Category.name))
+    return list(result.scalars().all())
+
+
+async def get_category(db: AsyncSession, name: str) -> Category | None:
+    result = await db.execute(select(Category).where(Category.name == name))
+    return result.scalar_one_or_none()
+
+
+async def create_category(
+    db: AsyncSession,
+    name: str,
+    *,
+    detection_model_uuid: str | None = None,
+    classification_model_uuid: str | None = None,
+    **geometry,
+) -> Category:
+    cat = Category(
+        name=name,
+        detection_model_uuid=detection_model_uuid,
+        classification_model_uuid=classification_model_uuid,
+        updated_at=_now_iso(),
+    )
+    for key in _CATEGORY_GEOMETRY:
+        if geometry.get(key) is not None:
+            setattr(cat, key, geometry[key])
+    db.add(cat)
+    await db.flush()
+    return cat
+
+
+async def update_category(db: AsyncSession, name: str, **fields) -> Category | None:
+    """Update a category's detector / classifier / geometry.
+
+    Only keys present (non-None) are applied, except ``classification_model_uuid``
+    which accepts an explicit ``None`` to *clear* the classifier — pass the
+    ``clear_classifier=True`` flag to do so unambiguously.
+    """
+    cat = await get_category(db, name)
+    if cat is None:
+        return None
+    if fields.pop("clear_classifier", False):
+        cat.classification_model_uuid = None
+    if fields.get("detection_model_uuid") is not None:
+        cat.detection_model_uuid = fields["detection_model_uuid"]
+    if fields.get("classification_model_uuid") is not None:
+        cat.classification_model_uuid = fields["classification_model_uuid"]
+    for key in _CATEGORY_GEOMETRY:
+        if fields.get(key) is not None:
+            setattr(cat, key, fields[key])
+    cat.updated_at = _now_iso()
+    await db.flush()
+    return cat
+
+
+async def delete_category(db: AsyncSession, name: str) -> bool:
+    cat = await get_category(db, name)
+    if cat is None:
+        return False
+    await db.delete(cat)
+    await db.flush()
+    return True
+
+
+# --- Classification models (the classifier library) ---
+
+
+async def list_classification_models(db: AsyncSession) -> list[ClassificationModel]:
+    result = await db.execute(
+        select(ClassificationModel).order_by(ClassificationModel.created_at)
+    )
+    return list(result.scalars().all())
+
+
+async def get_classification_model(
+    db: AsyncSession, uuid: str
+) -> ClassificationModel | None:
+    result = await db.execute(
+        select(ClassificationModel).where(ClassificationModel.uuid == uuid)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_classification_model_by_hash(
+    db: AsyncSession, file_hash: str
+) -> ClassificationModel | None:
+    result = await db.execute(
+        select(ClassificationModel).where(
+            ClassificationModel.file_hash == file_hash
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_classification_model(
+    db: AsyncSession,
+    *,
+    version: str,
+    filename: str,
+    file_hash: str | None,
+    class_names: list[str],
+    num_classes: int | None = None,
+    latent_dim: int = 128,
+    imgsz: int = 128,
+    source: str = "uploaded",
+    uuid: str | None = None,
+) -> ClassificationModel:
+    model = ClassificationModel(
+        version=version,
+        filename=filename,
+        file_hash=file_hash,
+        source=source,
+        class_names=json.dumps(class_names),
+        num_classes=num_classes if num_classes is not None else len(class_names),
+        latent_dim=latent_dim,
+        imgsz=imgsz,
+        created_at=_now_iso(),
+    )
+    if uuid is not None:
+        model.uuid = uuid
+    db.add(model)
+    await db.flush()
+    return model
+
+
+async def delete_classification_model(db: AsyncSession, uuid: str) -> bool:
+    model = await get_classification_model(db, uuid)
+    if model is None:
+        return False
+    await db.delete(model)
+    await db.flush()
+    return True

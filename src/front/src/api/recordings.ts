@@ -1,4 +1,8 @@
-import type { Recording, RecordingDetections } from "@/types"
+import type {
+  Recording,
+  RecordingClassifications,
+  RecordingDetections,
+} from "@/types"
 import { apiFetch } from "./client"
 
 export function startRecording(): Promise<Recording> {
@@ -94,4 +98,23 @@ export function getUploadingUuids(): Promise<{ uuids: string[] }> {
 
 export function getRecordingDetections(uuid: string): Promise<RecordingDetections> {
   return apiFetch(`/api/recordings/${uuid}/detections`)
+}
+
+// Ripeness classification results for a recording (distribution + crop gallery).
+export function getRecordingClassifications(
+  uuid: string,
+): Promise<RecordingClassifications> {
+  return apiFetch(`/api/recordings/${uuid}/classifications`)
+}
+
+// Re-run the offline ripeness classification with the pinned classifier (robot
+// only). 409 when the category has no classifier / the recording wasn't counted.
+export function reclassifyRecording(uuid: string): Promise<Recording> {
+  return apiFetch(`/api/recordings/${uuid}/reclassify`, { method: "POST" })
+}
+
+// URL of a single crop JPG. The filename is the bare basename from a
+// RipenessCrop.crop; the backend rejects any path separator.
+export function getCropImageUrl(uuid: string, filename: string): string {
+  return `/api/recordings/${uuid}/crops/${encodeURIComponent(filename)}`
 }
