@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Download, Loader2, Pencil, Play, RefreshCw, Trash2, UploadCloud } from "lucide-react"
+import { Download, Grape, Loader2, Pencil, Play, RefreshCw, Trash2, UploadCloud } from "lucide-react"
 import { getRecordingFileUrl } from "@/api/recordings"
 import { LocationCell } from "@/components/LocationCell"
 import { formatDateTime, formatDuration, formatSize, rowStatus } from "@/lib/recordingFormat"
@@ -30,6 +30,7 @@ import { StatusBadge } from "@/components/StatusBadge"
 import SessionEditDialog from "./SessionEditDialog"
 import DetectionReplayDialog from "./DetectionReplayDialog"
 import RecountConfigDialog from "./RecountConfigDialog"
+import RipenessDialog from "./RipenessDialog"
 
 const PAGE_SIZE = 13
 
@@ -54,6 +55,9 @@ export default function SessionsTable({
   const [page, setPage] = useState(0)
   const [editingSession, setEditingSession] = useState<Session | null>(null)
   const [replaySession, setReplaySession] = useState<Session | null>(null)
+  // Session whose ripeness (madurez) modal is open — the classification detail
+  // now lives in a centered popup, opened per row, instead of a detail panel.
+  const [ripenessSession, setRipenessSession] = useState<Session | null>(null)
   const [deleting, setDeleting] = useState<Session | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [syncingId, setSyncingId] = useState<number | null>(null)
@@ -281,6 +285,21 @@ export default function SessionsTable({
                       </Button>
                     )}
                     {s.recording_uuid != null &&
+                      s.classification_status !== "none" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Ver madurez"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setRipenessSession(s)
+                          }}
+                        >
+                          <Grape className="size-3.5" />
+                        </Button>
+                      )}
+                    {s.recording_uuid != null &&
                       (mode === "robot" || s.uploaded_at != null) && (
                         <Button
                           asChild
@@ -377,6 +396,15 @@ export default function SessionsTable({
           onEnqueued={() =>
             onSessionUpdated({ ...recountSession, count_status: "counting" })
           }
+        />
+      )}
+
+      {ripenessSession && (
+        <RipenessDialog
+          recordingUuid={ripenessSession.recording_uuid}
+          title={`Madurez — sesión #${ripenessSession.id}`}
+          open={!!ripenessSession}
+          onOpenChange={(open) => { if (!open) setRipenessSession(null) }}
         />
       )}
 

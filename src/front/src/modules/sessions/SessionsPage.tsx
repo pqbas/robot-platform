@@ -13,10 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import { useAppMode } from "@/context/AppModeContext"
 import SessionsTable from "@/modules/map/components/SessionsTable"
-import SessionDetail from "@/modules/map/components/SessionDetail"
 
 export default function SessionsPage() {
   const { mode } = useAppMode()
@@ -213,11 +211,6 @@ export default function SessionsPage() {
     setDateTo(null)
   }
 
-  const camellonName = selectedSession
-    ? selectedSession.camellon_id == null
-      ? "Sin ubicación"
-      : (camellones.get(selectedSession.camellon_id)?.nombre ?? `#${selectedSession.camellon_id}`)
-    : ""
 
   if (loading) {
     return (
@@ -348,17 +341,6 @@ export default function SessionsPage() {
           }}
         />
       </div>
-
-      {selectedSession && (
-        <>
-          <Separator />
-          <SessionDetail
-            session={selectedSession}
-            camellonName={camellonName}
-            showCamellon={mode === "server"}
-          />
-        </>
-      )}
     </div>
   )
 }
