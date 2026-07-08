@@ -289,20 +289,21 @@ export default function SessionsTable({
                         <RefreshCw className="size-3.5" />
                       </Button>
                     )}
-                    {s.recording_uuid != null && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        title="Ver grabación"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setReplaySession(s)
-                        }}
-                      >
-                        <Play className="size-3.5" />
-                      </Button>
-                    )}
+                    {s.recording_uuid != null &&
+                      (mode === "robot" || s.uploaded_at != null) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Ver grabación"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setReplaySession(s)
+                          }}
+                        >
+                          <Play className="size-3.5" />
+                        </Button>
+                      )}
                     {s.recording_uuid != null &&
                       (mode === "robot" || s.uploaded_at != null) && (
                         <Button
