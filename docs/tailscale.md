@@ -67,3 +67,47 @@ sudo tailscale funnel --https=443 off
 ```
 
 More details and troubleshooting in [`deploy/README.md`](../deploy/README.md).
+
+## Troubleshooting: "el Funnel me rechaza / no me deja entrar" (DNS)
+
+Síntoma: la URL pública `https://<host>.<tailnet>.ts.net` no carga desde
+algunos dispositivos/redes, de forma **intermitente** ("a ratos funciona, a
+ratos no"). El Funnel parece caído aunque `tailscale funnel status` diga `on`.
+
+**Causa (30-jul-2026):** NO es el Funnel. Es el **resolver DNS del cliente**.
+El nombre del Funnel vive en la zona firmada con DNSSEC `*.ts.net`, y **Google
+Public DNS (8.8.8.8 / 8.8.4.4) devuelve `NXDOMAIN`** ("dominio inexistente")
+para ese nombre de forma intermitente (negative cache), mientras que Cloudflare
+(1.1.1.1) y Quad9 (9.9.9.9) lo resuelven bien. Si la PC/router está apuntando
+solo a Google DNS, el navegador ni siquiera intenta conectar → parece que el
+Funnel "rechaza". En este caso la red del laboratorio entregaba `8.8.8.8`.
+
+### Diagnóstico (confirmar que es esto y no el Funnel)
+
+```bash
+# 1. El Funnel del lado servidor está OK (contenedor tailscale):
+docker exec robot-platform-tailscale-1 tailscale funnel status
+#   → "Funnel on: https://<host>.<tailnet>.ts.net" + proxy http://nginx:80
+
+# 2. Probar la ruta pública SALTÁNDOSE el DNS (forzar la IP de ingress).
+#    Si esto da 200, el Funnel/nginx/backend funcionan y el problema es DNS:
+curl -sS -i --resolve <host>.<tailnet>.ts.net:443:<ingress-ip> https://<host>.<tailnet>.ts.net/
+
+# 3. Comparar resolvers — el que falla es el culpable:
+nslookup -type=A <host>.<tailnet>.ts.net 8.8.8.8   # → NXDOMAIN (Google, falla)
+nslookup -type=A <host>.<tailnet>.ts.net 1.1.1.1   # → 209.177.x.x (Cloudflare, OK)
+nslookup -type=A <host>.<tailnet>.ts.net 9.9.9.9   # → 209.177.x.x (Quad9, OK)
+```
+
+La `<ingress-ip>` se obtiene del paso 3 con Cloudflare/Quad9 (son IPs anycast de
+Tailscale Funnel, p.ej. `209.177.145.97`).
+
+### Solución
+
+- **Permanente y para toda la LAN:** en el **router**, cambiar los DNS de
+  `8.8.8.8` / `8.8.4.4` a `1.1.1.1` (primario) y `9.9.9.9` (secundario).
+- **Por dispositivo (si no se puede tocar el router):** cambiar el DNS de ese
+  equipo/celular a `1.1.1.1`. En Android sirve "DNS privado" → `one.one.one.one`.
+
+No se cambia nada del servidor ni de Tailscale: el Funnel ya está bien; el
+arreglo es solo *quién resuelve el nombre*.
