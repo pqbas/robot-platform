@@ -158,6 +158,57 @@ Notas de actualización:
   Fijar `name: robot-platform` en el compose evita que esto se repita: ancla el
   nombre del proyecto (y de los volúmenes) sin importar dónde esté la carpeta.
 
+#### Problemas de conectividad y subida de archivos
+
+Incidencias reales de operación (jul-2026) y su solución. Ninguna requiere
+reconstruir imágenes ni re-desplegar: son config de nginx (recreando solo ese
+contenedor), DNS del cliente, o reloj del robot.
+
+- **Subir videos falla / `413 Request Entity Too Large`**: el robot sube el MP4
+  por `POST /api/sync/recordings/{uuid}/upload`, que entra por nginx. La ruta
+  `/api/` limita el tamaño del cuerpo con `client_max_body_size` en
+  `deploy/nginx.compose.conf.template`. Un video más grande que ese tope lo
+  rechaza nginx con 413 **antes** de llegar al backend (aplica igual por LAN o
+  por Funnel: ambos pasan por el mismo nginx). Subir el valor (ej. `5G`, o `0`
+  = sin límite) y recrear **solo** nginx:
+  ```bash
+  # editar la línea `client_max_body_size` en deploy/nginx.compose.conf.template
+  docker compose --env-file .env.server -f docker-compose.server.yml up -d --force-recreate nginx
+  # verificar que el template se re-renderizó con el nuevo valor:
+  docker exec robot-platform-nginx-1 grep client_max_body_size /etc/nginx/conf.d/default.conf
+  ```
+
+- **El Funnel "rechaza" / la página no carga desde algunos equipos (DNS)**: la
+  URL pública `https://<host>.<tailnet>.ts.net` no carga de forma
+  **intermitente** aunque `tailscale funnel status` diga `on`. No es el Funnel:
+  es el **resolver DNS del cliente**. Google Public DNS (`8.8.8.8`/`8.8.4.4`)
+  devuelve `NXDOMAIN` para el nombre `*.ts.net` de forma intermitente (negative
+  cache), mientras Cloudflare (`1.1.1.1`) y Quad9 (`9.9.9.9`) lo resuelven bien.
+  Solución: apuntar el DNS del **router** (o del dispositivo) a `1.1.1.1` /
+  `9.9.9.9`. Diagnóstico completo (curl `--resolve`, comparación de resolvers)
+  en [`docs/tailscale.md`](../docs/tailscale.md) → "Troubleshooting … (DNS)".
+
+- **El robot marca "server unreachable" / `certificate is not valid yet`**: el
+  robot no sincroniza y su log muestra un error TLS
+  `SSL: CERTIFICATE_VERIFY_FAILED … certificate is not valid yet`. Causa: el
+  **reloj del robot está atrasado**, con una fecha anterior al `notBefore` del
+  certificado del Funnel (Let's Encrypt, emitido vía Tailscale). El robot cree
+  que el certificado "aún no es válido" y rechaza el handshake — el server
+  parece inalcanzable aunque esté perfecto. Común en Jetson que pierde la hora
+  al reiniciar (RTC sin batería / sin NTP). Solución **en el robot**:
+  ```bash
+  date                                   # ¿fecha anterior a la emisión del cert?
+  sudo date -u -s "AAAA-MM-DD HH:MM:SS"  # poner la hora UTC actual
+  sudo hwclock -w                        # persistir en el reloj de hardware
+  sudo timedatectl set-ntp true          # sync automática (evita que recurra)
+  ```
+  Si se resetea en **cada** reinicio pese a NTP, es la batería del RTC de la
+  placa. Ver las fechas de validez del cert del server para comparar:
+  ```bash
+  echo | openssl s_client -connect <host>.<tailnet>.ts.net:443 2>/dev/null \
+    | openssl x509 -noout -dates
+  ```
+
 ### Notas
 
 - **Coexistencia con systemd**: si el servicio `robot-platform.service` ya está corriendo en el host, ambos no pueden usar el puerto 9090 al mismo tiempo. Detener el servicio systemd antes de levantar compose (`sudo systemctl stop robot-platform`).
