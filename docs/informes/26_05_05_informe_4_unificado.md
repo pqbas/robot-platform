@@ -18,403 +18,1230 @@ Fuente editable del informe técnico unificado #4 a PROCIENCIA.
 Compilar: node docs/informes/generate.js docs/informes/26_05_05_informe_4_unificado.md
 -->
 
-# I. INTRODUCCIÓN
+# INTRODUCCIÓN
 
-El proyecto PE5010-86701-2024-PROCIENCIA desarrolla un robot móvil multifuncional para fundos agrícolas de la Región La Libertad. La plataforma de software, denominada Robot Platform, se ejecuta sobre la computadora embebida NVIDIA Jetson Xavier y permite al operador detectar, contar y clasificar frutos en tiempo real desde un celular o tablet conectado a la red WiFi del vehículo.
+El proyecto PE5010-86701-2024-PROCIENCIA desarrolla un robot móvil
+multifuncional para fundos agrícolas de la Región La Libertad. La plataforma de
+software, denominada Robot Platform, se ejecuta sobre la computadora embebida
+NVIDIA Jetson Xavier y permite al operador detectar y contar frutos en tiempo
+real.
 
-El desarrollo avanza en dos frentes complementarios. El primero cubre la plataforma de software, que incluye arquitectura, workers, comunicación entre procesos, despliegue y aceleración de inferencia con TensorRT sobre el hardware embebido. El segundo cubre la evaluación de modelos de inteligencia artificial para la detección de frutos, con el entrenamiento y comparación de tres familias de modelos (YoloV9, YoloV10 y YoloV11) sobre un dataset propio de 800 imágenes de arándanos recolectadas en los campos del fundo Danper.
+El desarrollo avanza en dos frentes complementarios. El primero cubre la
+plataforma de software: arquitectura, _workers_, comunicación entre procesos y
+despliegue. El segundo cubre la evaluación de la estrategia de detección y
+conteo de frutos, con el entrenamiento y comparación de cinco familias de
+modelos (YOLOv8, YOLOv9, YOLOv10, YOLOv11 y YOLO26) y dos estrategias de conteo,
+medidas por el error de conteo sobre videos de campo del fundo Danper.
 
-El informe técnico previo de enero 2025 reportó la evaluación cuantitativa de los tres modelos sobre el dataset de arándanos y alcanzó un mAP@0,5 máximo de 0,8407 con YoloV9 en su variante Compact a 200 épocas (Cubas, 2025). El informe técnico de abril 2026 reportó la versión inicial de la plataforma, con un único proceso monolítico para captura, inferencia y grabación; esa integración reveló problemas de aislamiento de fallos, acumulación de frames por desacoplamiento de tasas y conflictos de versiones de Python entre los componentes (Cubas, 2026).
+El informe técnico previo de enero 2025 reportó la evaluación cuantitativa de
+los tres modelos sobre el _dataset_ de arándanos y alcanzó un mAP@0,5 máximo de
+0,8407 con YOLOv9 en su variante Compact a 200 épocas (Cubas, 2025). El informe
+técnico de abril 2026 reportó la versión inicial de la plataforma, con un único
+proceso monolítico para captura, inferencia y grabación; esa integración reveló
+problemas de aislamiento de fallos, acumulación de _frames_ por desacoplamiento
+de tasas y conflictos de versiones de Python entre los componentes (Cubas,
+2026a).
 
-El presente informe consolida los avances posteriores a esos dos entregables. La plataforma se rediseñó hacia una arquitectura por procesos independientes que se comunican por sockets Unix, se incorporó la aceleración con TensorRT FP16 sobre los Tensor Cores de la Jetson, y se cargó YoloV11 como modelo de validación integral de la plataforma. La integración del modelo de producción (YoloV9-Compact-200, seleccionado por su mAP@0,5 máximo en la evaluación cuantitativa) se encuentra en curso y se aborda en el capítulo IV.
+El presente informe consolida los avances posteriores a esos dos entregables. La
+plataforma se rediseñó hacia una arquitectura por procesos independientes que se
+comunican por sockets Unix, se incorporó la aceleración con TensorRT FP16 sobre
+los Tensor Cores de la Jetson, y se cargó YOLOv11 como modelo de validación
+integral de la plataforma. Se desplegó además el servidor central del
+laboratorio con acceso remoto seguro, se incorporó el soporte de cámara IP por
+RTSP, el transporte de video por WebCodecs sobre WebSocket y el registro de
+detecciones por _frame_ para reproducir cada sesión grabada. La integración del
+modelo de producción (YOLOv9s, seleccionado por su menor error de conteo en el
+_benchmark_ de campo) se encuentra en curso y se aborda en el capítulo 3.
 
-La finalidad del informe es documentar el estado actual del sistema, presentar la evaluación cuantitativa de los modelos de detección y fundamentar las decisiones técnicas adoptadas. El código fuente de la plataforma está disponible en el repositorio público https://github.com/pqbas/robot-platform.
+La finalidad del informe es documentar el estado actual del sistema, presentar
+la evaluación cuantitativa de los modelos de detección y fundamentar las
+decisiones técnicas adoptadas. La clasificación de frutos por estado de madurez
+es una capacidad prevista del sistema, pero queda fuera del alcance de este
+informe y se abordará en un entregable posterior. El código fuente de la
+plataforma está disponible en el repositorio público
+https://github.com/pqbas/robot-platform.
 
-# II. OBJETIVO GENERAL
+# OBJETIVO GENERAL
 
-Documentar el estado actual de la plataforma Robot Platform y la evaluación de modelos de detección de objetos sobre el dataset de arándanos, fundamentando las decisiones técnicas que sustentan el sistema desplegado en el robot móvil.
+Documentar el estado actual de la plataforma Robot Platform y la evaluación de
+la estrategia de detección y conteo de frutos sobre videos de campo,
+fundamentando las decisiones técnicas que sustentan el sistema desplegado en el
+robot móvil.
 
-# III. PLATAFORMA
+# CAPÍTULO 1. PLATAFORMA
 
-## 3.1 Visión general
+## 1.1 Visión general
 
-La Robot Platform es el componente de software del robot móvil agrícola. Detecta, cuenta y clasifica frutos en tiempo real mientras el robot recorre los camellones de un fundo. El operador interactúa con el sistema desde un celular o tablet conectado a la red WiFi del robot mediante una interfaz web.
+La _Robot Platform_ es el componente de software del robot móvil, le permite
+ejecutar la detección, conteo y clasificación frutos mientras el robot recorre
+los camellones de un fundo. Además le permite al operador interactuar con el
+sistema mediante una interfaz web desde un celular, una tablet o una laptop
+conectado a la red WiFi del robot como se observa en la Figura 1.
 
-El sistema opera en dos modos diferenciados mediante la variable de entorno ROBOT_MODE.
+<!-- ![FIGURA 1. Módulo de visión operando sobre el robot móvil](assets/2026-05-06-20-56-02.png){width=59%} -->
 
-- **Modo robot:** se ejecuta en la computadora embebida del robot (NVIDIA Jetson Xavier) y se encarga de la captura de video, la inferencia con YOLO, la grabación y la clasificación de frutos.
+El sistema _Robot Platform_ se despliega en dos modos:
 
-- **Modo servidor:** se ejecuta en una PC del laboratorio, recibe los datos sincronizados desde múltiples robots y administra los modelos YOLO desplegados en cada uno.
+- **Modo robot:** se ejecuta en la computadora embebida del robot (NVIDIA Jetson
+  Xavier) y se encarga de la captura de video, la inferencia con YOLO, la
+  grabación y la clasificación de frutos.
 
-Ambos modos comparten el mismo codebase del backend; la diferencia de comportamiento se controla por la variable de entorno mencionada.
+- **Modo servidor:** se ejecuta en una PC del laboratorio, recibe los datos
+  sincronizados desde múltiples robots y administra los modelos YOLO desplegados
+  en cada uno.
 
-## 3.2 Arquitectura por procesos
+La Figura 2 ilustra ambos modos en operación, donde cada robot envía
+periódicamente por HTTP los registros de sus sesiones de conteo mientras el
+servidor almacena los resultados de toda la flota.
 
-La Figura 1 presenta el diagrama de arquitectura del sistema en modo robot y la Tabla 1 detalla cada proceso. La arquitectura consta de cinco procesos que se comunican por sockets Unix. El cliente accede mediante nginx y recibe video por WebRTC; la sincronización con el servidor central se realiza por HTTP.
+![FIGURA 2. Comunicación entre el servidor central y los robots.](docs/diagrams/comunicacion_servidor_robots.png){width=50%}
 
-::figure docs/diagrams/arquitectura_actual.png
-^FIGURA 1. Arquitectura del sistema en modo robot. El backend (azul) coordina cuatro workers independientes: camera-worker (captura), inference-worker (YOLO/TensorRT), recording-worker (NVENC) y conversion-worker (build de engines TensorRT bajo demanda).
+La Tabla 1 contrasta las funciones activas en cada modo.
+
+| Robot (Jetson Xavier)                                        | Servidor (PC del laboratorio)                         |
+| ------------------------------------------------------------ | ----------------------------------------------------- |
+| Puerto 8080                                                  | Puerto 9090                                           |
+| SQLite (aiosqlite)                                           | PostgreSQL (psycopg async)                            |
+| Captura de video, inferencia, grabación, conversión TensorRT | Autenticación JWT con roles                           |
+| Streaming de video en tiempo real                            | Administración de modelos, usuarios y dispositivos    |
+| Sync push (envío de datos) y sync pull (descarga de modelos) | Recepción de sincronización y distribución de modelos |
+| Sin autenticación (red local aislada)                        | Login con usuario y contraseña                        |
+
+^TABLA 1. Funciones activas por modo de operación.
+
+## 1.2 Modo robot
+
+El modo robot se ejecuta sobre la computadora embebida (Jetson Xavier) y
+concentra la captura de video, la inferencia, la grabación y la conversión de
+modelos, según la arquitectura de la Figura 3.
+![FIGURA 3. Arquitectura del sistema en modo robot.](docs/diagrams/arquitectura_actual.png){width=78%}
+
+### 1.2.1 Arquitectura
+
+La arquitectura en modo robot reparte el trabajo en cinco procesoss que corren
+en paralelo sobre la computadora embebida. Dos procesos principales orquestan el
+sistema y exponen la interfaz de eusuario, mientras que cuatro _workers_
+especializados resuelven cada tarea de cómputo pesado.
+
+Sobre la computadora embebida. Los dos procesos principales son:
+
+- _backend_ coordina el sistema y expone la API.
+- _frontend_ es la aplicación con la que interactua el usuario.
+
+Además existen 4 procesos (workers) que no se comunican entre sí pero tienen
+responsabilidades especificas especializadas:
+
+- _camera worker_ captura el video.
+- _inference worker_ corre la detección YOLO sobre la GPU en PyTorch o TensorRT.
+- _recording worker_ graba con NVENC bajo demanda.
+- _conversion worker_ construye _engines_ TensorRT cuando el operador lo activa.
+
+El cliente accede a través de NGINX y recibe el video en tiempo real por
+WebCodecs sobre WebSocket, mientras que la sincronización con el servidor
+central se realiza por HTTP. La Tabla 2 detalla cada proceso, así como la
+interfaz de comunicación, y su responsabilidad.
+
+<!-- widths: 2200,1700,5460 -->
+
+| Proceso           | Interfaz        | Responsabilidad                                                                                                                                         |
+| ----------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend           | HTTP :8080      | Expone la API REST, transmite el video en tiempo real al cliente y coordina a los workers.                                                              |
+| Frontend          | navegador web   | Aplicación web con la que el operador activa o detiene el conteo, observa detecciones en tiempo real, las reevisa tras la sesión y las sube al servidor |
+| camera worker     | camera.sock     | Captura el video de la cámara y reparte cada frame al backend y al recording worker.                                                                    |
+| inference worker  | inference.sock  | Ejecuta la detección de frutos sobre la GPU con cualquier modelo YOLO y el seguimiento entre frames.                                                    |
+| recording worker  | recording.sock  | Graba el video de la sesión en disco cuando el operador lo solicita.                                                                                    |
+| conversion worker | conversion.sock | Acelera los modelos a TensorRT FP16 cuando el operador lo activa.                                                                                       |
+
+^TABLA 2. Procesos del sistema en modo robot.
+
+### 1.2.2 Sesión de conteo
+
+La sesión de conteo es el flujo central del modo robot, que coordina a los
+_workers_ para contar frutos en tiempo real. Recorre los siguientes pasos:
+
+1. El operador inicia la sesión desde el _frontend_.
+2. El _backend_ marca la sesión y ordena automáticamente al _recording worker_
+   que empiece a grabar el _stream_.
+3. Durante la sesión, el _backend_ envía los _frames_ al _inference worker_ y
+   reenvía las detecciones al _frontend_ solo como visualización en tiempo real,
+   sin contar todavía.
+4. Al finalizar, el _backend_ ordena al _recording worker_ el cierre y encola el
+   conteo diferido del MP4 resultante.
+5. El _counting worker_ reprocesa el video (detección, seguimiento y cruce de
+   línea), produce el conteo total y un _sidecar_ por _frame_, que el _backend_
+   guarda asociado a la grabación y a la sesión.
+
+::pagebreak
+
+## 1.3 Modo servidor
+
+El modo servidor se ejecuta en una PC del laboratorio, donde consolida los datos
+sincronizados desde múltiples robots y administra los modelos asignados a cada
+uno.
+
+![FIGURA 4. Arquitectura del sistema en modo servidor.](docs/diagrams/arquitectura_servidor.png)
+
+### 1.3.1 Arquitectura
+
+Según presenta la Figura 4 y detalla la Tabla 3. En el _modo servidor_ el
+sistema ejecuta unicamente el _backend_ sin _workers_ de captura ni inferencia,
+exponiendo una API HTTP publicada mediante Tailscale, accesible desde cualquier
+dispositivo que tenga el enlace y las credenciales.
 
 <!-- widths: 2200,1400,5760 -->
-| Proceso | Socket Unix | Responsabilidad |
-| --- | --- | --- |
-| Backend | HTTP :8080 | FastAPI + Uvicorn. API REST, WebRTC (aiortc), persistencia SQLite, sincronización HTTP. Coordina los workers. |
-| camera-worker | /tmp/camera.sock | Captura V4L2 (ZED 2i estéreo SBS), crop al ojo izquierdo, fan-out a múltiples consumidores (backend WebRTC y recording simultáneos). |
-| inference-worker | /tmp/inference.sock | Ultralytics YOLO v11 con tracking BoT-SORT. Carga modelo .pt o engine .engine TensorRT FP16 según selección del operador. Recarga en caliente. |
-| recording-worker | /tmp/recording.sock | Codifica el stream de cámara a H.264 con NVENC (Jetson nvv4l2h264enc, desktop h264_nvenc) o libx264 como fallback. Idle = 0 CPU mientras no hay grabación. |
-| conversion-worker | /tmp/conversion.sock | Construye engines TensorRT FP16 a partir de modelos .pt cuando el operador activa TensorRT en /settings. Una conversión a la vez. |
-^TABLA 1. Procesos del sistema en modo robot.
 
-En modo servidor el sistema ejecuta un único proceso (el backend) sin workers de captura ni inferencia. La Tabla 2 compara las funciones activas en cada modo.
+| Componente | Interfaz       | Responsabilidad                                                                                                                |
+| ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Backend    | HTTP :9090     | Expone la API REST, gestiona autenticación y administración de usuarios, modelos y dispositivos, sincronización de los robots. |
+| PostgreSQL | TCP :5432      | Almacena usuarios, dispositivos, modelos y los registros que llegan de cada robot.                                             |
+| nginx      | HTTP :80       | Enruta las peticiones del cliente al backend y entrega los archivos del frontend.                                              |
+| Frontend   | estático       | Aplicación web React que nginx entrega al navegador del cliente.                                                               |
+| Tailscale  | Funnel (HTTPS) | Da acceso remoto seguro al servicio por HTTPS.                                                                                 |
+
+^TABLA 3. Componentes del sistema en modo servidor.
+
+### 1.3.2 Seguridad y control de acceso
+
+Las credenciales son aplicadas de manera diferente según el tipo de cliente
+(persona, robot) de la siguiente manera:
+
+- Las personas inician sesión con usuario y contraseña, y reciben un token JWT
+- Los robots se autentican con una clave de dispositivo
+
+Además se han aplicado las siguientes 5 medidas para reforzar el acceso:
+
+- limitar el _login_ a cinco intentos cada cinco minutos
+- bloquear la cuenta treinta minutos tras cinco fallos en quince minutos
+- restringir el CORS a la URL pública
+- añadir cabeceras de seguridad HTTP
+- deshabilitar la documentación interactiva de la API.
+
+## 1.4 Justificación del diseño por procesos
+
+La descomposición del sistema en más cuatro _workers_ responde a problemas
+concretos que surgieron al integrar el sistema monolítico anterior.
+
+- **Aislamiento de fallos:** anteriormente un fallo del modelo o de la cámara
+  dejaba el _backend_ irrecuperable, por lo que se optó que cada componente
+  tenga un proceso independiente, en consecueencia un fallo aislado ya no
+  interrumpe el todo el sistema.
 
-| Robot (Jetson Xavier) | Servidor (PC del laboratorio) |
-| --- | --- |
-| ROBOT_MODE=robot, puerto 8080 | ROBOT_MODE=server, puerto 9090 |
-| SQLite (aiosqlite) | PostgreSQL (psycopg async) |
-| Captura de video, inferencia, grabación, conversión TensorRT | Autenticación JWT con roles |
-| WebRTC streaming en tiempo real | Administración de modelos, usuarios y dispositivos |
-| Sync push (envío de datos) y sync pull (descarga de modelos) | Recepción de sincronización y distribución de modelos |
-| Sin autenticación (red local aislada) | Login con usuario y contraseña |
-^TABLA 2. Funciones activas por modo de operación.
+- **Desacoplamiento de tasas de _frame_:** la captura opera entre 20 y 30 FPS y
+  la inferencia entre 9 y 14 FPS, por lo que en un mismo proceso los _frames_ se
+  acumulaban y retardaban el video, al separar cada _worker_ por responsabilidad
+  cada uno avanza a su ritmo sin acumulación.
+
+- **Acceso exclusivo a la cámara:** el driver de la computadora embebida no
+  admite varios consumidores sobre una misma cámara, lo que impedía integrar la
+  grabación de video, por lo que el _camera worker_ centraliza la captura y
+  reparte los _frames_ por colas al _backend_ y al _recording worker_.
 
-La descomposición en backend más cuatro workers responde a un conjunto de problemas concretos identificados durante la integración del sistema monolítico anterior.
+- **Independencia de versiones:** el _backend_ y los _workers_ usan librerías
+  específicas que pueden no ser compatibles entre sí, sobre todo las de Deep
+  Learning, ya que la computadora embebida trae drivers atados a una versión
+  concreta de PyTorch que exige una versión de Python en conflicto con la del
+  _backend_, por lo que cada componente corre en su propio entorno aislado.
 
-- **Aislamiento de fallos:** debido a que un fallo del modelo o de la cámara dejaba el backend irrecuperable, se decidió ejecutar cada componente como un proceso independiente bajo systemd, consiguiendo que un fallo aislado ya no interrumpa el streaming ni la API.
+- **Recursos liberados en reposo:** mantener la cámara y los modelos cargados de
+  forma permanete ocupaba NVENC, GPU y memoria entre sesiones, por lo que el
+  _recording worker_ y el _conversion worker_ no abren la cámara ni cargan
+  modelos hasta recibir un comando del _backend_.
+
+- **Recarga de modelo en caliente:** cambiar de modelo exigía reiniciar el
+  proceso de inferencia, por lo que el _inference worker_ acepta una orden para
+  cargar un nuevo modelo, en PyTorch o TensorRT, sin reiniciarse ni interrumpir
+  el servicio.
 
-- **Desacoplamiento de tasas de frame:** debido a que la captura opera entre 20 y 30 FPS mientras la inferencia opera entre 9 y 14 FPS y en un mismo proceso los frames se acumulaban en el buffer provocando retardos en video, se decidió separar captura e inferencia en procesos distintos, consiguiendo que cada worker avance a su propio ritmo sin acumulación.
+- **Monitoreo independiente:** un solo journal mezclaba los logs de todos los
+  componentes, por lo que cada proceso es una unidad systemd separada con su
+  propio log y puede depurarse sin afectar al resto.
 
-- **Desacoplamiento del acceso a la cámara:** debido a que la API V4L2 del kernel de Linux no admite múltiples consumidores sobre un mismo dispositivo, se decidió centralizar la captura en el camera-worker, consiguiendo que una sola apertura del dispositivo baste para repartir los frames por colas al backend y al recording-worker.
+## 1.5 Descripción del _backend_
 
-- **Independencia de versiones entre procesos:** debido a que JetPack 5.1 solo entrega PyTorch CUDA y TensorRT para Python 3.10 mientras el backend requiere Python 3.13, se decidió que cada worker mantuviera su propio entorno virtual, consiguiendo que versiones incompatibles convivan sin conflicto.
+El _backend_ es un servicio FastAPI que actúa como coordinador central del
+sistema, con un único codebase que se comporta de forma distinta según el modo
+(_modo robot_, _modo servidor_)
 
-- **Uso nulo de recursos en reposo:** debido a que mantener cámara y modelos cargados de forma permanente ocupaba NVENC, GPU y memoria entre sesiones, se decidió que recording-worker y conversion-worker no abrieran cámara ni cargaran modelos hasta recibir un comando, consiguiendo que el sistema libere esos recursos cuando no están en uso.
+En _modo robot_ orquesta a los _workers_, expone la API y transmite el video en
+tiempo real, mientras que en _modo servidor_ consolida los datos sincronizados
+de varios robots sobre PostgreSQL y administra los modelos.
 
-- **Recarga de modelo en caliente:** debido a que cambiar de modelo exigía reiniciar el proceso de inferencia, se decidió implementar en el inference-worker el comando reload_model, consiguiendo que un nuevo .pt o .engine se cargue sin interrumpir el servicio.
+### 1.5.1 Modo Robot
 
-- **Monitoreo independiente:** debido a que un solo journal mezclaba los logs de todos los componentes y dificultaba el diagnóstico, se decidió declarar cada proceso como una unidad systemd separada, consiguiendo que cada componente exponga su propio log y pueda depurarse sin afectar al resto.
+En _modo robot_ el _backend_ expone un conjunto de operaciones por su API REST
+(vease la Tabla 4), además controla cada _worker_ (_camera worker_, _inference
+worker_, _recording worker_, _conversion worker_, _counting worker_) enviando
+comandos puntuales sobre su socket Unix (vease la Tabla 5).
 
-![FIGURA 2. Módulo de visión operando sobre el robot móvil. La detección y la línea de conteo se renderizan sobre el video transmitido por WebRTC.](assets/2026-05-06-20-56-02.png)
+<!-- widths: 1900,4060,3400 -->
 
-## 3.3 Descripción de los workers
+| Dominio            | Operación que permite                                                        | Endpoint                                        |
+| ------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------- |
+| Streaming de video | Entrega el _stream_ en vivo por WebRTC, WebCodecs sobre WebSocket o MJPEG.   | `POST /offer`, `WS /ws/stream`                  |
+| Conteo y sesiones  | Inicia, cierra y elimina sesiones de conteo y registra los eventos de cruce. | `POST /api/counting/start`, `GET /api/sessions` |
+| Configuración      | Ajusta el modo de conteo, el umbral, la dirección y la línea o ROI.          | `PUT /api/config/counting`                      |
+| Modelos            | Activa la aceleración TensorRT por modelo.                                   | `PUT /api/models/{uuid}/tensorrt`               |
+| Grabaciones        | Genera y sirve los archivos MP4 y su registro de detecciones por _frame_.    | `GET /api/recordings/{uuid}/file`               |
+| Sincronización     | Envía el _push_ de sesiones, eventos y modelos al servidor central.          | `POST /api/sync/push`                           |
 
-Los cuatro workers son proyectos independientes ubicados en directorios separados (camera_worker/, inference/, recording_worker/, conversion_worker/). Cada uno mantiene su propio entorno virtual y dependencias, lo que evita conflictos entre las versiones de Python que cada worker requiere.
+^TABLA 4. Operaciones que expone el _backend_ en modo robot.
 
-### 3.3.1 camera-worker
+<!-- widths: 2200,2200,4960 -->
 
-La función principal del camera-worker es centralizar la captura de video del dispositivo V4L2 y repartir cada frame a múltiples consumidores sin abrir la cámara más de una vez, lo que permite que el backend (streaming WebRTC) y el recording-worker (grabación en disco) operen en simultáneo sobre la misma fuente.
+| Worker            | Comando        | Función                                                                       |
+| ----------------- | -------------- | ----------------------------------------------------------------------------- |
+| camera worker     | `reload`       | Recarga el preset y reabre la cámara con la nueva resolución y FPS.           |
+| ^^                | `status`       | Devuelve la resolución y los FPS actuales.                                    |
+| inference worker  | `reload_model` | Carga un nuevo modelo YOLO desde `model_path`, con filtro opcional de clases. |
+| ^^                | `status`       | Devuelve la ruta del modelo activo.                                           |
+| ^^                | `timing`       | Devuelve las estadísticas de tiempo de inferencia.                            |
+| recording worker  | `start`        | Inicia la grabación MP4 tomando los _frames_ del socket de cámara.            |
+| ^^                | `stop`         | Finaliza la grabación y devuelve su duración y tamaño.                        |
+| ^^                | `status`       | Devuelve el estado de grabación, inactivo o grabando.                         |
+| conversion worker | `convert`      | Encola la construcción de un engine TensorRT a partir de un modelo PyTorch.   |
+| ^^                | `status`       | Devuelve el estado de conversión y el último resultado.                       |
+| counting worker   | `count`        | Encola el reprocesamiento offline de un MP4 grabado para producir el conteo.  |
+| ^^                | `status`       | Devuelve el estado de conteo y el último resultado.                           |
 
-Para lograrlo, el worker mantiene una cola independiente por consumidor y, si alguno se atrasa, descarta el frame más antiguo de esa cola y conserva el más reciente, por lo que grabación y streaming sostienen 1080p a 30 FPS sin que un consumidor lento bloquee al resto.
+^TABLA 5. Comandos de control que admite cada _worker_.
 
-La configuración por defecto de la cámara ZED 2i es modo estéreo, obteniendo en total una resolución de 3840x1080 en formato YUYV a 30 FPS, sobre la cual el camera-worker recorta al ojo izquierdo y entrega un frame BGR de 1920x1080.
+### 1.5.2 Modo Servidor
 
-La resolución de salida se controla desde el módulo Vision del frontend, donde el operador alterna entre 720p y 1080p en línea, y la elección se persiste en data/robot/camera_settings.json para que el worker la aplique al reabrir el dispositivo.
+En _modo servidor_ el _backend_ expone las operaciones de administración y
+sincronización que resume la Tabla 6.
 
-### 3.3.2 inference-worker
+<!-- widths: 1900,4060,3400 -->
 
-La función principal del inference-worker es ejecutar detección y tracking sobre cada frame que llega del backend, recibiendo imágenes JPEG por /tmp/inference.sock y devolviendo las detecciones con su track_id, donde la inferencia corre YOLO v11 con tracking BoT-SORT en GPU y acepta tanto modelos .pt (PyTorch CUDA) como .engine (TensorRT FP16).
+| Dominio           | Operación que permite                                               | Endpoint                                                       |
+| ----------------- | ------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Conteo y sesiones | Consulta las sesiones y eventos sincronizados desde los robots.     | `GET /api/sessions/{session_id}/events`                        |
+| Modelos           | Asigna los modelos a cada robot.                                    | `PUT /api/devices/{device_id}/models`                          |
+| Grabaciones       | Consulta las grabaciones sincronizadas.                             | `GET /api/recordings/{uuid}/file`                              |
+| Sincronización    | Recibe el _push_ de los robots y distribuye los modelos por _pull_. | `POST /api/sync/sessions`, `GET /api/sync/models/{model_uuid}` |
+| Administración    | Autentica con JWT y gestiona usuarios, empresas y dispositivos.     | `POST /api/auth/login`                                         |
 
-El backend puede enviar el comando reload_model para alternar el modelo activo sin reiniciar el proceso, lo que se aplica tras una sincronización con el servidor o tras una conversión TensorRT recién terminada.
+^TABLA 6. Operaciones que expone el _backend_ en modo servidor.
 
-Mientras se completa el entrenamiento e integración del modelo de producción descrito en el capítulo IV, el inference-worker carga YoloV11 preentrenado de Ultralytics como modelo de validación de la plataforma, dado que su flujo expone en una sola llamada `model.track()` la detección y el seguimiento BoT-SORT, y el método `export()` produce directamente un engine TensorRT FP16 consumible por el worker. Con este modelo cargado se verifica sobre el robot real la detección de personas en interiores (independiente de la disponibilidad estacional de arándanos en campo), el algoritmo de conteo por cruce de línea sobre objetos seguidos reales, la recarga en caliente de engines TensorRT FP16 sin interrumpir el streaming WebRTC y el ciclo de sincronización de modelos con el servidor (descarga, conversión y `reload_model`).
+## 1.6 Descripción de los _workers_
 
-### 3.3.3 recording-worker
+Los cinco _workers_ (_camera worker_, _inference worker_, _recording worker_,
+_conversion worker_ y _counting worker_) son independientes del backend, cada
+uno con su propio directorio y entorno virtual, a continuación se detalla el
+funcionamiento y responsabilidades de cada _worker_.
 
-La función principal del recording-worker es codificar el stream de la cámara a H.264 y emitir un MP4 fragmentado por sesión, permaneciendo en reposo hasta recibir el comando start, de modo que en idle no consume CPU ni NVENC ni mantiene conexión con la cámara.
+### 1.6.2 _camera worker_
 
-Al recibir start, el worker se conecta al camera-worker, selecciona el codificador disponible según la plataforma y graba hasta recibir el comando stop, mientras el bitrate se autoescala según la altura del frame. La Tabla 3 resume los codificadores posibles según la plataforma.
+El _camera worker_ centraliza la captura de video y ofrece tres capacidades:
 
-| Plataforma | Codificador | Bitrate (1080p / 720p) |
-| --- | --- | --- |
-| Jetson Xavier (GStreamer) | nvv4l2h264enc | 12 / 8 Mbps |
-| Desktop NVIDIA (PyAV) | h264_nvenc | 12 / 8 Mbps |
-| Sin GPU (PyAV fallback) | libx264 | 9 / 6 Mbps |
-^TABLA 3. Backends de codificación seleccionados por el recording-worker.
+- Reparte cada _frame_ a varios consumidores desde una sola conexión a la cámara
+- Permite cambiar la resolución con el sistema en marcha
+- Soporta cámaras USB como IP.
 
-Sobre Jetson, el plugin nvv4l2h264enc se entrega con el paquete nvidia-l4t-gstreamer de JetPack, por lo que el script de despliegue verifica con gst-inspect-1.0 que el plugin esté disponible antes de habilitar la unidad systemd.
+La primera capacidad es la más importante, ya que evita abrir la cámara más de
+una vez y permite que el _backend_ y el _recording worker_ operen en simultáneo
+sobre la misma fuente. Para lograrlo, el _camera worker_ aplica un esquema de
+_fan-out_ con colas independientes, como ilustra la Figura 5, que sigue dos
+pasos:
 
-### 3.3.4 conversion-worker
+1. Abre la cámara una sola vez por V4L2 y entrega cada _frame_ a una cola
+   independiente por consumidor (_cola backend_, _cola recording_).
+2. Si un _worker_ se atrasa, descarta el _frame_ más antiguo de su cola y
+   conserva el más reciente, de modo que un _worker_ lento no frena a la captura
+   ni a los demás y cada uno avanza siempre sobre el _frame_ vigente.
 
-La función principal del conversion-worker es construir engines TensorRT FP16 a partir de modelos .pt usando el método export() de Ultralytics, atendiendo solicitudes por /tmp/conversion.sock y procesando una conversión a la vez, de modo que si llega una segunda mientras hay otra en curso el worker responde 409.
+![FIGURA 5. Esquema de _fan-out_ del _camera worker_ con colas _drop-oldest_ por consumidor.](docs/diagrams/worker_camera_fanout.png)
 
-Cada engine se cachea con el sha256 del .pt incrustado en el nombre del archivo, lo que invalida la cache automáticamente cuando el modelo se reentrena.
+### 1.6.3 _inference worker_
 
-En la Jetson, el venv del worker se crea con `uv venv --system-site-packages` para heredar los bindings de tensorrt que provee JetPack vía el paquete python3-libnvinfer.
+El _inference worker_ ejecuta la detección sobre cada _frame_ que llega del
+_backend_ y ofrece dos capacidades:
 
+- Ejecuta cualquier modelo YOLO sobre la GPU (tanto en PyTorch como en TensorRT)
+- Permite recargar el modelo activo con el sistema en marcha, sin reiniciar el
+  proceso
 
-![FIGURA 3. Tarjeta «Modelos asignados» en /settings, donde el operador activa la aceleración TensorRT FP16 por modelo.](assets/2026-05-06-21-38-45.png)
+La primera capacidad es la que permite detectar en tiempo real, ya que tanto la
+selección de modelos (familia YOLO) como las optimizaciones (TensorRT) mantienen
+el tiempo de inferencia en el orden de los milisegundos.
 
+Además, el _backend_ puede ordenar la recarga del modelo activo sin reiniciar el
+proceso, lo que se aplica tras una sincronización con el servidor o tras una
+conversión TensorRT recién terminada.
 
-## 3.4 Aceleración con TensorRT FP16
+![FIGURA 6. Secuencia del _inference worker_: intercambio por _frame_ y recarga en caliente entre el _backend_ y el _inference worker_.](docs/diagrams/worker_inference_secuencia.png){width=80%}
 
-La Jetson Xavier integra Tensor Cores que aceleran operaciones de matriz en FP16 sobre los SM (streaming multiprocessors), recursos que PyTorch FP32 no utiliza al ejecutar el modelo .pt, por lo que la conversión a un engine TensorRT FP16 reduce la latencia por frame y eleva el FPS efectivo. La Tabla 4 resume la latencia de inferencia aislada (percentiles p50 y p99 sobre 600 frames a 640x640 con `sudo jetson_clocks`) y el FPS efectivo medido de extremo a extremo sobre el flujo de producción del robot.
+La Figura 6 resume el intercambio entre el _backend_ y el _inference worker_,
+que sigue dos flujos:
 
-<!-- widths: 3120,2080,2080,2080 -->
-| Backend de inferencia | Latencia p50 | Latencia p99 | FPS efectivo |
-| --- | --- | --- | --- |
-| PyTorch FP32 (.pt) sobre CUDA | ~75 ms | ~85 ms | 9 |
-| TensorRT FP16 (.engine) | 50,9 ms | 57,0 ms | 14 |
-^TABLA 4. Rendimiento de inferencia YOLO sobre Jetson Xavier (latencia de inferencia aislada y FPS efectivo medido de extremo a extremo).
+1. Por cada _frame_, el _backend_ envía la imagen JPEG sobre el socket
+   _inference.sock_ y recibe las detecciones.
+2. En la recarga en caliente, el _backend_ ordena cargar un nuevo modelo, en
+   PyTorch o TensorRT, sin reiniciar el proceso ni interrumpir el _streaming_.
 
-El operador activa o desactiva TensorRT por modelo desde la card "Modelos asignados" en /settings, disponible únicamente en modo robot, donde al activar el toggle el conversion-worker construye el engine FP16 a partir del .pt y, al terminar, el inference-worker recarga el modelo en caliente sin interrumpir el streaming.
+### 1.6.4 _recording worker_
 
-## 3.5 Descripción del backend
+La función principal del _recording worker_ es grabar un MP4 por sesión, sus
+capacidades son:
 
-El backend es una aplicación FastAPI que actúa como coordinador central, comunicándose con el frontend mediante HTTP y con los workers mediante sockets Unix.
+- Permanece en reposo hasta recibir la orden de inicio
+- Selecciona el codificador según la plataforma y autoescala el bitrate según la
+  altura del _frame_
+- Guarda un registro de detecciones por _frame_ enlazado al mismo video
 
-El backend cumple tres roles que se entrelazan. Orquesta a los workers, ya que decide qué modelo cargar, qué resolución usar y cuándo grabar, traduciendo las acciones del operador en comandos hacia el worker correspondiente porque los workers no se comunican entre sí. Expone los endpoints REST y la conexión WebRTC que la interfaz consume, y persiste sesiones, eventos y configuración en la base de datos local mientras ejecuta el loop de sincronización con el servidor central cuando hay conectividad.
+La primera capacidad evita que el _worker_ reserve NVENC, CPU y la conexión con
+la cámara mientras no se graba, por lo que esos recursos quedan libres para el
+_streaming_ y la inferencia.
 
-La Tabla 5 resume los comandos que el backend dirige a cada worker.
+La segunda aprovecha el codificador por hardware de la Jetson (nvv4l2h264enc) y
+de escritorio NVIDIA (h264_nvenc), y solo cae a libx264 por software cuando no
+hay GPU disponible, como resume la Tabla 7.
 
-| Worker | Comandos típicos |
-| --- | --- |
-| camera-worker | `reload` (cambia la resolución 720p o 1080p) |
-| inference-worker | `reload_model` (carga un nuevo `.pt` o `.engine`) |
-| recording-worker | `start`, `stop` (controlan la grabación de la sesión) |
-| conversion-worker | `convert` (encola un build TensorRT) |
-^TABLA 5. Comandos que el backend dirige a cada worker.
+La tercera permite reproducir la sesión con las detecciones superpuestas y
+sincronizadas, y es lo que sirve la operación de grabaciones de la Tabla 4.
 
-Una sesión de conteo es la unidad de trabajo principal del sistema y sigue los siguientes pasos:
+| Plataforma                | Codificador   | Bitrate (1080p / 720p) |
+| ------------------------- | ------------- | ---------------------- |
+| Jetson Xavier (GStreamer) | nvv4l2h264enc | 12 / 8 Mbps            |
+| Desktop NVIDIA (PyAV)     | h264_nvenc    | 12 / 8 Mbps            |
+| Sin GPU (PyAV fallback)   | libx264       | 9 / 6 Mbps             |
 
-1. El operador inicia la sesión desde el frontend, indicando camellón, clase objetivo y modelo.
-2. El backend ordena al recording-worker que empiece a grabar el stream.
-3. Por cada frame que llega del camera-worker, el backend lo envía al inference-worker y reenvía las detecciones al frontend por el data channel de WebRTC.
-4. Cuando un objeto cruza la línea configurada, el backend registra el evento en SQLite asociado a la sesión.
-5. Al finalizar, el backend ordena al recording-worker el cierre y enlaza el archivo MP4 resultante con la sesión.
+^TABLA 7. Backends de codificación seleccionados por el _recording worker_.
 
-En modo robot, un loop de sincronización en segundo plano se activa cuando detecta conectividad y se ejecuta cada 30 segundos en dos fases, donde la fase push envía los registros locales no sincronizados al servidor y la fase pull descarga los modelos asignados al robot.
+La Figura 7 resume el flujo de grabación entre el _backend_, el _camera worker_
+y el _recording worker_, que sigue tres pasos:
 
-En modo servidor, los endpoints están protegidos con autenticación JWT (rol admin o viewer, asociado a una empresa), mientras los endpoints de sincronización usan la API key del dispositivo.
+1. El _backend_ ordena start y stop sobre el socket _recording.sock_.
+2. El _worker_ recibe los _frames_ del _camera worker_ por el socket  
+   _camera.sock_ y los codifica a H.264 con el codificador por hardware.
+3. El _worker_ emite el MP4 fragmentado a disco.
 
-## 3.6 Descripción del frontend
+![FIGURA 7. Flujo del _recording worker_ entre el _backend_, el _camera worker_ y el _recording worker_.](docs/diagrams/worker_recording_secuencia.png)
 
-El frontend es una aplicación React 19 con TypeScript que se compila a archivos estáticos servidos por nginx, donde la interfaz se adapta según el valor de `ROBOT_MODE` y el rol declarado en el JWT del usuario.
+### 1.6.5 _conversion worker_
 
-En modo robot, la interfaz principal es el módulo de visión, donde el operador visualiza el video en tiempo real con las detecciones superpuestas, configura la línea de conteo, selecciona el camellón y la clase objetivo, alterna la resolución entre 720p y 1080p, e inicia sesiones de conteo, mientras que la página /settings expone la tarjeta "Modelos asignados" desde la cual se activa TensorRT por modelo, tras lo cual el frontend consulta el estado de la conversión cada 5 segundos hasta que el engine quede listo.
+La función principal del _conversion worker_ es construir _engines_ TensorRT
+FP16 a partir de modelos YOLO en PyTorch. Sus capacidades son:
 
-En modo servidor, la interfaz incluye autenticación con JWT y páginas de administración para usuarios, empresas, fundos, modelos y dispositivos, con visibilidad restringida a la empresa propia para los usuarios de rol visualizador. Ambos modos comparten el módulo de mapa, basado en Google Maps con la ubicación de fundos y conteos acumulados, y el módulo de tablero, con indicadores y tendencias por fecha y camellón.
+- Atiende solicitudes sobre el socket _conversion.sock_ y procesa una conversión
+  a la vez, rechazando con 409 si llega otra mientras hay una en curso
+- Cachea cada _engine_ con el sha256 del modelo PyTorch de origen incrustado en
+  el nombre del archivo, lo que invalida la cache cuando el modelo se reentrena
 
+La conversión a TensorRT FP16 permite que la Jetson Xavier ejecute el proceso de
+detección de manera acelerada, ya que TensoRT aprovecha operaciones de matriz en
+FP16 PyTorch no utiliza, por lo que TensorRT reduce la latencia por _frame_ y
+eleva el FPS efectivo.
 
+La Tabla 8 resume la latencia de inferencia aislada (percentiles p50 y p99 sobre
+600 _frames_ a 640x640 con `sudo jetson_clocks`) y el FPS efectivo medido de
+extremo a extremo sobre el flujo de producción del robot.
 
-![FIGURA 4. Interfaz del modo robot mostrando el módulo de visión con el video en tiempo real recibido por WebRTC.](assets/2026-05-06-21-34-01.png)
+  <!-- widths: 3120,2080,2080,2080 -->
 
+| Backend de inferencia   | Latencia p50 | Latencia p99 | FPS efectivo |
+| ----------------------- | ------------ | ------------ | ------------ |
+| PyTorch FP32 sobre CUDA | ~75 ms       | ~85 ms       | 9            |
+| TensorRT FP16           | 50,9 ms      | 57,0 ms      | 14           |
 
+^TABLA 8. Rendimiento de inferencia YOLO sobre Jetson Xavier (latencia de
+inferencia aislada y FPS efectivo medido de extremo a extremo).
 
-![FIGURA 5. Página /settings del modo robot con la tarjeta de configuración de modelos asignados al dispositivo.](assets/2026-05-06-21-37-07.png)
+En la Jetson, el _conversion worker_ se ejecuta sobre el Python del sistema para
+reutilizar los bindings de TensorRT que provee JetPack. La Figura 8 detalla el
+ciclo completo, desde que se activa TensorRT hasta la recarga en caliente del
+_engine_, en tres pasos:
 
+1. El _backend_ encola una conversión sobre el socket _conversion.sock_.
+2. El _worker_ construye el _engine_ FP16, una conversión a la vez y con
+   respuesta 409 si hay otra en curso, mientras el _backend_ sondea el estado.
+3. Al terminar, el _backend_ ordena al _inference worker_ recargar el _engine_
+   en caliente.
 
-![FIGURA 6. Interfaz del modo servidor con páginas de administración de usuarios, empresas, fundos, modelos y dispositivos.](assets/2026-05-06-21-36-04.png)
+![FIGURA 8. Secuencia del _conversion worker_, desde la activación de TensorRT hasta la recarga en caliente del _engine_.](docs/diagrams/worker_conversion_secuencia.png){width=70%}
 
-## 3.7 Despliegue
+### 1.6.6 _counting worker_
 
-Para instalar el sistema se usa el script `deploy/install.sh <modo>` (robot o servidor), el cual registra todos los servicios en systemd de modo que arrancan al encender el equipo y se reinician ante fallos, mientras que la administración del robot en producción se realiza con los comandos de la Tabla 6.
+El conteo en vivo presenta varios inconvenientes de desfase debido a la latencia
+variable de los diferentes componentes, por esta razón se ha creado un worker
+dedicado al conteo post-session.
 
-<!-- widths: 3200,6160 -->
-| Comando | Descripción |
-| --- | --- |
-| make status | Estado de los servicios |
-| make restart | Reinicia los servicios |
-| make logs | Logs del backend |
-| make logs-camera | Logs del camera-worker |
-| make logs-inference | Logs del inference-worker |
-| make logs-recording | Logs del recording-worker |
-| make logs-conversion | Logs del conversion-worker |
-| make update | Actualiza código y reinicia los servicios |
-^TABLA 6. Comandos de operación del robot.
+El _worker_ permanece en reposo, sin hilo ni GPU, hasta recibir un trabajo, y
+atiende una sola tarea a la vez de modo que una segunda solicitud recibe `busy`.
+Por cada trabajo decodifica el MP4 _frame_ a _frame_, ejecuta detección con el
+mismo _engine_ que fijó la sesión, sigue los objetos con ByteTrack y cuenta los
+cruces de la línea de referencia, emitiendo dos salidas:
 
-## 3.8 Incidencias y funcionalidades pendientes
+1. El conteo total acumulado de la sesión, que el _backend_ persiste como
+   resultado definitivo.
+2. Un _sidecar_ `{uuid}.jsonl` con una línea por _frame_ que registra las
+   detecciones, su identificador de seguimiento y el conteo acumulado, alineado
+   con el video por su marca de presentación para reproducir luego la sesión con
+   las detecciones superpuestas.
 
-Durante la integración se identificó una incidencia operativa, descrita en la Tabla 7, la cual no bloquea la operación normal del robot ni la inferencia y solo requiere una acción manual del operador para reanudar la conversión TensorRT.
+El _counting worker_ admite dos métodos por objeto:
 
-<!-- widths: 600,2600,3000,1700,1100 -->
-| # | Incidencia | Descripción | Impacto | Severidad |
-| --- | --- | --- | --- | --- |
-| 1 | Conversión TensorRT no se recupera tras reinicio del backend | Si el backend se reinicia mientras un engine se está construyendo, la fila queda en estado converting hasta que el reconciliador de arranque la marca como error con el mensaje "Backend reiniciado durante conversión". El operador debe pulsar Reintentar. | Requiere reintento manual | No crítica |
-^TABLA 7. Incidencias detectadas en integración.
+- `single`: un detector sobre la región de interés, el comportamiento histórico
+- `tiled`: dos mosaicos cuadrados de lado H/2 apilados y centrados, cada uno con
+  su propio detector, seguimiento y línea de cruce, cuyos conteos se suman
 
-Como funcionalidades planificadas aún no liberadas a producción quedan las siguientes:
+La Figura 9 resume el flujo, que el _backend_ dispara al cerrar una sesión de
+conteo o al reprocesar una grabación con un modelo fijado, y cuyo estado sondea
+hasta que termina.
 
-- Despliegue del servidor central en la computadora del laboratorio
-- Implementación de mapa sin conexión para operación en zonas sin red
-- Soporte de cámara IP por red local
-- Pipeline de clasificación sin conexión de frutos por madurez
+![FIGURA 9. Flujo del _counting worker_: reprocesa el MP4 grabado para producir el conteo definitivo y el _sidecar_ `{uuid}.jsonl` alineado por _frame_.](docs/diagrams/worker_counting_secuencia.png){width=50%}
 
-# IV. EVALUACIÓN DE MODELOS DE IA
+## 1.7 Descripción del _frontend_
 
-Esta sección resume la evaluación cuantitativa de tres familias de modelos de detección de objetos sobre el dataset propio de arándanos recolectado en los campos del fundo Danper. La evaluación detallada de arquitecturas, curvas de entrenamiento y análisis de errores se presenta en el informe técnico #2 (Cubas, 2025). Aquí se reportan los algoritmos evaluados, las métricas empleadas, los resultados por modelo y el estado actual de la integración del modelo de producción.
+El _frontend_ es una aplicación de página única (SPA) construida con React 19 y
+TypeScript sobre Vite, estilizada con Tailwind CSS y componentes shadcn/ui. Sus
+características son:
 
+- Se compila a archivos estáticos que nginx entrega al navegador
+- Maneja el estado global con la Context API de React, repartido en un contexto
+  que conserva la sesión autenticada y otro que expone el modo de operación  
+  (`ROBOT_MODE`)
+- Separa la comunicación con el _backend_ en un cliente HTTP único que adjunta
+  el token a cada llamada REST y un canal de video independiente
 
-## 4.1 Algoritmo de conteo por cruce de línea
+La comunicación pasa siempre por nginx, que entrega los archivos estáticos y
+actúa de _proxy_ inverso hacia el _backend_. La Figura 10 resume esta conexión,
+con el cliente HTTP que transporta datos, configuración y sesiones por REST y la
+capa de video sobre un canal WebSocket o WebRTC separado.
 
-El sistema combina detección por YOLO, seguimiento de objetos con BoT-SORT y un algoritmo de cruce de línea para contar frutos que atraviesan una línea virtual configurada por el operador. El componente de conteo está implementado en `back/services/perception/object_counter.py` (clase `ObjectCounter`).
+![FIGURA 10. Conexión entre el frontend y el backend: el cliente HTTP único transporta los datos por REST y la capa de video usa un canal WebSocket o WebRTC separado, ambos a través de nginx.](docs/diagrams/comunicacion_back_front.png){width=70%}
 
-BoT-SORT recibe los cuadros delimitadores producidos por YOLO en cada frame y les asigna un identificador persistente (`track_id`) que se mantiene entre frames mientras el objeto permanezca visible. A partir de cada cuadro delimitador, el inference-worker calcula el centroide (cx, cy) y lo normaliza al rango [0, 1] dividiéndolo por el ancho y alto del frame antes de enviarlo al backend, de modo que el umbral de la línea sea independiente de la resolución de captura.
+### 1.7.2 Adaptación por modo y rol
 
-El operador configura tres parámetros: el modo (`vertical` u `horizontal`), la dirección (`top2down`, `down2top`, `left2right` o `right2left`) y la posición de la línea (umbral en [0, 1]). Estos parámetros definen una función booleana `count_condition(coord)` que determina si un track se encuentra en el lado "después" de la línea.
+Una misma base de código sirve los dos despliegues, y las vistas disponibles
+junto con la protección de las rutas se deciden en tiempo de ejecución según el
+valor de `ROBOT_MODE` (_modo robot_, _modo servidor_) y el rol declarado en el
+JWT del usuario.
 
+- En modo robot el acceso es directo, orientado al operador en campo, y se
+  habilitan los módulos de visión, sesiones, mapa, grabaciones y configuración.
+- En modo servidor el ingreso exige autenticación y se ofrecen sesiones,
+  grabaciones, configuración y el tablero analítico, con las páginas de
+  administración reservadas a los usuarios con rol administrador.
+- El acceso a cada vista está protegido según la sesión y el rol del usuario, de
+  modo que las páginas restringidas no se cargan aunque se ingrese su URL
+  directa.
 
+### 1.7.3 Transporte de video y resiliencia
 
-![FIGURA 7. Configuración de los parámetros del algoritmo de conteo por cruce de línea (modo, dirección y posición) desde el módulo de visión.](assets/2026-05-06-21-37-48.png)
+El video en vivo es independiente del canal de datos y admite tres transportes
+seleccionables, con WebCodecs sobre WebSocket como opción por defecto:
 
-Para validar el cruce, el contador mantiene dos conjuntos de `track_id`. LIST_0 acumula los `track_id` de los objetos seguidos que en algún frame anterior fueron observados en el lado "antes" de la línea y actúa como precondición. LIST_1 contiene los `track_id` ya contados, es decir, aquellos que pasaron al lado "después" habiendo estado antes en LIST_0; el cardinal de LIST_1 es el conteo total reportado en la sesión.
+- WebCodecs sobre WebSocket aprovecha el decodificador H.264 por hardware del
+  dispositivo cliente y descarta cuadros _P_ cuando la cola se acumula.
+- WebRTC negocia la conexión por SDP y recibe las detecciones por un canal de
+  datos.
+- MJPEG sobre WebSocket transmite cuadros JPEG con control de flujo por crédito.
 
-El procedimiento que sigue el algoritmo, para cada objeto seguido recibido del inference-worker en un frame, es el siguiente:
+Cada transporte incorpora reconexión automática mediante un detector de
+congelamiento que reinicia la conexión cuando deja de llegar video, con
+reintentos espaciados de forma creciente antes de declarar la conexión fallida.
 
-1. Se selecciona la coordenada relevante según el modo: `x = cx` si es horizontal, `y = cy` si es vertical.
-2. Si `count_condition(coord)` se cumple (lado "después"), el `track_id` se agrega a LIST_1 solo si ya pertenecía a LIST_0, lo que evita contar objetos que aparecen en el lado "después" sin haber sido vistos antes (oclusiones, entradas por borde).
-3. Si `count_condition(coord)` no se cumple (lado "antes"), el `track_id` se agrega a LIST_0 y se elimina de LIST_1 si estaba presente, de modo que un objeto que regresa al lado original descuenta del total.
+# CAPÍTULO 2. GUÍA DE USO
 
-El `track_id` asignado por BoT-SORT garantiza la idempotencia entre frames: un mismo objeto que permanece varios frames en el lado "después" solo incrementa el contador una vez. La operación con conjuntos (`set.add`, `set.discard`) hace que el costo sea O(n) por frame con n objetos seguidos visibles.
+## 2.1. Configuración de su navegador
 
-La Tabla 8 resume los modos de conteo soportados.
+1. Abrir un navegador Chrome
+2. Colocar la siguiente "expresion" en su barra "chrome://flags" (ver FIGURA 11)
+3. Buscar la configuracion "Insecure origins treated as secure", y configurar
+   las siguientes direcciones IP de los robots moviles, Robot 1
+   http://192.168.50.103, Robot 2 http://192.168.50.113 (ver FIGURA 12)
 
-<!-- widths: 2340,2340,4680 -->
-| Modo | Dirección | Condición de conteo |
-| --- | --- | --- |
-| Vertical | top2down | Objeto cruza de arriba hacia abajo (cy > threshold) |
-| Vertical | down2top | Objeto cruza de abajo hacia arriba (cy < threshold) |
-| Horizontal | left2right | Objeto cruza de izquierda a derecha (cx > threshold) |
-| Horizontal | right2left | Objeto cruza de derecha a izquierda (cx < threshold) |
-^TABLA 8. Modos de conteo por cruce de línea.
+![FIGURA 11. Página chrome://flags del navegador Chrome, desde donde se habilitan los orígenes inseguros tratados como seguros.](/home/pqbas/labinm/robot-platform/assets/2026-06-30-22-48-35.png){width=70%}
 
+![FIGURA 12. Opción "Insecure origins treated as secure" con las direcciones IP de los robots móviles agregadas.](/home/pqbas/labinm/robot-platform/assets/2026-06-30-22-47-54.png){width=70%}
 
-## 4.2 Algoritmos evaluados
+## 2.2. Ingreso a la plataforma
 
-Las evaluaciones reportadas en esta sección corresponden al entrenamiento estándar de los modelos de detección sobre el dataset de arándanos, midiendo la calidad de la detección por frame (mAP, F1, precisión, recall) y no el error del algoritmo de conteo descrito en la sección 4.1, cuya validación de extremo a extremo sobre frutos en campo se reporta como tarea pendiente en la sección 4.5. Bajo este alcance se entrenaron y evaluaron tres familias de modelos YOLO, cuyo origen y contribución técnica se sintetizan en la Tabla 9.
+1. Conectarse al internet del laboratorio (LABINM ROBOTICA)
+2. Conectar cada robot al internet del laboratorio (LABINM ROBOTICA)
+3. Abrir un navegador Chrome (ver FIGURA 13)
+4. Colocar la IP en la red LABINM ROBOTICA correspondiente al robot de interes,
+   Robot 1 192.168.50.113, Robot 2 192.168.50.103 (ver FIGURA 14)
+5. Se abrira automaticamente la siguiente interfaz (ver FIGURA 15)
 
-| Modelo | Origen | Contribución técnica |
-| --- | --- | --- |
-| YoloV9 | Wang et al. (2024), Academia Sinica | Introduce Programmable Gradient Information y la arquitectura RepNCSPELAN para preservar información gradiente en redes profundas. |
-| YoloV10 | Wang et al. (2024), Tsinghua University | Elimina la operación NMS mediante un esquema de asignación dual one-to-many y one-to-one durante el entrenamiento. |
-| YoloV11 | Ultralytics (2024) | Introduce el bloque C3k2 en el backbone y el bloque C2PSA con atención posicional, manteniendo compatibilidad con el ecosistema Ultralytics. |
-^TABLA 9. Algoritmos de detección evaluados.
+![FIGURA 13. Navegador Chrome abierto, listo para ingresar la dirección del robot.](/home/pqbas/labinm/robot-platform/assets/2026-06-30-22-40-19.png){width=70%}
 
-El dataset de entrenamiento consta de 800 imágenes no públicas de arándanos, recolectadas por el equipo en los campos del fundo Danper y etiquetadas manualmente con cuadros delimitadores, sobre el cual cada modelo se entrenó variando dos hiperparámetros: backbone (Tiny/Small/Medium/Large/Compact según corresponda al modelo) y número de épocas (50, 100, 150, 200), produciendo entre 16 y 20 configuraciones por familia.
+![FIGURA 14. Barra de direcciones con la IP del robot en la red LABINM ROBOTICA.](/home/pqbas/labinm/robot-platform/assets/2026-06-30-22-42-23.png){width=70%}
 
-## 4.3 Métricas de evaluación
+![FIGURA 15. Interfaz de la plataforma que se abre automáticamente tras ingresar la dirección del robot.](/home/pqbas/labinm/robot-platform/assets/2026-06-30-22-44-20.png){width=70%}
 
-Las métricas reportadas para cada configuración se definen en la Tabla 10.
+## 2.3. Ejecución del conteo
 
-| Métrica | Definición |
-| --- | --- |
-| mAP@0.5 | Precisión promedio sobre todas las clases con IoU mínimo de 0.5 entre detección y ground truth. |
-| mAP@0.5:0.95 | Precisión promedio en el rango de IoU de 0.5 a 0.95 con paso 0.05, métrica primaria del benchmark COCO. |
-| F1-score@0.5 | Media armónica entre precisión y recall a IoU 0.5. |
-| Precisión@0.5 | Proporción de detecciones correctas sobre el total de detecciones a IoU 0.5. |
-| Recall@0.5 | Proporción de objetos reales detectados a IoU 0.5. |
-| mError@0.5 y mError@0.3 | Tasa media de error a los IoU indicados. |
-^TABLA 10. Métricas de evaluación reportadas en el informe técnico #2.
+1. Ingresar a la plataforma del robot móvil, seleccionar el menú de "Visión" y
+   verificar que el sistema obtiene la imagen de la cámara (ver FIGURA 16).
+2. El panel de estado, en la esquina superior izquierda, muestra los FPS del
+   stream, el modelo activo, la clase objetivo y la resolución (ver FIGURA 17).
+3. Presionar el botón "Contar", señalado por la flecha, para iniciar la sesión
+   de conteo (ver FIGURA 18).
+4. Presionar el botón "Detener", señalado por la flecha, para finalizar la
+   sesión de conteo (ver FIGURA 19).
+5. Al finalizar, la sesión queda registrada como una nueva entrada en el menú de
+   sesiones, descrito en la sección 2.10 (ver FIGURA 20).
 
-## 4.4 Resultados por modelo
+![FIGURA 16. Menú de visión con la imagen en vivo de la cámara del robot.](/home/pqbas/labinm/robot-platform/assets/2026-06-30-22-49-28.png){width=70%}
 
-Las Tablas 11, 12 y 13 reportan los resultados de entrenamiento de YoloV9, YoloV10 y YoloV11 respectivamente. Los valores se transcriben del informe técnico #2.
+![FIGURA 17. Panel de estado, en la esquina superior izquierda, con los FPS del stream, el modelo activo, la clase objetivo y la resolución.](/home/pqbas/labinm/robot-platform/assets/2026-06-30-22-49-46.png){width=70%}
 
-<!-- widths: 1300,1100,1300,1500,1700,1500,1500,1500,1500,1500 -->
-| Backbone | Épocas | Params (M) | mAP@0.5 | mAP@0.5:0.95 | F1@0.5 | Precisión@0.5 | Recall@0.5 | mError@0.5 | mError@0.3 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Tiny | 50 | 2,006 | 0,8133 | 0,4621 | 0,7551 | 0,7668 | 0,7437 | 0,5413 | 0,3306 |
-| Tiny | 100 | 2,006 | 0,8225 | 0,4702 | 0,7598 | 0,7727 | 0,7474 | 0,5819 | 0,3833 |
-| Tiny | 150 | 2,006 | 0,8264 | 0,4806 | 0,7646 | 0,7724 | 0,7558 | 0,5663 | 0,4026 |
-| Tiny | 200 | 2,006 | 0,824 | 0,4788 | 0,7639 | 0,7685 | 0,7592 | 0,5725 | 0,3979 |
-| Small | 50 | 7,288 | 0,8311 | 0,4809 | 0,7665 | 0,7745 | 0,7586 | 0,45 | 0,3438 |
-| Small | 100 | 7,288 | 0,8346 | 0,4918 | 0,7714 | 0,7745 | 0,7682 | 0,5196 | 0,4006 |
-| Small | 150 | 7,288 | 0,8341 | 0,4915 | 0,7706 | 0,7741 | 0,7752 | 0,4409 | 0,2993 |
-| Small | 200 | 7,288 | 0,8328 | 0,495 | 0,7697 | 0,7772 | 0,7623 | 0,4006 | 0,2904 |
-| Medium | 50 | 20,159 | 0,8348 | 0,4927 | 0,7702 | 0,7677 | 0,7728 | 0,4271 | 0,2546 |
-| Medium | 100 | 20,159 | 0,8348 | 0,4927 | 0,7702 | 0,7677 | 0,7728 | 0,4271 | 0,2546 |
-| Medium | 150 | 20,159 | 0,8394 | 0,4949 | 0,7741 | 0,7642 | 0,7842 | 0,4804 | 0,3461 |
-| Medium | 200 | 20,159 | 0,8373 | 0,4945 | 0,7681 | 0,7559 | 0,7808 | 0,5566 | 0,3853 |
-| Compact | 50 | 25,53 | 0,833 | 0,4902 | 0,7697 | 0,7685 | 0,7709 | 0,44 | 0,2804 |
-| Compact | 100 | 25,53 | 0,8299 | 0,4886 | 0,7685 | 0,7721 | 0,765 | 0,4653 | 0,3238 |
-| Compact | 150 | 25,53 | 0,8327 | 0,4926 | 0,77 | 0,7775 | 0,7626 | 0,4186 | 0,3118 |
-| Compact | 200 | 25,53 | 0,8407 | 0,4939 | 0,7703 | 0,7679 | 0,7727 | 0,5723 | 0,4350 |
-^TABLA 11. Resultados del entrenamiento del modelo YoloV9 con 800 imágenes de arándanos recolectadas en los campos del fundo Danper.
+![FIGURA 18. Módulo de visión en tiempo real; la flecha señala el botón "Contar" que inicia la sesión de conteo.](/home/pqbas/labinm/robot-platform/assets/2026-06-24-22-00-50.png){width=70%}
 
-YoloV9 alcanza el mAP@0.5 más alto del estudio con la variante Compact a 200 épocas (0,8407). En las variantes Tiny, Small y Medium se observa una tendencia al sobreajuste a partir de 100 épocas, donde el mAP@0.5:0.95 se estabiliza o decrece pese al incremento de épocas.
+![FIGURA 19. Sesión de conteo en curso; la flecha señala el botón "Detener" que finaliza la sesión.](/home/pqbas/labinm/robot-platform/assets/2026-06-24-22-01-18.png){width=70%}
 
-<!-- widths: 1300,1100,1300,1500,1700,1500,1500,1500,1500,1500 -->
-| Backbone | Épocas | Params (M) | mAP@0.5 | mAP@0.5:0.95 | F1@0.5 | Precisión@0.5 | Recall@0.5 | mError@0.5 | mError@0.3 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Nano | 50 | 2,707 | 0,7894 | 0,4468 | 0,7364 | 0,7459 | 0,7272 | 0,6044 | 0,4471 |
-| Nano | 100 | 2,707 | 0,8066 | 0,4651 | 0,7471 | 0,7514 | 0,7428 | 0,4904 | 0,3832 |
-| Nano | 150 | 2,707 | 0,816 | 0,4721 | 0,7529 | 0,7664 | 0,74 | 0,4997 | 0,3991 |
-| Nano | 200 | 2,707 | 0,8136 | 0,4706 | 0,7504 | 0,741 | 0,76 | 0,4977 | 0,3427 |
-| Small | 50 | 8,067 | 0,8238 | 0,4762 | 0,759 | 0,7568 | 0,7612 | 0,5546 | 0,3877 |
-| Small | 100 | 8,067 | 0,8261 | 0,482 | 0,7606 | 0,7647 | 0,7566 | 0,5068 | 0,3651 |
-| Small | 150 | 8,067 | 0,8245 | 0,4845 | 0,7591 | 0,7567 | 0,7614 | 0,4811 | 0,3583 |
-| Small | 200 | 8,067 | 0,8188 | 0,4804 | 0,7595 | 0,7604 | 0,7587 | 0,4818 | 0,3583 |
-| Medium | 50 | 16,485 | 0,828 | 0,4817 | 0,7616 | 0,755 | 0,7683 | 0,466 | 0,3391 |
-| Medium | 100 | 16,485 | 0,8309 | 0,4905 | 0,765 | 0,7717 | 0,7584 | 0,4717 | 0,3465 |
-| Medium | 150 | 16,485 | 0,8305 | 0,4918 | 0,7628 | 0,7685 | 0,7571 | 0,3769 | 0,2674 |
-| Medium | 200 | 16,485 | 0,8275 | 0,4905 | 0,7619 | 0,7572 | 0,7667 | 0,3867 | 0,3044 |
-| Large | 50 | 25,767 | 0,8292 | 0,486 | 0,764 | 0,7588 | 0,7694 | 0,444 | 0,3088 |
-| Large | 100 | 25,767 | 0,8231 | 0,489 | 0,7591 | 0,7614 | 0,7569 | 0,5225 | 0,419 |
-| Large | 150 | 25,767 | 0,8116 | 0,4791 | 0,753 | 0,7424 | 0,7638 | 0,3991 | 0,2923 |
-| Large | 200 | 25,767 | 0,8097 | 0,486 | 0,7591 | 0,7543 | 0,7607 | 0,4472 | 0,3743 |
-^TABLA 12. Resultados del entrenamiento del modelo YoloV10 con 800 imágenes de arándanos recolectadas en los campos del fundo Danper.
+![FIGURA 20. Menú de sesiones con la sesión recién finalizada resaltada como la primera fila.](/home/pqbas/labinm/robot-platform/assets/2026-06-25-22-49-05.png){width=70%}
 
-YoloV10 sigue un patrón similar a YoloV9 en backbones grandes: las variantes Medium y Large muestran caída de mAP@0.5 entre 100 y 200 épocas, indicador de sobreajuste con el tamaño del dataset. El máximo se obtiene con Medium a 100 épocas (0,8309).
+## 2.4. Ejecución de la grabación
 
-<!-- widths: 1300,1100,1300,1500,1700,1500,1500,1500,1500,1500 -->
-| Backbone | Épocas | Params (M) | mAP@0.5 | mAP@0.5:0.95 | F1@0.5 | Precisión@0.5 | Recall@0.5 | mError@0.5 | mError@0.3 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Nano | 50 | 2,59 | 0,8091 | 0,4573 | 0,7504 | 0,7601 | 0,741 | 0,5755 | 0,3738 |
-| Nano | 100 | 2,59 | 0,8153 | 0,4663 | 0,7548 | 0,7692 | 0,7409 | 0,4841 | 0,3279 |
-| Nano | 150 | 2,59 | 0,821 | 0,4734 | 0,7599 | 0,7639 | 0,756 | 0,5067 | 0,3487 |
-| Nano | 200 | 2,59 | 0,8228 | 0,4728 | 0,7623 | 0,7672 | 0,7574 | 0,4529 | 0,3151 |
-| Small | 50 | 9,428 | 0,8311 | 0,4802 | 0,7695 | 0,7725 | 0,7666 | 0,4911 | 0,3183 |
-| Small | 100 | 9,428 | 0,8295 | 0,4859 | 0,7663 | 0,7677 | 0,7648 | 0,4304 | 0,3239 |
-| Small | 150 | 9,428 | 0,8338 | 0,4925 | 0,7675 | 0,7684 | 0,7666 | 0,4982 | 0,3685 |
-| Small | 200 | 9,428 | 0,8293 | 0,4914 | 0,7627 | 0,756 | 0,758 | 0,4562 | 0,3402 |
-| Medium | 50 | 20,054 | 0,8265 | 0,4862 | 0,7638 | 0,7558 | 0,7719 | 0,4281 | 0,3054 |
-| Medium | 100 | 20,054 | 0,833 | 0,4946 | 0,7677 | 0,7672 | 0,7682 | 0,4434 | 0,3055 |
-| Medium | 150 | 20,054 | 0,831 | 0,4929 | 0,7629 | 0,7765 | 0,7499 | 0,3966 | 0,2901 |
-| Medium | 200 | 20,054 | 0,8262 | 0,493 | 0,7664 | 0,7685 | 0,7642 | 0,4166 | 0,3087 |
-| Large | 50 | 25,311 | 0,8293 | 0,4884 | 0,7625 | 0,7706 | 0,7544 | 0,4437 | 0,296 |
-| Large | 100 | 25,311 | 0,8335 | 0,4951 | 0,7693 | 0,7748 | 0,7639 | 0,4114 | 0,3035 |
-| Large | 150 | 25,311 | 0,8274 | 0,4921 | 0,7625 | 0,7552 | 0,7699 | 0,4219 | 0,3027 |
-| Large | 200 | 25,311 | 0,8278 | 0,4929 | 0,7657 | 0,7607 | 0,7708 | 0,4412 | 0,347 |
-^TABLA 13. Resultados del entrenamiento del modelo YoloV11 con 800 imágenes de arándanos recolectadas en los campos del fundo Danper.
+1. Ingresar a la plataforma del robot móvil, seleccionar el menú de "Visión" y
+   verificar que el sistema obtiene la imagen de la cámara.
+2. Presionar el botón "Grabar", señalado por la flecha, para iniciar la
+   grabación (ver FIGURA 21).
+3. Presionar el botón "Detener", señalado por la flecha, para finalizar la
+   grabación (ver FIGURA 22).
+4. Al finalizar, la grabación queda registrada como una nueva entrada en el menú
+   de grabaciones, descrito en la sección 2.11 (ver FIGURA 23).
 
-YoloV11 no muestra el comportamiento decreciente observado en YoloV9 y YoloV10 al aumentar las épocas. Los valores de mAP@0.5 se mantienen en una banda de 0,8091 a 0,8338 (rango 0,0247) frente a 0,0274 en YoloV9 y 0,0415 en YoloV10 sobre el mismo barrido de configuraciones. El máximo se obtiene con Small a 150 épocas (0,8338) y Large a 100 épocas (0,8335), con variantes Medium muy próximas.
+![FIGURA 21. Módulo de visión en tiempo real; la flecha señala el botón "Grabar" que inicia la grabación.](/home/pqbas/labinm/robot-platform/assets/2026-06-25-21-02-34.png){width=70%}
 
-## 4.5 Modelo de producción y estado de la integración
+![FIGURA 22. Grabación en curso; la flecha señala el botón "Detener" que finaliza la grabación.](/home/pqbas/labinm/robot-platform/assets/2026-06-24-22-21-35.png){width=70%}
 
-La Tabla 14 reporta el mAP@0.5 máximo de cada familia y la configuración correspondiente sobre el dataset propio recolectado en Danper.
+![FIGURA 23. Menú de grabaciones con la grabación recién finalizada resaltada como la primera fila, en estado "pendiente".](/home/pqbas/labinm/robot-platform/assets/2026-06-25-22-49-33.png){width=70%}
 
-| Modelo | Backbone | Épocas | mAP@0.5 | mAP@0.5:0.95 |
-| --- | --- | --- | --- | --- |
-| YoloV9 | Compact | 200 | 0,8407 | 0,4939 |
-| YoloV10 | Medium | 100 | 0,8309 | 0,4905 |
-| YoloV11 | Small | 150 | 0,8338 | 0,4925 |
-^TABLA 14. Mejor configuración por familia de modelos sobre el dataset propio recolectado en Danper.
+## 2.5. Configuración de la cámara
 
-YoloV9-Compact-200 obtiene el mAP@0.5 más alto del estudio en la tarea de detección por frame y se selecciona como modelo candidato de producción. Queda por verificar si esta ventaja en detección se traduce en mejor desempeño en la tarea de conteo, dado que un mejor mAP no garantiza menor error de conteo cuando el algoritmo depende también del seguimiento entre frames y de la estabilidad del `track_id`. La integración del modelo en la plataforma está en curso y aún no se ha completado.
+- Ingresar al menú de configuración y abrir la sección de cámara (ver FIGURA 24).
+- Las opciones de fuente de video disponibles son dos, la cámara USB conectada
+  por cable y la cámara IP por red (RTSP o HTTP) (ver FIGURA 25).
 
-Las tareas pendientes para integrar el modelo de producción YoloV9 son:
+![FIGURA 24. Sección de cámara del menú de configuración del modo robot.](/home/pqbas/labinm/robot-platform/assets/2026-06-25-21-11-38.png){width=70%}
 
-1. Empaquetar el checkpoint YoloV9-Compact-200 entrenado sobre el dataset propio recolectado en Danper en el formato que el inference-worker carga.
-2. Componer el detector YoloV9 con el algoritmo de seguimiento BoT-SORT, ya que el repositorio de los autores no expone el equivalente a `model.track()` de Ultralytics y requiere un envoltorio.
-3. Habilitar la conversión a TensorRT FP16 desde el conversion-worker, lo cual requiere para YoloV9 un paso intermedio por ONNX y la verificación de capas soportadas por la versión de TensorRT incluida en JetPack 5.1.
-4. Validar la métrica mAP@0.5 sobre frutos reales en sesión de campo, una vez integrado el modelo en el flujo de producción del robot.
+![FIGURA 25. Selector de fuente de video con las opciones "Cámara USB" y "Cámara IP (RTSP)".](/home/pqbas/labinm/robot-platform/assets/2026-06-25-21-17-19.png){width=70%}
 
-# V. CONCLUSIONES
+### 2.5.1 Configuración de cámara USB
 
-1. La arquitectura por procesos independientes resuelve los problemas de aislamiento de fallos, desacoplamiento de tasas de frame y conflictos de versiones de Python que presentaba el sistema monolítico anterior. Captura, inferencia y grabación operan en simultáneo a 1080p y 30 FPS sin acumulación de buffers ni regresión en el módulo de visión.
-2. La aceleración con TensorRT FP16 sobre los Tensor Cores de la Jetson Xavier reduce la latencia de inferencia aislada de 75 ms a 50,9 ms en el percentil 50 y eleva el FPS efectivo medido de extremo a extremo de 9 a 14, manteniendo el modelo intacto sin alterar la métrica de detección.
-3. Los tres modelos evaluados alcanzan mAP@0.5 superiores a 0,83 sobre el dataset propio recolectado en Danper. YoloV9-Compact-200 obtiene el máximo (0,8407) y queda seleccionado como el modelo de producción para la detección de frutos. Su integración en la plataforma está en curso e implica empaquetar el checkpoint, componer un wrapper con BoT-SORT y habilitar la conversión a TensorRT FP16 desde el conversion-worker.
-4. Mientras se completa esa integración, la plataforma carga YoloV11 preentrenado de Ultralytics como modelo de validación de extremo a extremo, lo que permite verificar sobre el robot real la detección, el algoritmo de conteo por cruce de línea, el pipeline TensorRT y la sincronización de modelos sin depender de la disponibilidad estacional de arándanos en campo.
-5. Los próximos pasos cubren la integración del modelo de producción YoloV9, la reducción del overhead del wrapper de Ultralytics en el flujo de inferencia (donde el modelo puro corre a 16 ms y `model.track()` añade ~35 ms de envoltura), el despliegue del servidor central en la PC del laboratorio y el pipeline de clasificación offline de frutos por madurez y calidad.
+- La cámara USB habilita tres opciones (ver FIGURA 26):
+  - En el selector de cámara se elige cuál de los dispositivos USB conectados se
+    usa como fuente de video.
+  - En la resolución de captura se define si la cámara entrega el video en 720p
+    o en 1080p.
+  - Con el botón de reinicio se reinicia el _camera worker_, útil si la cámara
+    se congela o no reconecta tras desconectar y conectar el cable.
+- El cambio de resolución reinicia la cámara, por lo que conviene detener el
+  conteo y la grabación antes.
 
-# VI. REFERENCIAS
+![FIGURA 26. Panel de configuración de la cámara USB con el dispositivo, la resolución y el reinicio del _camera worker_.](/home/pqbas/labinm/robot-platform/assets/2026-06-25-21-21-36.png){width=70%}
 
-Aharon, N., Orfaig, R. y Bobrovsky, B.-Z. (2022). BoT-SORT: Robust Associations Multi-Pedestrian Tracking. arXiv:2206.14651. https://arxiv.org/abs/2206.14651
+### 2.5.2 Configuración de cámara IP
 
-Cubas, P. (2025). Informe técnico #2: Evaluación de algoritmos de detección de objetos para conteo de arándanos. Proyecto PE5010-86701-2024-PROCIENCIA, Universidad Privada Antenor Orrego.
+- La cámara IP habilita dos opciones (ver FIGURA 27):
+  - En la dirección del stream se ingresa la URL RTSP o HTTP que publica la
+    cámara, de la forma `rtsp://<host>:<puerto>/stream`, desde donde el robot
+    toma el video.
+  - Con el botón de reinicio se reinicia el _camera worker_, útil si el stream
+    se congela o la cámara deja de responder.
 
-Cubas, P. (2026). Informe técnico #3: Plataforma de software del robot móvil agrícola, versión inicial. Proyecto PE5010-86701-2024-PROCIENCIA, Universidad Privada Antenor Orrego.
+![FIGURA 27. Panel de configuración de la cámara IP con la dirección del stream y el reinicio del _camera worker_.](/home/pqbas/labinm/robot-platform/assets/2026-06-25-21-22-56.png){width=70%}
 
-Ultralytics. (2024). YOLO11: Documentation and release notes. https://docs.ultralytics.com/models/yolo11/
+## 2.6. Configuración de la detección
 
-Wang, A., Chen, H., Liu, L., Chen, K., Lin, Z., Han, J. y Ding, G. (2024). YOLOv10: Real-Time End-to-End Object Detection. arXiv:2405.14458. https://arxiv.org/abs/2405.14458
+- La sección de detección permite configurar tres aspectos (ver FIGURA 28):
+  - En el objeto a detectar se elige el modelo y su archivo de pesos, junto con
+    el backend de inferencia, que puede ser PyTorch o TensorRT.
+  - En el área de detección se decide si YOLO procesa un cuadrado central del
+    frame, recomendado porque evita el _letterbox_, o el frame completo.
+  - En el umbral de confianza se fija el valor mínimo por debajo del cual las
+    detecciones se descartan.
+- El _backend_ aplica cada cambio recargando en caliente el modelo del
+  _inference worker_, sin interrumpir el _streaming_.
 
-Wang, C.-Y., Yeh, I.-H. y Liao, H.-Y. M. (2024). YOLOv9: Learning What You Want to Learn Using Programmable Gradient Information. arXiv:2402.13616. https://arxiv.org/abs/2402.13616
+![FIGURA 28. Panel de configuración de la detección con el objeto a detectar, el área de detección y el umbral de confianza.](/home/pqbas/labinm/robot-platform/assets/2026-06-25-21-35-54.png){width=70%}
+
+## 2.7. Configuración del conteo
+
+- La sección de conteo permite configurar cuatro aspectos:
+  - En el método de conteo se elige, para cada modelo por separado, entre
+    single, que usa una sola región de interés, y tiled, que divide el frame en
+    dos regiones apiladas.
+  - En el modo de conteo se define la orientación de la línea, horizontal con
+    línea vertical o vertical con línea horizontal.
+  - En la posición de la línea de cruce se indica dónde se ubica la línea sobre
+    el frame, como un valor de X normalizado entre 0 y 1.
+  - En la dirección de cruce se establece hacia qué lado debe cruzar un objeto
+    para sumarse al conteo, por ejemplo de izquierda a derecha.
+- El método se fija de forma independiente para cada modelo, y la línea y la
+  dirección se aplican tanto al método single como, de forma equivalente, a cada
+  una de las dos regiones del método tiled (ver FIGURA 29).
+- Al desplegar el selector del método de conteo se muestran las dos opciones
+  disponibles para el modelo, single y tiled, con un check sobre la opción
+  activa (ver FIGURA 30).
+
+![FIGURA 29. Panel de configuración del conteo con el método por objeto, el modo, la posición de la línea de cruce y la dirección.](/home/pqbas/labinm/robot-platform/assets/2026-06-25-21-37-35.png){width=70%}
+
+![FIGURA 30. Selector del método de conteo desplegado con las opciones "Single" y "Tiled".](/home/pqbas/labinm/robot-platform/assets/2026-06-25-22-52-01.png){width=70%}
+
+Cada control de la configuración del conteo se selecciona por separado. El modo
+de conteo permite elegir entre horizontal con línea vertical o vertical con
+línea horizontal. La línea de cruce se ajusta como un valor de X normalizado
+entre 0 y 1, que ubica la línea sobre el frame de forma independiente de la
+resolución. La dirección de cruce depende del modo elegido, ya que en horizontal
+se selecciona entre izquierda a derecha o derecha a izquierda, mientras que en
+vertical se selecciona entre arriba a abajo o abajo a arriba.
+
+![(a)](/home/pqbas/labinm/robot-platform/assets/2026-06-25-22-55-00.png){width=70%}
+![(b)](/home/pqbas/labinm/robot-platform/assets/2026-06-25-22-55-11.png){width=70%}
+![(c)](/home/pqbas/labinm/robot-platform/assets/2026-06-25-22-55-20.png){width=70%}
+![(d)](/home/pqbas/labinm/robot-platform/assets/2026-06-25-22-55-35.png){width=70%}
+
+^FIGURA 31. Selectores de la configuración del conteo desplegados: (a) modo de
+conteo; (b) posición de la línea de cruce normalizada; (c) dirección de cruce en
+modo horizontal; (d) dirección de cruce en modo vertical.
+
+## 2.8. Sincronización entre el servidor y el robot
+
+- Ofrece el botón "Sincronizar ahora", que fuerza de inmediato el envío de
+  sesiones, eventos y grabaciones al servidor central sin esperar al ciclo
+  automático periódico (ver FIGURA 32).
+
+![FIGURA 32. Sección de sincronización con el botón "Sincronizar ahora", que fuerza una sincronización inmediata con el servidor central.](/home/pqbas/labinm/robot-platform/assets/2026-06-25-21-40-18.png){width=70%}
+
+## 2.9. Configuración del servidor central
+
+- Define la URL y las credenciales con que el robot se conecta al servidor
+  central, a través de cuatro campos:
+  - En la Server URL se escribe la dirección donde responde el servidor central,
+    de la forma `http://<host>:<puerto>`, que el robot usa como destino de la
+    sincronización.
+  - En el Device ID se indica el identificador con el que ese robot queda
+    registrado en el servidor, de modo que sus sesiones y grabaciones se asocien
+    al dispositivo correcto.
+  - En la API Key se ingresa la clave de dispositivo que el servidor entregó al
+    robot, y con la que este se autentica en cada sincronización.
+  - En la URL LAN de video se puede configurar la dirección del servidor dentro
+    de la red local, para que las grabaciones se suban por la LAN, que es más
+    rápida, cuando esa red está disponible; si se deja vacía, las grabaciones se
+    suben por internet.
+- El robot sincroniza de forma automática y periódica, pero solo cuando el
+  servidor central está alcanzable; si no responde, omite el ciclo y reintenta
+  más tarde (ver FIGURA 33).
+
+![FIGURA 33. Panel de configuración del servidor central con la Server URL, el Device ID y la API Key, más la URL LAN para subir las grabaciones por la red local.](/home/pqbas/labinm/robot-platform/assets/2026-06-25-21-40-49.png){width=70%}
+
+## 2.10. Módulo de sesiones
+
+- Lista las sesiones de conteo en una tabla con la fecha, la clase, el conteo,
+  la duración, el tamaño del video y el estado de subida, paginada de a trece
+  entradas (ver FIGURA 34).
+- Permite filtrar por clase y por rango de fechas (desde y hasta).
+- Cada fila ofrece, de izquierda a derecha, cinco acciones:
+  - Sincronizar la sesión al servidor central (icono de nube).
+  - Re-procesar el conteo del video con el _counting worker_ (icono de recarga).
+  - Reproducir el video con las detecciones superpuestas (icono de play).
+  - Descargar el video MP4 (icono de descarga).
+  - Eliminar la sesión (icono de papelera).
+- La columna de conteo muestra el total final, un indicador de "procesando"
+  mientras el _counting worker_ termina, o "error" si el conteo falla.
+
+![FIGURA 34. Módulo de sesiones con la tabla de sesiones, los filtros por clase y fecha y las acciones por fila.](/home/pqbas/labinm/robot-platform/assets/2026-06-25-22-08-17.png){width=70%}
+
+## 2.11. Módulo de grabaciones
+
+- Lista las grabaciones sin conteo asociado en una tabla con la fecha, la
+  duración, el tamaño y el estado de subida, paginada de a trece entradas
+  (ver FIGURA 35).
+- Permite filtrar por rango de fechas (desde y hasta).
+- Cada fila ofrece, de izquierda a derecha, cuatro acciones:
+  - Sincronizar la grabación al servidor central (icono de nube).
+  - Reproducir el video (icono de play).
+  - Descargar el video MP4 (icono de descarga).
+  - Eliminar la grabación (icono de papelera).
+- El estado de subida (grabando, pendiente, subiendo o subido) se actualiza por
+  sondeo, de modo que la grabación recién terminada aparece como "pendiente"
+  hasta que se sincroniza.
+
+![FIGURA 35. Módulo de grabaciones con la tabla de grabaciones, los filtros por fecha y las acciones por fila.](/home/pqbas/labinm/robot-platform/assets/2026-06-25-22-08-36.png){width=70%}
+
+# CAPÍTULO 3. EVALUACIÓN DE LA ESTRATEGIA DE DETECCIÓN Y CONTEO
+
+Este capítulo evalúa la estrategia de detección y conteo de frutos de extremo a
+extremo sobre videos de campo, midiendo el error de conteo (MAE) en lugar de la
+calidad de detección por _frame_ (mAP). El _benchmark_ compara dos estrategias
+de conteo y veinte detectores YOLO (cinco familias por cuatro backbones) sobre
+grabaciones tomadas en el fundo Danper, y se basa en el estudio de Cubas y Prado
+(2026). Se reportan la estrategia de conteo propuesta, los modelos de detección
+evaluados, el protocolo de comparación, los resultados y el estado de la
+integración del modelo de producción.
+
+## 3.1 Estrategia de conteo propuesta
+
+La estrategia toma como entrada un video capturado en condiciones de campo y
+produce como salida el número de frutos contados, mediante cuatro etapas
+encadenadas: recorte, detección, seguimiento y criterio de conteo.
+
+### 3.1.1 Recorte
+
+El recorte extrae una región cuadrada centrada de 1080x1080 píxeles del _frame_
+original de 1920x1080 y la reescala a la entrada de YOLO de 640x640, como
+muestra la Figura 13. Este paso evita el _letterboxing_, que reduce el tamaño
+aparente de los frutos, y la distorsión directa, que altera su forma circular.
+
+![FIGURA 13. Operación de recorte: (a) *frame* original de 1920x1080; (b) región cuadrada centrada de 1080x1080 extraída de él.](assets/counting-cropping.png)
+
+### 3.1.2 Detección
+
+La detección procesa la región recortada con un detector YOLO entrenado para
+localizar frutos y entrega una lista de cuadros delimitadores $B = (x, y, w, h)$
+en píxeles, uno por fruto detectado, como ilustra la Figura 14.
+
+![FIGURA 14. Detección de frutos con un modelo YOLO entrenado: (a) *frame* recortado y reescalado de entrada; (b) el mismo *frame* con los cuadros delimitadores devueltos por el detector superpuestos.](assets/counting-detection.png)
+
+### 3.1.3 Seguimiento
+
+El seguimiento asigna a cada fruto un identificador persistente (ID) y lo
+mantiene consistente entre _frames_ consecutivos mediante BoT-SORT (Aharon et
+al., 2022) con sus parámetros por defecto, necesario porque el movimiento de la
+cámara hace que un mismo fruto aparezca con coordenadas distintas en _frames_
+sucesivos. Tras el seguimiento, cada fruto queda representado como un objeto O =
+(B, ID), que es la unidad de trabajo del criterio de conteo.
+
+### 3.1.4 Criterio de conteo
+
+El criterio decide, _frame_ a _frame_, cuándo un ID entra o sale del conteo
+según cruce una línea de referencia vertical $L$ que divide el _frame_ en una
+zona de detección ($O_x \leq L$) y una zona de conteo ($O_x > L$), donde
+$O_x(n)$ es la coordenada horizontal del centro del cuadro de un objeto en el
+_frame_ $n$. La Figura 15 muestra el esquema. El objeto entra al conteo al
+cruzar de la zona de detección a la de conteo:
+
+$$ O_x(n) > L \quad \text{y} \quad O_x(n-1) \leq L $$
+
+y sale del conteo al cruzar de vuelta:
+
+$$ O_x(n-1) > L \quad \text{y} \quad O_x(n) \leq L $$
+
+El conteo final es el número de IDs únicos que permanecen en la lista al
+terminar el video.
+
+![FIGURA 15. Esquema del criterio de conteo con la línea de referencia L que divide las zonas de detección y de conteo. Se ilustra la variante line_crossing; tiled_crossing replica el mismo esquema de forma independiente en cada uno de los dos mosaicos horizontales, con su propia línea de referencia Li.](assets/counting-criterion.png){width=70%}
+
+### 3.1.5 Estrategias de conteo
+
+Se consideran dos estrategias que aplican este criterio:
+
+- **`line_crossing`:** una sola línea de referencia L ubicada en el centro
+  horizontal del _frame_ completo, con un único tracker sobre todas las
+  detecciones; el conteo es el número de IDs únicos que cruzan L.
+- **`tiled_crossing`:** la banda central del _frame_ se divide en dos mosaicos
+  horizontales de igual ancho, el mismo criterio se aplica de forma
+  independiente a cada mosaico con su propia línea de referencia Li y su propia
+  instancia de tracker, y el conteo del video es la suma de los conteos por
+  mosaico, lo que reduce los cambios de identidad en escenas densas al limitar
+  la extensión espacial que cada tracker debe asociar.
+
+## 3.2 Modelos de detección evaluados
+
+Se evalúan veinte detectores construidos como el producto de cinco familias YOLO
+y cuatro backbones por familia. Los cuatro backbones corresponden, en orden
+creciente de parámetros y capacidad, a las variantes nano/tiny, small, medium y
+large/compact, según los códigos oficiales de cada familia; por eso YOLOv9 usa
+las variantes tiny y compact donde las demás familias usan nano y large. La
+Tabla 9 resume el origen y la contribución técnica de cada familia.
+
+| Modelo  | Origen                                  | Contribución técnica                                                                                                               |
+| ------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| YOLOv8  | Jocher et al. (2023), Ultralytics       | Diseño anchor-free con cabeza de detección desacoplada en el ecosistema Ultralytics.                                               |
+| YOLOv9  | Wang et al. (2024), Academia Sinica     | Introduce Programmable Gradient Information y la arquitectura RepNCSPELAN para preservar información gradiente en redes profundas. |
+| YOLOv10 | Wang et al. (2024), Tsinghua University | Elimina la operación NMS mediante un esquema de asignación dual one-to-many y one-to-one durante el entrenamiento.                 |
+| YOLOv11 | Ultralytics (2024)                      | Introduce el bloque C3k2 en el backbone y el bloque C2PSA con atención posicional.                                                 |
+| YOLO26  | Ultralytics (2025)                      | Versión más reciente de la familia, orientada a inferencia eficiente en el borde.                                                  |
+
+^TABLA 9. Familias de detección evaluadas en el _benchmark_ de conteo.
+
+Los veinte detectores se entrenan desde cero bajo condiciones idénticas. La
+Tabla 10 resume la configuración de entrenamiento.
+
+| Item                 | Valor                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------- |
+| Dataset de detección | 800 imágenes de arándanos anotadas manualmente, partición 561/160/78 (70/20/10 en train/validación/test) |
+| Framework            | Ultralytics                                                                                              |
+| Épocas               | 50 (early stopping con paciencia 20)                                                                     |
+| Tamaño de batch      | 16                                                                                                       |
+| Tamaño de imagen     | 640x640                                                                                                  |
+| Hardware             | GPU NVIDIA T4                                                                                            |
+| Precisión numérica   | mixta automática (AMP)                                                                                   |
+| Aumentación de datos | override propio sobre los valores por defecto de Ultralytics                                             |
+
+^TABLA 10. Configuración de entrenamiento compartida por los veinte detectores.
+
+El _dataset_ de detección consta de 800 imágenes no públicas recolectadas en los
+campos del fundo Danper y anotadas manualmente en la plataforma Roboflow, y se
+usa exclusivamente para entrenar los detectores.
+
+## 3.3 Protocolo de comparación
+
+Los parámetros del pipeline se clasifican en variables, que definen los ejes de
+comparación, y fijos, que toman un único valor para aislar el efecto de los ejes
+variables. La Tabla 11 los lista.
+
+| Parámetro               | Rol      | Valor(es)                                         |
+| ----------------------- | -------- | ------------------------------------------------- |
+| Estrategia de conteo    | variable | `line_crossing`, `tiled_crossing`                 |
+| Pesos del detector YOLO | variable | 20 detectores (5 familias x 4 backbones)          |
+| Umbral de confianza     | fijo     | 0,15                                              |
+| Algoritmo de tracking   | fijo     | BoT-SORT                                          |
+| ReID del tracker        | fijo     | desactivado                                       |
+| Resolución de entrada   | fijo     | 1080x1080 (recorte centrado) reescalada a 640x640 |
+| Posición de la línea    | fijo     | vertical, centrada                                |
+
+^TABLA 11. Parámetros del protocolo de evaluación.
+
+1. **Rejilla de configuraciones:** 40 configuraciones, el producto de los dos
+   ejes variables (dos estrategias por veinte detectores). Cada una se ejecuta
+   de extremo a extremo sobre cada video y produce un conteo automático $C_v$,
+   igual al número de IDs únicos que cruzan la línea de referencia (la suma
+   sobre las dos líneas de los mosaicos en `tiled_crossing`).
+2. **Referencia:** cada video tiene un conteo manual $GT_v$ obtenido por un
+   anotador experto sobre la misma línea.
+3. **Dataset de conteo:** cinco clips de 3 segundos recortados de las
+   grabaciones de surco completo, cada uno con su conteo manual; a 20 FPS el
+   presupuesto de _frames_ sostiene el seguimiento. La detección y el conteo
+   provienen de campañas distintas en el mismo fundo, por lo que el MAE mide la
+   generalización a una distribución relacionada pero no idéntica.
+4. **Intervalo de confianza:** el IC95% se obtiene por bootstrap no paramétrico
+   de 10000 iteraciones con semilla fija, cuyos percentiles 2,5 y 97,5 definen
+   el intervalo ($V = 5$).
+5. **Métricas:** MAE y sesgo, promediados sobre los $V$ videos.
+
+Ambas métricas promedian el error relativo de conteo sobre los $V$ videos, con
+$C_v$ el conteo automático y $GT_v$ la referencia manual. El MAE toma el valor
+absoluto, mientras que el sesgo conserva el signo, negativo si el sistema
+subcuenta y positivo si sobrecuenta.
+
+$$ \text{MAE} = \frac{1}{V} \sum\_{v} \frac{|C_v - GT_v|}{GT_v} $$
+
+$$ \text{Sesgo} = \frac{1}{V} \sum\_{v} \frac{C_v - GT_v}{GT_v} $$
+
+## 3.4 Resultados
+
+El protocolo de evaluación de la sección 3.3 se aplica a los cinco videos del
+conjunto de evaluación. Los resultados se organizan en tres partes: la
+comparación principal entre las 40 configuraciones y dos barridos sobre los
+parámetros fijos del protocolo (umbral de confianza y ReID del tracker), ambos
+sobre la configuración de referencia `tiled_crossing` + YOLOv9s.
+
+### 3.4.1 Comparación de estrategias y detectores
+
+La Figura 16 compara el MAE de conteo de cada detector bajo las dos estrategias,
+con el umbral de confianza y el tracker fijados según la Tabla 11.
+
+![FIGURA 16. MAE de conteo por detector bajo line_crossing (azul) y tiled_crossing (rojo); las barras indican el intervalo de confianza al 95% por bootstrap. Los detectores se ordenan por el MAE de tiled_crossing, con YOLOv9s (menor MAE) en la parte superior.](assets/counting-mae-forest.png){width=70%}
+
+`tiled_crossing` reduce el MAE de conteo respecto de `line_crossing` en 19 de
+los 20 detectores; la única excepción es YOLO26m, donde `tiled_crossing` resulta
+5,3 puntos peor. El menor MAE de toda la rejilla es 22,8% (IC95% [12,8, 32,7];
+sesgo -13,8%, IC95% [-30,3, +4,4]), alcanzado por `tiled_crossing` combinado con
+YOLOv9s. Aunque el IC del sesgo de esta configuración cruza el cero, las
+estimaciones puntuales son negativas en los 20 pares detector-estrategia,
+consistente con el techo del detector, que en escenas densas localiza alrededor
+de la mitad de los arándanos presentes en el _frame_. Con $V = 5$ varias
+configuraciones de bajo MAE son estadísticamente indistinguibles; por ejemplo,
+YOLOv9s (22,8%) y YOLOv11s (25,5%, IC95% [13,1, 37,5]) solapan sus intervalos, y
+estrecharlos requiere anotar videos de evaluación adicionales.
+
+### 3.4.2 Sensibilidad al umbral de confianza
+
+La Tabla 12 reporta el MAE y el sesgo de la configuración de referencia
+`tiled_crossing` + YOLOv9s para seis valores del umbral de confianza, entre 0,05
+y 0,40.
+
+| Umbral de confianza | MAE (%) | Sesgo (%) |
+| ------------------- | ------- | --------- |
+| 0,05                | 22,8    | -13,8     |
+| 0,10                | 22,8    | -13,8     |
+| 0,15                | 22,8    | -13,8     |
+| 0,20                | 22,8    | -13,8     |
+| 0,30                | 23,2    | -15,4     |
+| 0,40                | 24,3    | -20,3     |
+
+^TABLA 12. Sensibilidad del MAE y el sesgo de `tiled_crossing` + YOLOv9s al
+umbral de confianza.
+
+El MAE y el sesgo son constantes entre 0,05 y 0,20, en 22,8% y -13,8%
+respectivamente, y solo empiezan a crecer a partir de 0,30. El umbral de 0,15
+fijado en la Tabla 11 queda por tanto dentro del rango estable de operación y no
+sesga la comparación hacia ningún detector en particular.
+
+### 3.4.3 Efecto del ReID en el tracker
+
+La Tabla 13 compara la configuración de referencia `tiled_crossing` + YOLOv9s
+con el tracker BoT-SORT configurado para usar las características de apariencia
+por defecto del backbone del detector (with_reid = true, sin modelo de ReID
+dedicado ni ajuste).
+
+| Configuración    | MAE (%) |
+| ---------------- | ------- |
+| ReID desactivado | 22,8    |
+| ReID activado    | 21,6    |
+
+^TABLA 13. Efecto del ReID en `tiled_crossing` + YOLOv9s.
+
+Activar el ReID reduce el MAE de 22,8% a 21,6%, un cambio de 1,2 puntos que
+queda por debajo de la variabilidad observada entre detectores en la Figura 16.
+La contribución de la apariencia a la asociación es limitada porque los
+arándanos son pequeños y visualmente similares entre sí, de modo que el tracker
+no es el cuello de botella del pipeline.
+
+# CAPÍTULO 4. CLASIFICACIÓN DE FRUTOS POR NIVELES DE MADUREZ
+
+Este capítulo compara cómo distintos paradigmas de representación capturan la
+madurez del arándano a partir de imágenes individuales del fruto segmentado. El
+pipeline de detección y conteo del capítulo 3 localiza al fruto en el _frame_,
+mientras que el clasificador asigna a cada fruto un nivel de madurez, lo que
+habilita reportes por estado fenológico además del conteo agregado por camellón.
+El capítulo se basa en el estudio de clasificación de madurez de arándanos por
+aprendizaje de representaciones (Cubas, 2026b). Se reportan el problema y el
+enfoque, el _dataset_, los paradigmas evaluados, el protocolo de evaluación y
+los resultados.
+
+## 4.1 Definición del problema y enfoque
+
+La madurez del arándano es un fenómeno cromático continuo, con una transición
+gradual de verde a azul, pero las etiquetas disponibles son discretas e
+inciertas porque las clases se solapan en los rangos de color intermedios. A
+esto se suman dos dificultades del régimen de trabajo: imágenes pequeñas
+(recortes del fruto de entre 100 y 200 píxeles estandarizados a 128x128) y
+degradación por ruido de iluminación y baja resolución.
+
+Trabajos previos de clasificación de madurez con redes convolucionales
+supervisadas reportan alta exactitud en manzanas (Zhang et al., 2018), mangos
+(Naranjo-Torres et al., 2020) y tomates (Liu et al., 2019), pero tratan la
+madurez como un conjunto de clases discretas. Esta tensión entre un fenómeno
+gradual y un etiquetado categórico motiva la pregunta central del estudio, que
+es si las representaciones aprendidas, en particular las _self-supervised_,
+capturan la estructura continua de la madurez mejor que la representación
+interna de un clasificador supervisado, por lo que el enfoque no compara solo la
+precisión sino la geometría del espacio latente que induce cada paradigma.
+
+## 4.2 _Dataset_ y preprocesamiento
+
+El _dataset_ consta de 1239 imágenes del fruto segmentado (fondo removido sobre
+blanco) recolectadas en el laboratorio, distribuidas en siete clases de madurez
+ordenadas por progresión cromática: verde, cremoso, rosado, pintón 1, pintón 2,
+guinda y azul. Las clases están aproximadamente balanceadas, con alrededor de
+180 imágenes por clase (pintón 2 es la única excepción menor, con 159).
+
+El preprocesamiento estandariza cada recorte a 128x128 píxeles por estiramiento
+y aplica variaciones de brillo y color como _data augmentation_, para evaluar
+robustez ante iluminación y mitigar el tamaño reducido del conjunto. La
+partición es 70/15/15 estratificada por clase con semilla fija (867 imágenes de
+entrenamiento, 186 de validación y 186 de prueba); el conjunto de prueba queda
+reservado para evaluar los _embeddings_ congelados.
+
+## 4.3 Paradigmas de representación evaluados
+
+Se comparan seis representaciones bajo condiciones equivalentes (misma
+partición, capacidad de _encoder_ comparable, mismo presupuesto de entrenamiento
+y mismo protocolo de evaluación), todas con arquitecturas CNN pequeñas acordes
+al tamaño de imagen. La Tabla 14 las resume.
+
+| Representación      | Paradigma                                                                                                              | Latente                  |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Supervisado         | clasificador CNN de referencia; _embedding_ de la penúltima capa                                                       | continuo, 64-d           |
+| Autoencoder vanilla | reconstructivo con latente continuo                                                                                    | continuo, 64-d           |
+| VQ-VAE              | reconstructivo con cuantización vectorial; latente discreto tomado de un _codebook_ finito (Van den Oord et al., 2017) | discreto, 128-d          |
+| RVQ-VAE             | reconstructivo con cuantización vectorial residual en cascada                                                          | discreto-continuo, 128-d |
+| JEPA                | predictivo en espacio latente; predice regiones enmascaradas sin reconstruir píxeles (Assran et al., 2023)             | continuo, 128-d          |
+| Métrica continua    | aprendizaje métrico; la distancia en el _embedding_ refleja la similitud de madurez (Schroff et al., 2015)             | continuo, 128-d          |
+
+^TABLA 14. Paradigmas de representación evaluados y dimensión del espacio
+latente.
+
+## 4.4 Protocolo de evaluación
+
+Cada representación se entrena sin usar las etiquetas en los métodos
+_self-supervised_, se congela el _encoder_ y se evalúa la calidad del
+_embedding_ resultante con dos sondas sobre el conjunto de prueba: una sonda
+lineal (un clasificador lineal entrenado sobre el _embedding_ congelado) y un
+clasificador k-NN. Se reportan el accuracy y el F1-macro de cada sonda, de modo
+que la sonda lineal mide la separabilidad global de las clases y el k-NN su
+estructura local. Para inspeccionar la geometría de cada espacio, los
+_embeddings_ se proyectan a dos dimensiones con t-SNE, una técnica de reducción
+de dimensionalidad que preserva la vecindad local de los puntos (Van der Maaten
+y Hinton, 2008).
+
+## 4.5 Resultados
+
+La Tabla 15 reporta el desempeño de cada representación bajo las dos sondas,
+ordenado por el accuracy de la sonda lineal.
+
+| Representación      | Sonda lineal acc. (%) | Sonda lineal F1-macro | k-NN acc. (%) |
+| ------------------- | --------------------- | --------------------- | ------------- |
+| Supervisado         | 78,0                  | 0,78                  | 77,4          |
+| Métrica continua    | 69,4                  | 0,68                  | 65,1          |
+| RVQ-VAE             | 51,6                  | 0,50                  | 36,6          |
+| Autoencoder vanilla | 44,1                  | 0,37                  | 33,9          |
+| JEPA                | 43,5                  | 0,38                  | 23,1          |
+| VQ-VAE              | 38,2                  | 0,35                  | 36,0          |
+
+^TABLA 15. Desempeño de las representaciones por sonda lineal y k-NN sobre el
+conjunto de prueba (186 imágenes, siete clases).
+
+Hallazgos principales:
+
+- El clasificador supervisado obtiene el mayor accuracy (78,0% en sonda lineal),
+  como es esperable cuando las etiquetas guían directamente la representación.
+- Entre los métodos sin supervisión por clase, la representación métrica
+  continua (69,4%) y la RVQ-VAE (51,6%) superan al autoencoder vanilla (44,1%),
+  a JEPA (43,5%) y a la VQ-VAE (38,2%).
+- El autoencoder continuo supera a la VQ-VAE discreta en la sonda lineal (44,1%
+  frente a 38,2%), consistente con la hipótesis de que un latente continuo
+  preserva mejor la progresión gradual de la madurez.
+- El k-NN cae más que la sonda lineal en los latentes discretos y en JEPA (23,1%
+  en JEPA), lo que indica una geometría latente menos separable a nivel local
+  pese a una separabilidad lineal comparable.
+
+El conjunto de prueba es pequeño (186 imágenes) y varias diferencias caen dentro
+de la variabilidad esperable, por lo que el eje de interpretabilidad geométrica
+resulta tan relevante como el accuracy para decidir qué representación captura
+mejor la trayectoria continua de verde a azul. Las Figuras 17 a 20 muestran los
+_embeddings_ de cuatro representaciones proyectados con t-SNE y coloreados por
+madurez de verde a azul.
+
+![FIGURA 17. Proyección t-SNE de los embeddings del clasificador supervisado, coloreados por nivel de madurez.](assets/class-tsne-supervised.png){width=50%}
+
+En la Figura 17 se observa que el supervisado agrupa los frutos en regiones
+compactas por clase, con la madurez ordenada de extremo a extremo y fronteras
+nítidas entre niveles.
+
+![FIGURA 18. Proyección t-SNE de los embeddings de la representación métrica continua, coloreados por nivel de madurez.](assets/class-tsne-metric.png){width=50%}
+
+En la Figura 18 se observa que la métrica continua traza la trayectoria
+cromática más ordenada de verde a azul entre las representaciones evaluadas.
+
+![FIGURA 19. Proyección t-SNE de los embeddings de VQ-VAE, coloreados por nivel de madurez.](assets/class-tsne-vqvae.png){width=50%}
+
+En la Figura 19 se observa que la VQ-VAE fragmenta el espacio, con los frutos
+azules separados pero los niveles intermedios mezclados sin una progresión
+clara.
+
+![FIGURA 20. Proyección t-SNE de los embeddings de JEPA, coloreados por nivel de madurez.](assets/class-tsne-jepa.png){width=50%}
+
+En la Figura 20 se observa que JEPA presenta una geometría difusa con
+solapamiento entre niveles, coherente con su menor desempeño en las sondas.
+
+# CONCLUSIONES
+
+1. La arquitectura por procesos independientes resuelve los problemas de
+   aislamiento de fallos, desacoplamiento de tasas de _frame_ y conflictos de
+   versiones de Python que presentaba el sistema monolítico anterior. Captura,
+   inferencia y grabación operan en simultáneo a 1080p y 30 FPS sin acumulación
+   de buffers ni regresión en el módulo de visión.
+2. La aceleración con TensorRT FP16 sobre los Tensor Cores de la Jetson Xavier
+   reduce la latencia de inferencia aislada de 75 ms a 50,9 ms en el percentil
+   50 y eleva el FPS efectivo medido de extremo a extremo de 9 a 14, manteniendo
+   el modelo intacto sin alterar la métrica de detección.
+3. El _benchmark_ de conteo sobre videos de campo compara dos estrategias y
+   veinte detectores (cinco familias por cuatro backbones). La configuración
+   `tiled_crossing` + YOLOv9s obtiene el menor error de conteo (MAE 22,8%, sesgo
+   -13,8%) y `tiled_crossing` reduce el MAE respecto de `line_crossing` en 19 de
+   los 20 detectores. El sesgo negativo en todas las configuraciones identifica
+   al detector como la fuente dominante de error, y YOLOv9s queda seleccionado
+   como modelo de producción para la detección de frutos.
+4. La plataforma carga YOLOv11 preentrenado como modelo de validación integral,
+   lo que permite verificar el sistema sobre el robot real sin depender de la
+   disponibilidad estacional de arándanos en campo, mientras YOLOv9s se publica
+   como _checkpoint_ productivo a través del mecanismo de distribución ya
+   operativo.
+5. El servidor central quedó desplegado en la PC del laboratorio mediante Docker
+   Compose, con acceso remoto por Tailscale Funnel sobre HTTPS y endurecimiento
+   de autenticación (límite de tasa, bloqueo de cuenta, CORS restringido y
+   cabeceras de seguridad), lo que habilita la sincronización de datos y la
+   distribución de modelos hacia el robot. La plataforma incorpora además el
+   soporte de cámara IP por RTSP, el transporte de video por WebCodecs sobre
+   WebSocket y el registro de detecciones por _frame_ que permite reproducir
+   cada sesión grabada con las detecciones superpuestas.
+6. El estudio de clasificación de madurez compara seis paradigmas de
+   representación sobre un _dataset_ de 1239 imágenes de arándanos segmentados
+   en siete clases ordenadas por progresión cromática, evaluados por sondas
+   lineal y k-NN sobre los _embeddings_ congelados. El clasificador supervisado
+   obtiene el mayor accuracy (78,0% en sonda lineal), seguido por la
+   representación métrica continua (69,4%) y la RVQ-VAE (51,6%); el autoencoder
+   continuo supera a la VQ-VAE discreta, consistente con la naturaleza gradual
+   de la madurez. Los resultados son preliminares y orientan la integración del
+   _encoder_ supervisado detrás del detector YOLOv9s en el robot, junto con el
+   análisis de interpretabilidad de los espacios latentes.
+7. Las líneas de trabajo siguientes apuntan a ampliar el _dataset_ de
+   entrenamiento del detector para reducir el subconteo en escenas densas y
+   completar el mapa sin conexión para zonas sin red.
+
+# REFERENCIAS
+
+Aharon, N., Orfaig, R. y Bobrovsky, B.-Z. (2022). BoT-SORT: Robust Associations
+Multi-Pedestrian Tracking. arXiv:2206.14651. https://arxiv.org/abs/2206.14651
+
+Assran, M., Duval, Q., Misra, I., Bojanowski, P., Vincent, P., Rabbat, M.,
+LeCun, Y. y Ballas, N. (2023). Self-Supervised Learning from Images with a
+Joint-Embedding Predictive Architecture (I-JEPA). IEEE Conference on Computer
+Vision and Pattern Recognition (CVPR).
+
+Cubas, P. (2025). Informe técnico #2: Evaluación de algoritmos de detección de
+objetos para conteo de arándanos. Proyecto PE5010-86701-2024-PROCIENCIA,
+Universidad Privada Antenor Orrego.
+
+Cubas, P. (2026a). Informe técnico #3: Plataforma de software del robot móvil
+agrícola, versión inicial. Proyecto PE5010-86701-2024-PROCIENCIA, Universidad
+Privada Antenor Orrego.
+
+Cubas, P. (2026b). Self-Supervised Representation Learning Applied to Blueberry
+Ripeness Classification. Laboratorio de Investigación Multidisciplinario
+(LABINM), Universidad Privada Antenor Orrego.
+
+Cubas, P. y Prado, S. (2026). A Detection-and-Tracking Pipeline for Fruit
+Counting: Benchmarking the Modern YOLO Family (v8 to YOLO26) on Pre-Harvest
+Blueberries. Laboratorio de Investigación Multidisciplinario (LABINM),
+Universidad Privada Antenor Orrego.
+
+He, K., Zhang, X., Ren, S. y Sun, J. (2016). Deep Residual Learning for Image
+Recognition. IEEE Conference on Computer Vision and Pattern Recognition (CVPR).
+
+Jocher, G., Chaurasia, A. y Qiu, J. (2023). Ultralytics YOLOv8.
+https://github.com/ultralytics/ultralytics
+
+Liu, Z. et al. (2019). Tomato diseases and pests detection based on improved
+YOLO v3 convolutional neural network. Frontiers in Plant Science.
+
+Naranjo-Torres, J. et al. (2020). A review of convolutional neural network
+applied to fruit image processing. Applied Sciences, 10(10), 3443.
+
+Schroff, F., Kalenichenko, D. y Philbin, J. (2015). FaceNet: A Unified Embedding
+for Face Recognition and Clustering. IEEE Conference on Computer Vision and
+Pattern Recognition (CVPR).
+
+Simonyan, K. y Zisserman, A. (2015). Very Deep Convolutional Networks for
+Large-Scale Image Recognition. ICLR 2015.
+
+Ultralytics. (2024). YOLO11: Documentation and release notes.
+https://docs.ultralytics.com/models/yolo11/
+
+Ultralytics. (2025). YOLO26: Documentation and release notes.
+https://docs.ultralytics.com/models/yolo26/
+
+Van den Oord, A., Vinyals, O. y Kavukcuoglu, K. (2017). Neural Discrete
+Representation Learning (VQ-VAE). Advances in Neural Information Processing
+Systems (NeurIPS).
+
+Van der Maaten, L. y Hinton, G. (2008). Visualizing Data using t-SNE. Journal of
+Machine Learning Research, 9, 2579-2605.
+
+Wang, A., Chen, H., Liu, L., Chen, K., Lin, Z., Han, J. y Ding, G. (2024).
+YOLOv10: Real-Time End-to-End Object Detection. arXiv:2405.14458.
+https://arxiv.org/abs/2405.14458
+
+Wang, C.-Y., Yeh, I.-H. y Liao, H.-Y. M. (2024). YOLOv9: Learning What You Want
+to Learn Using Programmable Gradient Information. arXiv:2402.13616.
+https://arxiv.org/abs/2402.13616
+
+Zhang, Y. et al. (2018). Identification of apple leaf diseases based on deep
+convolutional neural networks. Symmetry, 10(1), 11.

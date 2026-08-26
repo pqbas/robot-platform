@@ -1,0 +1,31 @@
+direction: right
+
+robot1: "Robot 1\n(Modo Robot)" {
+  style.fill: "#E8F4FD"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}
+
+robot2: "Robot 2\n(Modo Robot)" {
+  style.fill: "#E8F4FD"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+}
+
+servidor: "Servidor\n(Backend FastAPI)" {
+  style.fill: "#F3E5F5"
+  style.stroke: "#6A1B9A"
+  style.stroke-width: 2
+}
+
+robot1 -> servidor: "HTTP / LAN" {
+  style.stroke: "#6A1B9A"
+  style.stroke-width: 2
+  style.stroke-dash: 5
+}
+
+robot2 -> servidor: "HTTP / LAN" {
+  style.stroke: "#6A1B9A"
+  style.stroke-width: 2
+  style.stroke-dash: 5
+}

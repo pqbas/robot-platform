@@ -1,6 +1,6 @@
 direction: down
 
-robot: "Robot Móvil (Jetson Xavier)" {
+robot: "Robot Platform (Modo Robot)" {
   style.fill: "#E8F4FD"
   style.stroke: "#1F4E79"
   style.stroke-width: 2
@@ -12,31 +12,31 @@ robot: "Robot Móvil (Jetson Xavier)" {
     style.stroke: "#1F4E79"
   }
 
-  camera_worker: "camera-worker\nV4L2 + OpenCV\nfan-out 1080p/720p" {
+  camera_worker: "camera-worker" {
     style.fill: "#FFE0B2"
     style.stroke: "#E65100"
     style.stroke-width: 2
   }
 
-  inference_worker: "inference-worker\nYOLO v11 + BotSort\nPyTorch / TensorRT FP16" {
+  inference_worker: "inference-worker" {
     style.fill: "#FFE0B2"
     style.stroke: "#E65100"
     style.stroke-width: 2
   }
 
-  recording_worker: "recording-worker\nNVENC (H.264)\nidle = 0 CPU" {
+  recording_worker: "recording-worker" {
     style.fill: "#FFE0B2"
     style.stroke: "#E65100"
     style.stroke-width: 2
   }
 
-  conversion_worker: "conversion-worker\nbuild .pt → .engine FP16\non demand" {
+  conversion_worker: "conversion-worker" {
     style.fill: "#FFE0B2"
     style.stroke: "#E65100"
     style.stroke-width: 2
   }
 
-  backend: "Backend\nFastAPI · Python 3.13\nWebRTC · API REST" {
+  backend: "Backend" {
     style.fill: "#D5E8F0"
     style.stroke: "#1F4E79"
     style.stroke-width: 2
@@ -48,24 +48,33 @@ robot: "Robot Móvil (Jetson Xavier)" {
     shape: cylinder
   }
 
+  nginx: "nginx\n:8080" {
+    style.fill: "#E8F5E9"
+    style.stroke: "#2E7D32"
+  }
+
+  nginx -> backend: "HTTP" {
+    style.stroke: "#2E7D32"
+  }
+
   camera_dev -> camera_worker: "V4L2" {
     style.stroke: "#1F4E79"
     style.stroke-width: 2
   }
 
-  camera_worker -> backend: "/tmp/camera.sock\nframes BGR" {
+  camera_worker -> backend: "camera.sock" {
     style.stroke: "#E65100"
     style.stroke-width: 2
     style.stroke-dash: 5
   }
 
-  camera_worker -> recording_worker: "/tmp/camera.sock\n(consumidor 2)" {
+  camera_worker -> recording_worker: "camera.sock" {
     style.stroke: "#E65100"
     style.stroke-width: 2
     style.stroke-dash: 5
   }
 
-  backend -> inference_worker: "/tmp/inference.sock\nJPEG + JSON" {
+  backend -> inference_worker: "inference.sock" {
     style.stroke: "#E65100"
     style.stroke-width: 2
     style.stroke-dash: 5
@@ -77,13 +86,13 @@ robot: "Robot Móvil (Jetson Xavier)" {
     style.stroke-dash: 5
   }
 
-  backend -> recording_worker: "/tmp/recording.sock\nstart · stop" {
+  backend -> recording_worker: "recording.sock" {
     style.stroke: "#E65100"
     style.stroke-width: 2
     style.stroke-dash: 5
   }
 
-  backend -> conversion_worker: "/tmp/conversion.sock\nconvert · status" {
+  backend -> conversion_worker: "conversion.sock" {
     style.stroke: "#E65100"
     style.stroke-width: 2
     style.stroke-dash: 5
@@ -104,39 +113,18 @@ robot: "Robot Móvil (Jetson Xavier)" {
   }
 }
 
-cliente: "Cliente (Navegador Web)\nReact 19 + TypeScript" {
+cliente: "Cliente\n(Navegador Web)" {
   style.fill: "#FFFFFF"
   style.stroke: "#1F4E79"
   style.stroke-width: 2
 }
 
-servidor: "Servidor Central (PC Laboratorio)\nFastAPI · PostgreSQL · JWT" {
-  style.fill: "#F3E5F5"
-  style.stroke: "#6A1B9A"
-  style.stroke-width: 2
-}
-
-nginx: "nginx\n:8080" {
-  style.fill: "#E8F5E9"
-  style.stroke: "#2E7D32"
-}
-
-cliente -> nginx: "HTTP" {
+cliente -> robot.nginx: "HTTP" {
   style.stroke: "#2E7D32"
   style.stroke-width: 2
-}
-
-nginx -> robot.backend: "proxy" {
-  style.stroke: "#2E7D32"
 }
 
 robot.backend -> cliente: "WebRTC\n(video H.264 + detecciones)" {
   style.stroke: "#2E7D32"
   style.stroke-width: 3
-}
-
-robot.backend -> servidor: "HTTP Sync\n(push datos · pull modelos)" {
-  style.stroke: "#6A1B9A"
-  style.stroke-width: 2
-  style.stroke-dash: 5
 }

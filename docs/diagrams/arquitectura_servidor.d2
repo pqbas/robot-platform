@@ -1,0 +1,74 @@
+vars: {
+  d2-config: {
+    layout-engine: elk
+  }
+}
+
+direction: right
+
+cliente: "Cliente\n(Navegador Web)" {
+  style.fill: "#FFFFFF"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+  style.font-size: 32
+}
+
+servidor: "Robot Platform (Modo Servidor)" {
+  style.fill: "#F3E5F5"
+  style.stroke: "#6A1B9A"
+  style.stroke-width: 2
+  style.font-size: 32
+
+  direction: right
+
+  tailscale: "Tailscale\nFunnel" {
+    style.fill: "#E0F2F1"
+    style.stroke: "#00695C"
+    style.stroke-width: 2
+    style.font-size: 32
+  }
+
+  nginx: "nginx" {
+    style.fill: "#E8F5E9"
+    style.stroke: "#2E7D32"
+    style.stroke-width: 2
+    style.font-size: 32
+  }
+
+  back: "Backend" {
+    style.fill: "#D5E8F0"
+    style.stroke: "#1F4E79"
+    style.stroke-width: 2
+    style.font-size: 32
+  }
+
+  postgres: "PostgreSQL" {
+    style.fill: "#F5F5F5"
+    style.stroke: "#999999"
+    shape: cylinder
+    style.font-size: 32
+  }
+
+  tailscale -> nginx: "HTTP" {
+    style.stroke: "#2E7D32"
+    style.stroke-width: 2
+    style.font-size: 28
+  }
+
+  nginx -> back: "HTTP\n:9090" {
+    style.stroke: "#2E7D32"
+    style.stroke-width: 2
+    style.font-size: 28
+  }
+
+  back -> postgres: "SQL\n(async)" {
+    style.stroke: "#999999"
+    style.font-size: 28
+  }
+}
+
+cliente -> servidor.tailscale: "HTTPS\n(acceso remoto)" {
+  style.stroke: "#00695C"
+  style.stroke-width: 3
+  style.font-size: 28
+}

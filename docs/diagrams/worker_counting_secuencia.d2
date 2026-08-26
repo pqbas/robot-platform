@@ -1,0 +1,61 @@
+direction: down
+
+backend: "Backend" {
+  style.fill: "#D5E8F0"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+  style.font-size: 32
+}
+
+mp4: "MP4 grabado\n+ count_config" {
+  style.fill: "#E8F4FD"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+  style.font-size: 28
+}
+
+counting: "counting-worker" {
+  style.fill: "#FFE0B2"
+  style.stroke: "#E65100"
+  style.stroke-width: 2
+  style.font-size: 32
+
+  proc: "decode + detect\n+ ByteTrack\n+ cruce de línea" {
+    style.fill: "#FFF3E0"
+    style.stroke: "#E65100"
+    style.font-size: 28
+  }
+}
+
+sidecar: "conteo + sidecar\n{uuid}.jsonl" {
+  style.fill: "#E8F4FD"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+  style.font-size: 28
+}
+
+backend -> counting.proc: "counting.sock (count)" {
+  style.stroke: "#E65100"
+  style.stroke-width: 2
+  style.stroke-dash: 5
+  style.font-size: 28
+}
+
+mp4 -> counting.proc: "lee frames" {
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+  style.font-size: 28
+}
+
+counting.proc -> sidecar: "escribe" {
+  style.stroke: "#E65100"
+  style.stroke-width: 2
+  style.font-size: 28
+}
+
+counting.proc -> backend: "status (idle / last_result)" {
+  style.stroke: "#E65100"
+  style.stroke-width: 2
+  style.stroke-dash: 3
+  style.font-size: 28
+}

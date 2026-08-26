@@ -1,0 +1,41 @@
+direction: right
+
+backend: "Backend" {
+  style.fill: "#D5E8F0"
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+  style.font-size: 32
+}
+
+iw: "inference-worker" {
+  style.fill: "#FFE0B2"
+  style.stroke: "#E65100"
+  style.stroke-width: 2
+  style.font-size: 32
+
+  model: "YOLOv11 + BoT-SORT" {
+    style.fill: "#FFF3E0"
+    style.stroke: "#E65100"
+    style.font-size: 28
+  }
+}
+
+backend -> iw.model: "inference.sock" {
+  style.stroke: "#E65100"
+  style.stroke-width: 2
+  style.stroke-dash: 5
+  style.font-size: 28
+}
+
+iw.model -> backend: "detecciones (JSON)" {
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+  style.font-size: 28
+}
+
+backend -> iw.model: "reload model" {
+  style.stroke: "#1F4E79"
+  style.stroke-width: 2
+  style.stroke-dash: 3
+  style.font-size: 28
+}
