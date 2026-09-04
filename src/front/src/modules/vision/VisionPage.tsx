@@ -103,12 +103,13 @@ export default function VisionPage() {
     }
   }, [selectedClass, selectedModelFilename])
 
-  // Auto-connect when an object is selected and we're idle
+  // Auto-connect once labels have resolved. The stream doesn't depend on a
+  // model, so we connect even when none are assigned — only counting does.
   useEffect(() => {
-    if (selectedClass && connectionState === "disconnected") {
+    if (!labelsLoading && connectionState === "disconnected") {
       connect()
     }
-  }, [selectedClass, connectionState, connect])
+  }, [labelsLoading, connectionState, connect])
 
   const handleForcePull = async () => {
     setSyncing(true)
@@ -128,6 +129,7 @@ export default function VisionPage() {
   }
 
   const connected = connectionState === "connected"
+  const hasModels = labels.length > 0
   const isCounting = counting.state === "COUNTING"
   const isRecording = recording.recording != null
 
@@ -240,22 +242,6 @@ export default function VisionPage() {
     )
   }
 
-  if (labels.length === 0) {
-    return (
-      <div className="flex h-full flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-        <p>No hay modelos asignados a este robot.</p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleForcePull}
-          disabled={syncing}
-        >
-          {syncing ? "Sincronizando" : "Sincronizar ahora"}
-        </Button>
-      </div>
-    )
-  }
-
   return (
     <div className="relative flex h-full flex-col md:h-auto md:flex-1">
       <VideoStream
@@ -326,6 +312,22 @@ export default function VisionPage() {
         )}
       </VideoStream>
 
+      {!hasModels && (
+        <div className="absolute bottom-4 left-2 z-10 flex max-w-[60%] flex-col items-start gap-2 rounded-md bg-background/80 px-3 py-2 text-xs backdrop-blur-sm sm:flex-row sm:items-center">
+          <span className="text-muted-foreground">
+            No hay modelos asignados a este robot — el conteo está deshabilitado.
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleForcePull}
+            disabled={syncing}
+          >
+            {syncing ? "Sincronizando" : "Sincronizar ahora"}
+          </Button>
+        </div>
+      )}
+
       {/* Action bar — overlay on bottom-right, Contar/Detener as last (closest to bottom) */}
       <div className="absolute bottom-4 right-2 z-10 flex flex-col gap-2">
         {connectionState === "failed" && (
@@ -368,7 +370,12 @@ export default function VisionPage() {
         {connected && counting.state === "IDLE" && !isRecording && (
           <Button
             onClick={handleStart}
-            title="Iniciar conteo"
+            disabled={!hasModels}
+            title={
+              hasModels
+                ? "Iniciar conteo"
+                : "Sin modelos asignados a este robot"
+            }
             className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-primary/85 backdrop-blur-sm hover:bg-primary"
           >
             <ScanEye className="size-5" />
