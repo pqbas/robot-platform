@@ -20,8 +20,10 @@ import os
 import signal
 import struct
 import time
+import urllib.request
 
 import cv2
+import numpy as np
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("camera_worker")
@@ -116,15 +118,146 @@ def _apply_override(args, override: dict | None) -> None:
         args.rtsp_url = override["rtsp_url"]
 
 
+class MultipartYUYVCapture:
+    """Reads raw YUYV frames from an HTTP ``multipart/x-mixed-replace`` stream.
+
+    The IP camera server streams uncompressed YUYV (YUY2 4:2:2, 2 bytes/px)
+    parts, each preceded by a boundary line and MIME-style headers
+    (``Content-Length`` + ``X-Frame-Width`` / ``X-Frame-Height``). Reading those
+    bytes straight through preserves the fan-out contract (raw YUYV,
+    ``channels=2``) with **zero CPU color conversion**.
+
+    ``cv2.VideoCapture`` cannot be used here: for network sources OpenCV's
+    FFmpeg backend always decodes to 3-channel BGR and ignores
+    ``CAP_PROP_CONVERT_RGB=0``, so it hands back 3 bytes/px that then blow up the
+    ``(H, W, 2)`` reshape in the consumer. This reader keeps the pixels raw.
+
+    Exposes the subset of the ``cv2.VideoCapture`` interface that the worker
+    uses: ``isOpened()``, ``read() -> (ok, frame)``, ``get(prop)``, ``release()``.
+    """
+
+    def __init__(self, url, timeout=10.0):
+        self._url = url
+        self._timeout = timeout
+        self._resp = None
+        self.width = 0
+        self.height = 0
+        self._pending = None
+
+        req = urllib.request.Request(url, headers={"User-Agent": "camera-worker"})
+        self._resp = urllib.request.urlopen(req, timeout=timeout)
+        ctype = self._resp.headers.get("Content-Type", "")
+        if "multipart/x-mixed-replace" not in ctype:
+            self.release()
+            raise RuntimeError(
+                f"expected multipart/x-mixed-replace stream, got {ctype!r}"
+            )
+
+        # Prime one frame so width/height are known before the handshake.
+        ok, frame = self._read_part()
+        if not ok:
+            self.release()
+            raise RuntimeError("could not read first frame from multipart stream")
+        self._pending = frame
+
+    def isOpened(self):
+        return self._resp is not None
+
+    def _read_exact(self, n):
+        buf = bytearray()
+        while len(buf) < n:
+            chunk = self._resp.read(n - len(buf))
+            if not chunk:
+                raise ConnectionError("stream closed mid-frame")
+            buf += chunk
+        return bytes(buf)
+
+    def _read_part(self):
+        # Skip blank lines until the boundary marker (``--frame``).
+        line = self._resp.readline()
+        while line in (b"\r\n", b"\n"):
+            line = self._resp.readline()
+        if not line:
+            return False, None  # stream ended cleanly
+
+        # Parse the part headers up to the blank separator line.
+        headers = {}
+        while True:
+            hline = self._resp.readline()
+            if hline in (b"\r\n", b"\n", b""):
+                break
+            key, _, val = hline.decode("latin-1").partition(":")
+            headers[key.strip().lower()] = val.strip()
+
+        length = int(headers["content-length"])
+        width = int(headers.get("x-frame-width", self.width))
+        height = int(headers.get("x-frame-height", self.height))
+        expected = width * height * 2
+        if length != expected:
+            raise ValueError(
+                f"YUYV size mismatch: got {length} bytes, expected {expected} "
+                f"for {width}x{height} (2 bytes/px)"
+            )
+        body = self._read_exact(length)
+        self.width, self.height = width, height
+        frame = np.frombuffer(body, dtype=np.uint8).reshape(height, width, 2)
+        return True, frame
+
+    def read(self):
+        if self._pending is not None:
+            frame, self._pending = self._pending, None
+            return True, frame
+        try:
+            return self._read_part()
+        except Exception as exc:
+            logger.warning("multipart YUYV read failed: %s", exc)
+            return False, None
+
+    def get(self, prop):
+        if prop == cv2.CAP_PROP_FRAME_WIDTH:
+            return float(self.width)
+        if prop == cv2.CAP_PROP_FRAME_HEIGHT:
+            return float(self.height)
+        return 0.0
+
+    def release(self):
+        if self._resp is not None:
+            try:
+                self._resp.close()
+            except Exception:
+                pass
+            self._resp = None
+
+
 def open_camera(args):
     rtsp_url = getattr(args, "rtsp_url", "")
     if rtsp_url:
-        # IP camera path — RTSP or HTTP MJPEG URL.
-        # FOURCC and BUFFERSIZE are silently ignored by OpenCV for network
-        # sources; omitting them avoids confusing log output.
+        # IP camera path.
         # Crop is forced to 0: stereo-split only applies to the ZED 2i USB camera.
         args.crop = 0
+        is_http = rtsp_url.lower().startswith(("http://", "https://"))
         while True:
+            if is_http:
+                # HTTP multipart/x-mixed-replace of raw YUYV parts. Read the
+                # bytes straight through (no decode) so the fan-out stays raw
+                # YUYV; cv2.VideoCapture would force a CPU BGR decode here.
+                try:
+                    cap = MultipartYUYVCapture(rtsp_url)
+                    actual_width = cap.width
+                    actual_height = cap.height
+                    actual_fps = args.fps
+                    logger.info(
+                        "Camera opened (ip=%s) — actual %dx%d @ %.1ffps (raw YUYV)",
+                        rtsp_url, actual_width, actual_height, actual_fps,
+                    )
+                    return cap, actual_width, actual_height, actual_fps
+                except Exception as exc:
+                    logger.warning(
+                        "IP camera stream not available (%s) — retrying in 1s", exc
+                    )
+                    time.sleep(1)
+                    continue
+            # Non-HTTP (e.g. rtsp://) still goes through OpenCV.
             cap = cv2.VideoCapture(rtsp_url)
             if cap.isOpened():
                 actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
