@@ -68,10 +68,25 @@ export function saveSession(
   })
 }
 
-export function patchSession(id: number, camellonId: number): Promise<Session> {
+export function patchSession(
+  id: number,
+  camellonId: number,
+  startTime?: string,
+): Promise<Session> {
   return apiFetch(`/api/sessions/${id}`, {
     method: "PATCH",
-    body: JSON.stringify({ camellon_id: camellonId }),
+    body: JSON.stringify({
+      camellon_id: camellonId,
+      ...(startTime != null ? { start_time: startTime } : {}),
+    }),
+  })
+}
+
+// Session date only, no location change.
+export function patchSessionDate(id: number, startTime: string): Promise<Session> {
+  return apiFetch(`/api/sessions/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ start_time: startTime }),
   })
 }
 

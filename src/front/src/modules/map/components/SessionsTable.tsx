@@ -341,20 +341,18 @@ export default function SessionsTable({
                           </a>
                         </Button>
                       )}
-                    {mode === "server" && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        title="Editar"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setEditingSession(s)
-                        }}
-                      >
-                        <Pencil className="size-3.5" />
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      title={mode === "server" ? "Editar" : "Editar fecha"}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingSession(s)
+                      }}
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -395,6 +393,7 @@ export default function SessionsTable({
         <SessionEditDialog
           session={editingSession}
           open={!!editingSession}
+          dateOnly={mode !== "server"}
           onOpenChange={(open) => { if (!open) setEditingSession(null) }}
           onSaved={(updated) => {
             onSessionUpdated(updated)

@@ -2,7 +2,7 @@ import csv
 import io
 import logging
 import os
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -201,14 +201,24 @@ async def update_session(
     sess = await storage.get_session(db, session_id)
     if sess is None:
         raise HTTPException(404, "Session not found")
-    cam = await storage.get_camellon(db, body.camellon_id)
-    if cam is None:
-        raise HTTPException(404, "Camellon not found")
-    sess.camellon_id = body.camellon_id
-    await _link_recording_camellon(db, body.camellon_id)
+
+    if body.camellon_id is not None:
+        cam = await storage.get_camellon(db, body.camellon_id)
+        if cam is None:
+            raise HTTPException(404, "Camellon not found")
+        sess.camellon_id = body.camellon_id
+        await _link_recording_camellon(db, body.camellon_id)
+
+    if body.start_time is not None:
+        try:
+            datetime.fromisoformat(body.start_time.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(422, "start_time no es una fecha ISO 8601 válida")
+        sess.start_time = body.start_time
+
     # Re-queue for sync: a session is pushed once (often unlocated), and sync is
-    # insert-only, so drop its sync_log row to re-push the new location. The
-    # server upserts camellon_id for an existing session.
+    # insert-only, so drop its sync_log row to re-push the new location/date. The
+    # server upserts camellon_id/start_time for an existing session.
     await db.execute(
         delete(SyncLog).where(
             (SyncLog.table_name == "sessions") & (SyncLog.record_uuid == sess.uuid)

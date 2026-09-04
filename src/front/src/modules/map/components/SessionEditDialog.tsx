@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import type { Session, Camellon, Empresa, Fundo } from "@/types"
-import { patchSession } from "@/api/sessions"
+import { patchSession, patchSessionDate } from "@/api/sessions"
 import { getAllCamellones, createCamellon, renameCamellon } from "@/api/camellones"
 import { getEmpresas, createEmpresa, getFundos, createFundo } from "@/api/admin"
 import { Button } from "@/components/ui/button"
@@ -29,11 +29,27 @@ type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved: (updated: Session) => void
+  // Robot mode has no empresa/fundo/camellón catalog — only the date is editable.
+  dateOnly?: boolean
 }
 
 type InlineMode = "idle" | "creating" | "renaming"
 
-export default function SessionEditDialog({ session, open, onOpenChange, onSaved }: Props) {
+// datetime-local inputs need "YYYY-MM-DDTHH:mm" in the browser's local time.
+function toLocalInputValue(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ""
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+export default function SessionEditDialog({
+  session,
+  open,
+  onOpenChange,
+  onSaved,
+  dateOnly = false,
+}: Props) {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [fundos, setFundos] = useState<Fundo[]>([])
   const [camellones, setCamellones] = useState<Camellon[]>([])
@@ -41,6 +57,7 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
   const [selectedEmpresaUuid, setSelectedEmpresaUuid] = useState("")
   const [selectedFundoUuid, setSelectedFundoUuid] = useState("")
   const [selectedCamellonId, setSelectedCamellonId] = useState("")
+  const [startTime, setStartTime] = useState("")
 
   const [saving, setSaving] = useState(false)
 
@@ -51,6 +68,8 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
     setEmpMode("idle")
     setFundoMode("idle")
     setCamMode("idle")
+    setStartTime(toLocalInputValue(session.start_time))
+    if (dateOnly) return
 
     Promise.all([getEmpresas(), getFundos(), getAllCamellones()])
       .then(([emps, fnds, cams]) => {
@@ -70,7 +89,7 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
         setSelectedCamellonId(cam ? String(cam.id) : "")
       })
       .catch(() => toast.error("Error al cargar ubicaciones"))
-  }, [open, session.camellon_id])
+  }, [open, dateOnly, session.camellon_id, session.start_time])
 
   const fundosForEmpresa = fundos.filter((f) => f.empresa_uuid === selectedEmpresaUuid)
   const camellonesForFundo = camellones.filter((c) => c.fundo_uuid === selectedFundoUuid)
@@ -176,10 +195,13 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
   }
 
   async function handleSave() {
-    if (!selectedCamellon) return
+    if (!startTime || (!dateOnly && !selectedCamellon)) return
     setSaving(true)
     try {
-      const updated = await patchSession(session.id, selectedCamellon.id)
+      const iso = new Date(startTime).toISOString()
+      const updated = dateOnly
+        ? await patchSessionDate(session.id, iso)
+        : await patchSession(session.id, selectedCamellon!.id, iso)
       onSaved(updated)
       onOpenChange(false)
       toast.success("Sesión actualizada")
@@ -195,18 +217,33 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
     empMode === "idle" &&
     fundoMode === "idle" &&
     camMode === "idle" &&
-    selectedCamellon != null
+    !!startTime &&
+    (dateOnly || selectedCamellon != null)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:w-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Editar ubicación — sesión #{session.id}</DialogTitle>
+          <DialogTitle>Editar sesión #{session.id}</DialogTitle>
           <DialogDescription>
-            Asigna empresa, fundo y camellón. Puedes crear cualquiera en el momento.
+            {dateOnly
+              ? "Ajusta la fecha y hora de inicio de la sesión."
+              : "Asigna empresa, fundo y camellón, y ajusta la fecha si es necesario. Puedes crear cualquiera en el momento."}
           </DialogDescription>
         </DialogHeader>
 
+        {/* --- Fecha --- */}
+        <div className="space-y-2">
+          <Label>Fecha y hora de inicio</Label>
+          <Input
+            type="datetime-local"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+          />
+        </div>
+
+        {!dateOnly && (
+        <>
         {/* --- Empresa --- */}
         <div className="space-y-2">
           <Label>Empresa</Label>
@@ -367,6 +404,8 @@ export default function SessionEditDialog({ session, open, onOpenChange, onSaved
             </Button>
           )}
         </div>
+        </>
+        )}
 
         <DialogFooter className="flex-row gap-2 sm:justify-end">
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>

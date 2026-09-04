@@ -93,7 +93,8 @@ class SessionSave(BaseModel):
 
 
 class SessionUpdate(BaseModel):
-    camellon_id: int
+    camellon_id: int | None = None
+    start_time: str | None = None
 
 
 # --- Counting (live) ---
