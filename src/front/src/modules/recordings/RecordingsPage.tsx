@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Download, Loader2, MapPin, Pencil, Play, Trash2, UploadCloud } from "lucide-react"
+import { Download, FileUp, Loader2, MapPin, Pencil, Play, Trash2, UploadCloud } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -43,6 +43,7 @@ import { formatDateTime, formatDuration, formatSize, rowStatus } from "@/lib/rec
 import { StatusBadge } from "@/components/StatusBadge"
 import DetectionReplayDialog from "@/modules/map/components/DetectionReplayDialog"
 import RecordingPlaceDialog from "@/modules/vision/components/RecordingPlaceDialog"
+import UploadCountDialog from "@/modules/recordings/UploadCountDialog"
 
 const POLL_INTERVAL_MS = 30_000
 const PAGE_SIZE = 13
@@ -74,6 +75,7 @@ export default function RecordingsPage() {
   const [playing, setPlaying] = useState<Recording | null>(null)
   const [editingUuid, setEditingUuid] = useState<string | null>(null)
   const [editingRec, setEditingRec] = useState<Recording | null>(null)
+  const [uploadingCountFor, setUploadingCountFor] = useState<string | null>(null)
   const [uploadingUuids, setUploadingUuids] = useState<Set<string>>(new Set())
   const [syncingUuid, setSyncingUuid] = useState<string | null>(null)
 
@@ -500,6 +502,17 @@ export default function RecordingsPage() {
                             size="icon"
                             variant="ghost"
                             className="h-7 w-7"
+                            title="Subir conteo manual (calculado fuera del robot)"
+                            onClick={() => setUploadingCountFor(r.uuid)}
+                          >
+                            <FileUp className="size-3.5" />
+                          </Button>
+                        )}
+                        {status !== "active" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
                             title="Eliminar"
                             onClick={() => setDeleting(r)}
                           >
@@ -582,6 +595,13 @@ export default function RecordingsPage() {
           load()
         }}
         onSkip={() => { setEditingUuid(null); setEditingRec(null) }}
+      />
+
+      <UploadCountDialog
+        open={uploadingCountFor != null}
+        recordingUuid={uploadingCountFor}
+        onOpenChange={(open) => { if (!open) setUploadingCountFor(null) }}
+        onSuccess={() => { setUploadingCountFor(null); load() }}
       />
     </div>
   )

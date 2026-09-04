@@ -73,6 +73,45 @@ export function recountWithConfig(
   })
 }
 
+// Attach a manually-produced count to an uncounted recording, bypassing the
+// robot's counting-worker (e.g. detections computed locally/in the cloud
+// with a tweaked algorithm). totalCount omitted -> server derives it from
+// distinct track_ids in the uploaded JSONL.
+export async function uploadRecordingCount(
+  uuid: string,
+  file: File,
+  totalCount?: number,
+): Promise<Recording> {
+  const token = localStorage.getItem("auth_token")
+  const headers: Record<string, string> = {}
+  if (token) headers["Authorization"] = `Bearer ${token}`
+
+  const fd = new FormData()
+  fd.append("file", file)
+  if (totalCount != null) fd.append("total_count", String(totalCount))
+
+  const res = await fetch(`/api/recordings/${uuid}/upload-count`, {
+    method: "POST",
+    headers,
+    body: fd,
+  })
+
+  if (res.status === 401) {
+    localStorage.removeItem("auth_token")
+    if (window.location.pathname !== "/login") {
+      window.location.replace("/login")
+    }
+    throw new Error("Unauthorized")
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new Error(text)
+  }
+
+  return res.json() as Promise<Recording>
+}
+
 export function setRecordingPlace(
   uuid: string,
   camellonId: number | null,
