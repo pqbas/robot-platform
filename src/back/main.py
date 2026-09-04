@@ -83,6 +83,13 @@ async def lifespan(app: FastAPI):
             reconcile_active_model_once,
             run_model_reconciler,
         )
+        from back.services.recording_reconcile import (
+            reconcile_orphaned_recordings,
+        )
+
+        # Close any recording row left open by a crash/restart. An orphan row
+        # otherwise blocks every future /start with 409 "already in progress".
+        await reconcile_orphaned_recordings()
 
         await reconcile_orphaned_conversions()
         poller_task = asyncio.create_task(run_poller())
