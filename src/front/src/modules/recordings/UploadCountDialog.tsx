@@ -13,12 +13,13 @@ import { Label } from "@/components/ui/label"
 import { uploadRecordingCount } from "@/api/recordings"
 import { toast } from "sonner"
 import { FileCheck, FileUp } from "lucide-react"
+import type { Recording } from "@/types"
 
 type Props = {
   open: boolean
   recordingUuid: string | null
   onOpenChange: (open: boolean) => void
-  onSuccess: () => void
+  onSuccess: (updated: Recording) => void
 }
 
 export default function UploadCountDialog({
@@ -49,19 +50,19 @@ export default function UploadCountDialog({
   }
 
   const handleSubmit = async () => {
-    if (!recordingUuid || !file) {
-      toast.error("Selecciona el archivo de detecciones")
+    if (!recordingUuid || !totalCount.trim()) {
+      toast.error("Ingresa el total contado")
       return
     }
     setSaving(true)
     try {
-      await uploadRecordingCount(
+      const updated = await uploadRecordingCount(
         recordingUuid,
-        file,
-        totalCount.trim() ? Number(totalCount) : undefined,
+        Number(totalCount),
+        file ?? undefined,
       )
       toast.success("Conteo subido")
-      onSuccess()
+      onSuccess(updated)
       onOpenChange(false)
     } catch {
       toast.error("Error al subir el conteo")
@@ -76,15 +77,26 @@ export default function UploadCountDialog({
         <DialogHeader>
           <DialogTitle>Subir conteo manual</DialogTitle>
           <DialogDescription>
-            Sube el JSONL de detecciones por frame calculado fuera del robot
-            (mismo formato que el counting-worker: una línea por frame con{" "}
-            <code>dets</code>). El total es opcional — si se omite, se calcula
-            como el número de <code>track_id</code> distintos.
+            Ingresa el total contado fuera del robot. Opcionalmente adjunta el
+            JSONL de detecciones por frame (mismo formato que el
+            counting-worker: una línea por frame con <code>dets</code>) para
+            que el replay pueda dibujar el overlay de detecciones.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Archivo .jsonl *</Label>
+            <Label>Total contado *</Label>
+            <Input
+              type="number"
+              min={0}
+              value={totalCount}
+              onChange={(e) => setTotalCount(e.target.value)}
+              placeholder="0"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Archivo .jsonl (opcional)</Label>
             <div
               className={[
                 "flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-center cursor-pointer transition-colors",
@@ -137,17 +149,6 @@ export default function UploadCountDialog({
                 const f = e.target.files?.[0]
                 if (f) acceptFile(f)
               }}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Total contado</Label>
-            <Input
-              type="number"
-              min={0}
-              value={totalCount}
-              onChange={(e) => setTotalCount(e.target.value)}
-              placeholder="Auto (track_ids distintos)"
             />
           </div>
         </div>

@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { BarChart3, Download, Loader2, Pencil, Play, RefreshCw, Trash2, UploadCloud } from "lucide-react"
+import { BarChart3, Download, FileUp, Loader2, Pencil, Play, RefreshCw, Trash2, UploadCloud } from "lucide-react"
 import { getRecordingFileUrl } from "@/api/recordings"
 import { LocationCell } from "@/components/LocationCell"
 import { formatDateTime, formatDuration, formatSize, rowStatus } from "@/lib/recordingFormat"
@@ -31,6 +31,7 @@ import SessionEditDialog from "./SessionEditDialog"
 import DetectionReplayDialog from "./DetectionReplayDialog"
 import RecountConfigDialog from "./RecountConfigDialog"
 import RipenessDialog from "./RipenessDialog"
+import UploadCountDialog from "@/modules/recordings/UploadCountDialog"
 
 const PAGE_SIZE = 13
 
@@ -65,6 +66,9 @@ export default function SessionsTable({
   // that will be used, lets the operator review/edit them, and only then runs
   // the count.
   const [recountSession, setRecountSession] = useState<Session | null>(null)
+  // Session whose manual-count-upload dialog is open (detections computed off
+  // the robot — own laptop/cloud — attached without running counting-worker).
+  const [uploadingCountSession, setUploadingCountSession] = useState<Session | null>(null)
 
   const handleSync = async (s: Session) => {
     setSyncingId(s.id)
@@ -295,6 +299,21 @@ export default function SessionsTable({
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
+                          title="Subir conteo manual (calculado fuera del robot)"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setUploadingCountSession(s)
+                          }}
+                        >
+                          <FileUp className="size-3.5" />
+                        </Button>
+                      )}
+                    {s.recording_uuid != null &&
+                      (mode === "robot" || s.uploaded_at != null) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
                           title="Ver grabación"
                           onClick={(e) => {
                             e.stopPropagation()
@@ -400,6 +419,21 @@ export default function SessionsTable({
           onOpenChange={(open) => { if (!open) setRecountSession(null) }}
           onEnqueued={() =>
             onSessionUpdated({ ...recountSession, count_status: "counting" })
+          }
+        />
+      )}
+
+      {uploadingCountSession?.recording_uuid && (
+        <UploadCountDialog
+          recordingUuid={uploadingCountSession.recording_uuid}
+          open={!!uploadingCountSession}
+          onOpenChange={(open) => { if (!open) setUploadingCountSession(null) }}
+          onSuccess={(updated) =>
+            onSessionUpdated({
+              ...uploadingCountSession,
+              count_status: updated.count_status,
+              count: updated.count,
+            })
           }
         />
       )}

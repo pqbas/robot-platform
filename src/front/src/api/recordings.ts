@@ -75,20 +75,20 @@ export function recountWithConfig(
 
 // Attach a manually-produced count to an uncounted recording, bypassing the
 // robot's counting-worker (e.g. detections computed locally/in the cloud
-// with a tweaked algorithm). totalCount omitted -> server derives it from
-// distinct track_ids in the uploaded JSONL.
+// with a tweaked algorithm). totalCount is mandatory; the per-frame JSONL is
+// optional (only needed to power the detection-replay overlay).
 export async function uploadRecordingCount(
   uuid: string,
-  file: File,
-  totalCount?: number,
+  totalCount: number,
+  file?: File,
 ): Promise<Recording> {
   const token = localStorage.getItem("auth_token")
   const headers: Record<string, string> = {}
   if (token) headers["Authorization"] = `Bearer ${token}`
 
   const fd = new FormData()
-  fd.append("file", file)
-  if (totalCount != null) fd.append("total_count", String(totalCount))
+  fd.append("total_count", String(totalCount))
+  if (file != null) fd.append("file", file)
 
   const res = await fetch(`/api/recordings/${uuid}/upload-count`, {
     method: "POST",

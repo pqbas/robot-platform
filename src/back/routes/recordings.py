@@ -23,6 +23,7 @@ from back.models import (
     FruitCrop,
     Fundo,
     Recording,
+    Session,
     SyncLog,
 )
 from back.schemas import (
@@ -513,21 +514,20 @@ async def recount(
 @router.post("/{uuid}/upload-count", response_model=RecordingOut)
 async def upload_count(
     uuid: str,
-    file: UploadFile = File(...),
-    total_count: int | None = Form(None),
+    total_count: int = Form(...),
+    file: UploadFile | None = File(None),
     db: AsyncSession = Depends(get_db),
 ):
     """Attach a manually-produced count to a recording, bypassing counting-worker.
 
     For experimenting with detection/tracking off the robot (own laptop, cloud):
-    download the MP4 via ``GET /file``, run any pipeline that reproduces the
-    counting-worker's per-frame JSONL contract (one line per frame:
-    ``{"frame","pts","dets":[{"cls","conf","bbox","track_id"}]}``), then upload
-    the result here. ``total_count`` is optional — if omitted it's derived as
-    the number of distinct ``track_id``s seen across all frames.
+    type the ``total_count`` you got; optionally also attach the per-frame JSONL
+    (same contract as the counting-worker's sidecar — one line per frame:
+    ``{"frame","pts","dets":[{"cls","conf","bbox","track_id"}]}``) so the replay
+    overlay has detections to draw. Downloadable via ``GET /file``.
 
-    404 if unknown, 409 if the recording hasn't finished, 422 if the file has
-    no valid JSONL lines.
+    404 if unknown, 409 if the recording hasn't finished, 422 if total_count is
+    negative or the attached file has no valid JSONL lines.
     """
     result = await db.execute(select(Recording).where(Recording.uuid == uuid))
     rec = result.scalar_one_or_none()
@@ -535,46 +535,63 @@ async def upload_count(
         raise HTTPException(404, "Recording not found")
     if rec.ended_at is None:
         raise HTTPException(409, "La grabación aún no ha terminado")
-    if total_count is not None and total_count < 0:
+    if total_count < 0:
         raise HTTPException(422, "total_count no puede ser negativo")
 
-    raw = await file.read()
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        raise HTTPException(422, "El archivo no es texto UTF-8 válido")
-
-    track_ids: set[int] = set()
-    valid_lines = 0
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    if file is not None:
+        raw = await file.read()
         try:
-            frame = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        valid_lines += 1
-        for det in frame.get("dets") or []:
-            tid = det.get("track_id")
-            if tid is not None:
-                track_ids.add(tid)
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            raise HTTPException(422, "El archivo no es texto UTF-8 válido")
 
-    if valid_lines == 0:
-        raise HTTPException(422, "El archivo no tiene líneas JSONL válidas")
+        valid_lines = 0
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            valid_lines += 1
 
-    jsonl_path = os.path.join(os.path.dirname(rec.file_path), f"{uuid}.jsonl")
-    os.makedirs(os.path.dirname(jsonl_path), exist_ok=True)
-    with open(jsonl_path, "w") as f:
-        f.write(text)
+        if valid_lines == 0:
+            raise HTTPException(422, "El archivo no tiene líneas JSONL válidas")
 
-    rec.count = total_count if total_count is not None else len(track_ids)
+        jsonl_path = os.path.join(os.path.dirname(rec.file_path), f"{uuid}.jsonl")
+        os.makedirs(os.path.dirname(jsonl_path), exist_ok=True)
+        with open(jsonl_path, "w") as f:
+            f.write(text)
+
+    rec.count = total_count
     rec.count_status = "done"
     rec.count_error = None
     rec.count_config = json.dumps({"source": "manual_upload", "uploaded_at": _now_iso()})
     # New sidecar content — clear so the sync poller re-pushes it (mirrors
     # what the offline counting-worker does when a (re)count finishes).
     rec.detections_uploaded_at = None
+
+    # Backfill the authoritative number onto any session already linked to
+    # this recording (same as counting_poller._process_worker_result), so a
+    # manual upload shows up correctly on the Sesiones page and in dashboard
+    # aggregates (which read Session.total_count directly, not the recording
+    # join).
+    linked_sessions = (
+        await db.execute(select(Session).where(Session.recording_uuid == uuid))
+    ).scalars().all()
+    for s in linked_sessions:
+        s.total_count = rec.count
+        await db.execute(
+            delete(SyncLog).where(
+                (SyncLog.table_name == "sessions") & (SyncLog.record_uuid == s.uuid)
+            )
+        )
+    await db.execute(
+        delete(SyncLog).where(
+            (SyncLog.table_name == "recordings") & (SyncLog.record_uuid == uuid)
+        )
+    )
 
     await db.flush()
     await db.refresh(rec)
