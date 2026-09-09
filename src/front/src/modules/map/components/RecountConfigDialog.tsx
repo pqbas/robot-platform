@@ -166,7 +166,9 @@ export default function RecountConfigDialog({
     : []
   const isTiled = cfg?.method === "tiled"
 
-  const sources = ["uploaded", "library"] as const
+  const sources = ["local", "uploaded", "library"] as const
+  const sourceLabel = (src: string) =>
+    src === "local" ? "Locales" : src === "uploaded" ? "Subidos" : "Librería"
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -194,7 +196,7 @@ export default function RecountConfigDialog({
                     return (
                       <SelectGroup key={src}>
                         <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                          {src === "uploaded" ? "Subidos" : "Librería"}
+                          {sourceLabel(src)}
                         </SelectLabel>
                         {group.map((o) => (
                           <SelectItem

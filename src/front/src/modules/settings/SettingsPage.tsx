@@ -37,6 +37,7 @@ import { useAppMode } from "@/context/AppModeContext"
 import { forceSyncPull, forceSyncPush } from "@/api/sync"
 import ModelStatusInline from "./components/ModelStatusInline"
 import CountingMethodsPanel from "./components/CountingMethodsPanel"
+import AssignedModelsCard from "./components/AssignedModelsCard"
 
 const SELECTED_LABEL_KEY = "vision.selectedLabel.v3"
 const PREFERRED_DEFAULT_LABEL = "blueberry"
@@ -380,6 +381,12 @@ export default function SettingsPage() {
 
           {activeId === "detection" && config && (
             <SectionPanel title="Detección" description="Qué objetos detectar y con qué exigencia">
+              {mode === "robot" && (
+                <div className="border-b pb-5">
+                  <AssignedModelsCard />
+                </div>
+              )}
+
               {labels.length > 0 && (
                 <Field label="Objeto a detectar" htmlFor="object-select">
                   <Select value={draftKey} onValueChange={setDraftKey}>
@@ -387,13 +394,19 @@ export default function SettingsPage() {
                       <SelectValue placeholder="Selecciona un objeto" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(["uploaded", "library"] as const).map((src) => {
+                      {(["local", "uploaded", "library"] as const).map((src) => {
                         const group = labels.filter((l) => l.source === src)
                         if (group.length === 0) return null
+                        const groupLabel =
+                          src === "local"
+                            ? "Locales"
+                            : src === "uploaded"
+                              ? "Subidos"
+                              : "Librería"
                         return (
                           <SelectGroup key={src}>
                             <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                              {src === "uploaded" ? "Subidos" : "Librería"}
+                              {groupLabel}
                             </SelectLabel>
                             {group.map((l) => (
                               <SelectItem
