@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { Trash2, Upload } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -7,10 +8,13 @@ import { Separator } from "@/components/ui/separator"
 import {
   type EngineStatus,
   type LocalModel,
+  deleteLocalModel,
   getLocalModels,
   setTensorRT,
 } from "@/api/models"
 import { ApiError } from "@/api/client"
+import { useAppMode } from "@/context/AppModeContext"
+import LocalModelUploadDialog from "./LocalModelUploadDialog"
 
 const POLL_INTERVAL_MS = 5000
 
@@ -46,6 +50,22 @@ function StatusBadge({ status }: { status: EngineStatus }) {
   }
 }
 
+/** Where the model came from: uploaded here vs pushed by the server (sync). */
+function OriginBadge({ source }: { source: string }) {
+  if (source === "local") {
+    return (
+      <Badge variant="outline" className="border-primary/40 text-primary">
+        Local
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="outline" className="text-muted-foreground">
+      Servidor
+    </Badge>
+  )
+}
+
 function ToggleButton({
   enabled,
   busy,
@@ -70,9 +90,11 @@ function ToggleButton({
 }
 
 export default function AssignedModelsCard() {
+  const { mode } = useAppMode()
   const [models, setModels] = useState<LocalModel[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<Record<string, boolean>>({})
+  const [uploadOpen, setUploadOpen] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   async function refresh() {
@@ -143,9 +165,7 @@ export default function AssignedModelsCard() {
       )
     } catch (err) {
       // Revert optimistic update.
-      setModels((ms) =>
-        ms.map((m) => (m.uuid === model.uuid ? model : m)),
-      )
+      setModels((ms) => ms.map((m) => (m.uuid === model.uuid ? model : m)))
       if (err instanceof ApiError && err.status === 409) {
         toast.error("Conversión en curso, espera a que termine")
       } else {
@@ -158,6 +178,30 @@ export default function AssignedModelsCard() {
     }
   }
 
+  async function handleDelete(model: LocalModel) {
+    if (
+      !window.confirm(
+        `¿Borrar el modelo ${model.filename}? Se elimina el archivo del robot.`,
+      )
+    ) {
+      return
+    }
+    setBusy((b) => ({ ...b, [model.uuid]: true }))
+    try {
+      await deleteLocalModel(model.uuid)
+      setModels((ms) => ms.filter((m) => m.uuid !== model.uuid))
+      toast.success("Modelo borrado")
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error al borrar modelo"
+      toast.error(msg)
+    } finally {
+      setBusy((b) => ({ ...b, [model.uuid]: false }))
+    }
+  }
+
+  // The upload/delete flow is robot-only; in server mode this card is absent.
+  if (mode !== "robot") return null
+
   if (loading) {
     return (
       <div className="text-sm text-muted-foreground">
@@ -166,52 +210,92 @@ export default function AssignedModelsCard() {
     )
   }
 
-  if (models.length === 0) return null
-
   return (
     <div className="space-y-3">
-      <div>
-        <h2 className="text-sm font-semibold">Modelos asignados</h2>
-        <p className="text-xs text-muted-foreground">
-          Activa TensorRT para acelerar la inferencia en este robot. La
-          conversión se ejecuta localmente y puede tardar varios minutos.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold">Modelos asignados</h2>
+          <p className="text-xs text-muted-foreground">
+            Activa TensorRT para acelerar la inferencia en este robot. La
+            conversión se ejecuta localmente y puede tardar varios minutos.
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="shrink-0 gap-1.5"
+          onClick={() => setUploadOpen(true)}
+        >
+          <Upload className="h-3.5 w-3.5" />
+          Subir modelo
+        </Button>
       </div>
-      <div className="space-y-2">
-        {models.map((m, idx) => (
-          <div key={m.uuid}>
-            {idx > 0 && <Separator className="mb-2" />}
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{m.filename}</p>
-                {m.engine_error && m.engine_status === "error" && (
-                  <p className="mt-0.5 truncate text-xs text-destructive">
-                    {m.engine_error}
-                  </p>
+
+      {models.length === 0 ? (
+        <p className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
+          No hay modelos en este robot. Sube un .pt para usarlo sin depender del
+          servidor.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {models.map((m, idx) => (
+            <div key={m.uuid}>
+              {idx > 0 && <Separator className="mb-2" />}
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium">{m.filename}</p>
+                    <OriginBadge source={m.source} />
+                  </div>
+                  {m.engine_error && m.engine_status === "error" && (
+                    <p className="mt-0.5 truncate text-xs text-destructive">
+                      {m.engine_error}
+                    </p>
+                  )}
+                </div>
+                <StatusBadge status={m.engine_status} />
+                {m.engine_status === "error" ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleToggle(m, true)}
+                    disabled={busy[m.uuid]}
+                  >
+                    Reintentar
+                  </Button>
+                ) : (
+                  <ToggleButton
+                    enabled={m.tensorrt_enabled}
+                    busy={!!busy[m.uuid]}
+                    onClick={() => handleToggle(m, !m.tensorrt_enabled)}
+                  />
+                )}
+                {m.source === "local" && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleDelete(m)}
+                    disabled={busy[m.uuid]}
+                    title="Borrar modelo"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 )}
               </div>
-              <StatusBadge status={m.engine_status} />
-              {m.engine_status === "error" ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleToggle(m, true)}
-                  disabled={busy[m.uuid]}
-                >
-                  Reintentar
-                </Button>
-              ) : (
-                <ToggleButton
-                  enabled={m.tensorrt_enabled}
-                  busy={!!busy[m.uuid]}
-                  onClick={() => handleToggle(m, !m.tensorrt_enabled)}
-                />
-              )}
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
+
+      <LocalModelUploadDialog
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        onSuccess={refresh}
+      />
     </div>
   )
 }

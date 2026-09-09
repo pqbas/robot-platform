@@ -35,6 +35,12 @@ async def _upsert_models(remote_models: list[dict]) -> None:
         local_models = result.scalars().all()
         for local in local_models:
             if local.filename not in remote_filenames:
+                # Locally-uploaded models (uploaded on the robot itself) are not
+                # governed by the server, so a pull that doesn't list them must
+                # not delete them — otherwise the row and its .pt vanish on the
+                # next successful sync. See routes/models_local.py.
+                if local.source == "local":
+                    continue
                 await session.execute(
                     delete(DetectionModel).where(DetectionModel.filename == local.filename)
                 )

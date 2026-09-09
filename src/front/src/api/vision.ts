@@ -3,7 +3,8 @@ import { apiFetch } from "./client"
 export type AvailableLabelItem = {
   label: string
   model_filename: string
-  source: "uploaded" | "library"
+  // "local" = uploaded on this robot; "uploaded"/"library" come from the server.
+  source: "local" | "uploaded" | "library"
 }
 
 export function getAvailableLabels(): Promise<AvailableLabelItem[]> {
