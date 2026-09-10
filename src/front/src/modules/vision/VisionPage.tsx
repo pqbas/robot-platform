@@ -18,20 +18,14 @@ import {
 } from "@/api/vision"
 import { getCountingConfig, type CountingConfig } from "@/api/config"
 import { apiFetch } from "@/api/client"
+import {
+  NO_DETECTOR,
+  SELECTED_LABEL_KEY,
+  fromSelectKey,
+  toSelectKey,
+} from "@/lib/detectorSelection"
 
-const SELECTED_LABEL_KEY = "vision.selectedLabel.v3"
 const PREFERRED_DEFAULT_LABEL = "blueberry"
-
-// Composite key shared with SettingsPage so both pages agree on
-// "what's selected" via the same localStorage entry.
-function toSelectKey(l: { label: string; model_filename: string }) {
-  return `${l.label}::${l.model_filename}`
-}
-function fromSelectKey(key: string) {
-  const idx = key.indexOf("::")
-  if (idx === -1) return { label: key, model_filename: "" }
-  return { label: key.slice(0, idx), model_filename: key.slice(idx + 2) }
-}
 
 function formatDuration(start: Date | null): string {
   if (!start) return "0s"
@@ -50,6 +44,11 @@ export default function VisionPage() {
 
   const [selectedClass, setSelectedClass] = useState("")
   const [selectedModelFilename, setSelectedModelFilename] = useState("")
+  // "Sin detector" picked in Settings: record the video, run no inference.
+  // Read once on mount — navigating back here remounts the page.
+  const [noDetector] = useState(
+    () => localStorage.getItem(SELECTED_LABEL_KEY) === NO_DETECTOR,
+  )
   const [labels, setLabels] = useState<AvailableLabelItem[]>([])
   const [labelsLoading, setLabelsLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
@@ -71,7 +70,7 @@ export default function VisionPage() {
         setLabels(items)
         setLabelsLoading(false)
         const stored = localStorage.getItem(SELECTED_LABEL_KEY) ?? ""
-        if (items.length === 0) return
+        if (items.length === 0 || stored === NO_DETECTOR) return
         const { label: storedLabel, model_filename: storedFile } = fromSelectKey(stored)
         const initial =
           items.find((i) => i.label === storedLabel && i.model_filename === storedFile) ??
@@ -115,7 +114,7 @@ export default function VisionPage() {
       await apiFetch("/api/sync/pull", { method: "POST" })
       const fresh = await getAvailableLabels()
       setLabels(fresh)
-      if (fresh.length > 0 && !selectedClass) {
+      if (fresh.length > 0 && !selectedClass && !noDetector) {
         const first = fresh[0]
         setSelectedClass(first.label)
         setSelectedModelFilename(first.model_filename)
@@ -132,7 +131,7 @@ export default function VisionPage() {
   // The detector is optional: with no model configured the session records the
   // video and nothing else. Recording is owned by the session — there is no
   // separate "Grabar" button, so a run can never produce two videos.
-  const hasDetector = hasModels && !!selectedClass
+  const hasDetector = hasModels && !!selectedClass && !noDetector
 
   // Block navigation only while a session is running — idle connections
   // disconnect automatically via useWebRTC's unmount cleanup.
