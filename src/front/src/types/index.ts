@@ -28,7 +28,8 @@ export type Session = {
   device_id: string
   start_time: string
   end_time: string | null
-  target_class: string
+  // Null when the session was recorded without a detector configured.
+  target_class: string | null
   total_count: number
   recording_uuid: string | null
   // Offline counting status/number, derived from the linked recording.

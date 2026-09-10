@@ -5,7 +5,7 @@ import { apiFetch } from "./client"
 
 type CountingStopResult = {
   total_count: number
-  target_class: string
+  target_class: string | null
 }
 
 export type CountingStatus = {
@@ -15,7 +15,11 @@ export type CountingStatus = {
   total_count: number
 }
 
-export function startCounting(targetClass: string): Promise<{ active: boolean }> {
+// targetClass null starts a detector-less session: it records the video
+// without running live inference.
+export function startCounting(
+  targetClass: string | null,
+): Promise<{ active: boolean }> {
   return apiFetch("/api/counting/start", {
     method: "POST",
     body: JSON.stringify({ target_class: targetClass }),
@@ -55,7 +59,7 @@ export function getSession(id: number): Promise<Session> {
 
 // The robot saves a session without a location; the server assigns it later.
 export function saveSession(
-  targetClass: string,
+  targetClass: string | null,
   totalCount: number,
 ): Promise<Session> {
   return apiFetch("/api/sessions/save", {

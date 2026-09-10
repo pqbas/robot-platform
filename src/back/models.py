@@ -216,7 +216,9 @@ class Session(Base):
     )
     start_time: Mapped[str] = mapped_column(Text, nullable=False)
     end_time: Mapped[str | None] = mapped_column(Text, nullable=True)
-    target_class: Mapped[str] = mapped_column(Text, nullable=False)
+    # Nullable: a session recorded without a detector configured is just a
+    # video; a class can be attached later by re-counting the recording.
+    target_class: Mapped[str | None] = mapped_column(Text, nullable=True)
     total_count: Mapped[int] = mapped_column(Integer, default=0)
     recording_uuid: Mapped[str | None] = mapped_column(Text, nullable=True)
     camellon: Mapped["Camellon"] = relationship(back_populates="sessions")

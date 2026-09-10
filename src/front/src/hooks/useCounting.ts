@@ -12,7 +12,7 @@ export type UseCountingReturn = {
   state: CountingState
   startTime: Date | null
   targetClass: string | null
-  startCounting: (targetClass: string) => Promise<void>
+  startCounting: (targetClass: string | null) => Promise<void>
   stopCounting: () => Promise<void>
   save: () => Promise<void>
   discard: () => Promise<void>
@@ -24,7 +24,7 @@ export function useCounting(): UseCountingReturn {
   const [targetClass, setTargetClass] = useState<string | null>(null)
 
   const targetClassRef = useRef<string | null>(null)
-  const stopResultRef = useRef<{ target_class: string } | null>(null)
+  const stopResultRef = useRef<{ target_class: string | null } | null>(null)
 
   // Rehydrate from backend on mount: if another device left a session running,
   // recover its state so the user can stop/save it from here. The count itself
@@ -45,7 +45,7 @@ export function useCounting(): UseCountingReturn {
     }
   }, [])
 
-  const startCounting = useCallback(async (cls: string) => {
+  const startCounting = useCallback(async (cls: string | null) => {
     await apiStart(cls)
     setTargetClass(cls)
     targetClassRef.current = cls
@@ -60,7 +60,8 @@ export function useCounting(): UseCountingReturn {
   }, [])
 
   const save = useCallback(async () => {
-    const cls = stopResultRef.current?.target_class ?? targetClassRef.current ?? "person"
+    // null is a valid value here: a session recorded with no detector.
+    const cls = stopResultRef.current?.target_class ?? targetClassRef.current
     // The authoritative count arrives later (offline worker → poller backfill of
     // Session.total_count), so we save with 0 as a placeholder.
     await saveSession(cls, 0)

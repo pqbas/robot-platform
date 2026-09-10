@@ -82,7 +82,8 @@ class _InferenceWorker:
                 continue
 
             session = counter.get_active_session()
-            if not processing_enabled or session is None:
+            # A detector-less session records only — nothing to infer.
+            if not processing_enabled or session is None or session.target_class is None:
                 continue
 
             try:
@@ -157,7 +158,7 @@ class CameraStreamTrack(VideoStreamTrack):
         # Skip the frame copy + inference dispatch when no counting session is
         # active. submit_frame would copy ~6 MB at 1080p — wasted CPU + ~5 ms of
         # dead time per frame when nobody needs the overlay.
-        needs_inference = counter.get_active_session() is not None
+        needs_inference = counter.is_detector_active()
         if processing_enabled and needs_inference:
             self._worker.submit_frame(frame.copy())
 

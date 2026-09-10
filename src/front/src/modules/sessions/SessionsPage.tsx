@@ -162,7 +162,13 @@ export default function SessionsPage() {
 
   // Classes present in the empresa+fundo-narrowed sessions.
   const targetClasses = useMemo(() => {
-    return Array.from(new Set(sessionsByFundo.map((s) => s.target_class))).sort()
+    return Array.from(
+      new Set(
+        sessionsByFundo
+          .map((s) => s.target_class)
+          .filter((c): c is string => c != null),
+      ),
+    ).sort()
   }, [sessionsByFundo])
 
   const filteredSessions = useMemo(() => {

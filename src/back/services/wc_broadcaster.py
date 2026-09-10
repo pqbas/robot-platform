@@ -157,9 +157,11 @@ class WCBroadcaster:
                 self._frame_id += 1
 
                 session = counter.get_active_session()
-                if session is None:
+                # A detector-less session records only — no live inference.
+                detecting = session is not None and session.target_class is not None
+                if not detecting:
                     self._last_result = None
-                if camera_module.processing_enabled and session is not None:
+                if camera_module.processing_enabled and detecting:
                     self._inference.submit_frame(frame.copy())
 
                 for is_keyframe, nal_bytes in self._encoder.push_frame(frame):
@@ -184,7 +186,7 @@ class WCBroadcaster:
                         header["session_active"] = self._last_result.session_active
                         if self._last_result.error:
                             header["error"] = self._last_result.error
-                    elif session is not None:
+                    elif detecting:
                         header["target_class"] = session.target_class
                         header["session_active"] = True
 
