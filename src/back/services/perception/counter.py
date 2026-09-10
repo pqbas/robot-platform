@@ -7,7 +7,9 @@ logger = logging.getLogger("counter")
 
 @dataclass
 class CountingSession:
-    target_class: str
+    # None: the session was started without a detector configured — it records
+    # the video but runs no live inference.
+    target_class: str | None
     start_time: str
     # Kept for the status/stream payloads, but no longer accumulated live: the
     # authoritative number is computed offline by the counting-worker. Stays 0.
@@ -21,13 +23,17 @@ _active: CountingSession | None = None
 _last_recording_uuid: str | None = None
 
 
-def start_counting(target_class: str) -> CountingSession:
+def start_counting(target_class: str | None = None) -> CountingSession:
     """Start a counting session (marker only).
 
     The session marks that counting is active — it triggers the auto-recording
     and enables live inference for the visual overlay — but it no longer counts
     in real time. The count is recomputed offline from the recorded MP4 by the
     counting-worker, so there is no live ``ObjectCounter`` here.
+
+    ``target_class`` may be None: the session then records the video with no
+    detector attached (no live inference). A class can be attached later by
+    re-counting the recording.
     """
     global _active
     if _active is not None:
@@ -40,7 +46,7 @@ def start_counting(target_class: str) -> CountingSession:
     return _active
 
 
-def stop_counting() -> tuple[int, str]:
+def stop_counting() -> tuple[int, str | None]:
     """Stop the counting session. Returns (0, target_class).
 
     The total is always 0 — the authoritative count arrives later via the
@@ -72,3 +78,12 @@ def clear_last_recording_uuid() -> None:
 
 def is_session_active() -> bool:
     return _active is not None
+
+
+def is_detector_active() -> bool:
+    """True while a session with a detector is running.
+
+    Live inference keys off this, not ``is_session_active``: a detector-less
+    session must record without submitting frames to the inference worker.
+    """
+    return _active is not None and _active.target_class is not None

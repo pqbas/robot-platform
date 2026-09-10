@@ -13,7 +13,6 @@ import {
   RefreshCw,
   PanelLeftClose,
   PanelLeftOpen,
-  Video,
   Menu,
   X,
   LogOut,
@@ -58,7 +57,6 @@ export default function Sidebar() {
       const robotItems: NavItem[] = [
         { label: "Vision", path: "/vision", icon: Eye },
         { label: "Sesiones", path: "/sesiones", icon: Map },
-        { label: "Grabaciones", path: "/recordings", icon: Video },
         { label: "Configuración", path: "/settings", icon: Settings },
       ]
       return robotItems
@@ -67,7 +65,6 @@ export default function Sidebar() {
     const base: NavItem[] = [
       { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
       { label: "Sesiones", path: "/sesiones", icon: Map },
-      { label: "Grabaciones", path: "/recordings", icon: Video },
     ]
 
     if (user?.role === "admin") {

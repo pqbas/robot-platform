@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useBlocker } from "react-router-dom"
 import { toast } from "sonner"
-import { Circle, Monitor, RefreshCw, ScanEye, Square } from "lucide-react"
+import { Circle, Monitor, Play, RefreshCw, ScanEye, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useStream } from "@/hooks/useStream"
 import { useCounting } from "@/hooks/useCounting"
-import { useRecording } from "@/hooks/useRecording"
 import { useCameraResolution } from "@/hooks/useCameraResolution"
 import { useAppMode } from "@/context/AppModeContext"
 import VideoStream from "./components/VideoStream"
@@ -19,20 +18,14 @@ import {
 } from "@/api/vision"
 import { getCountingConfig, type CountingConfig } from "@/api/config"
 import { apiFetch } from "@/api/client"
+import {
+  NO_DETECTOR,
+  SELECTED_LABEL_KEY,
+  fromSelectKey,
+  toSelectKey,
+} from "@/lib/detectorSelection"
 
-const SELECTED_LABEL_KEY = "vision.selectedLabel.v3"
 const PREFERRED_DEFAULT_LABEL = "blueberry"
-
-// Composite key shared with SettingsPage so both pages agree on
-// "what's selected" via the same localStorage entry.
-function toSelectKey(l: { label: string; model_filename: string }) {
-  return `${l.label}::${l.model_filename}`
-}
-function fromSelectKey(key: string) {
-  const idx = key.indexOf("::")
-  if (idx === -1) return { label: key, model_filename: "" }
-  return { label: key.slice(0, idx), model_filename: key.slice(idx + 2) }
-}
 
 function formatDuration(start: Date | null): string {
   if (!start) return "0s"
@@ -46,12 +39,16 @@ export default function VisionPage() {
   const stream = useStream()
   const { kind, mediaRef, connectionState, frameData, fps, connect } = stream
   const counting = useCounting()
-  const recording = useRecording()
   const { mode } = useAppMode()
   const resolution = useCameraResolution(mode === "robot")
 
   const [selectedClass, setSelectedClass] = useState("")
   const [selectedModelFilename, setSelectedModelFilename] = useState("")
+  // "Sin detector" picked in Settings: record the video, run no inference.
+  // Read once on mount — navigating back here remounts the page.
+  const [noDetector] = useState(
+    () => localStorage.getItem(SELECTED_LABEL_KEY) === NO_DETECTOR,
+  )
   const [labels, setLabels] = useState<AvailableLabelItem[]>([])
   const [labelsLoading, setLabelsLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
@@ -73,7 +70,7 @@ export default function VisionPage() {
         setLabels(items)
         setLabelsLoading(false)
         const stored = localStorage.getItem(SELECTED_LABEL_KEY) ?? ""
-        if (items.length === 0) return
+        if (items.length === 0 || stored === NO_DETECTOR) return
         const { label: storedLabel, model_filename: storedFile } = fromSelectKey(stored)
         const initial =
           items.find((i) => i.label === storedLabel && i.model_filename === storedFile) ??
@@ -117,7 +114,7 @@ export default function VisionPage() {
       await apiFetch("/api/sync/pull", { method: "POST" })
       const fresh = await getAvailableLabels()
       setLabels(fresh)
-      if (fresh.length > 0 && !selectedClass) {
+      if (fresh.length > 0 && !selectedClass && !noDetector) {
         const first = fresh[0]
         setSelectedClass(first.label)
         setSelectedModelFilename(first.model_filename)
@@ -131,55 +128,22 @@ export default function VisionPage() {
   const connected = connectionState === "connected"
   const hasModels = labels.length > 0
   const isCounting = counting.state === "COUNTING"
-  const isRecording = recording.recording != null
+  // The detector is optional: with no model configured the session records the
+  // video and nothing else. Recording is owned by the session — there is no
+  // separate "Grabar" button, so a run can never produce two videos.
+  const hasDetector = hasModels && !!selectedClass && !noDetector
 
-  const handleStartRecording = async () => {
-    try {
-      await recording.start()
-      toast.success("Grabación iniciada")
-    } catch (e) {
-      toast.error(
-        "Error al iniciar grabación: " +
-          (e instanceof Error ? e.message : "desconocido"),
-      )
-    }
-  }
-
-  const handleStopRecording = async () => {
-    try {
-      const row = await recording.stop()
-      if (!row) {
-        toast.info("La grabación ya estaba detenida")
-        return
-      }
-      const dur = row.duration_seconds
-        ? `${Math.round(row.duration_seconds)}s`
-        : "—"
-      const size = row.file_size_bytes
-        ? `${(row.file_size_bytes / 1_048_576).toFixed(1)} MB`
-        : "—"
-      toast.success(`Video guardado — ${dur}, ${size}`)
-    } catch (e) {
-      toast.error(
-        "Error al detener grabación: " +
-          (e instanceof Error ? e.message : "desconocido"),
-      )
-    }
-  }
-
-  // Block navigation only while counting or recording — idle connections
+  // Block navigation only while a session is running — idle connections
   // disconnect automatically via useWebRTC's unmount cleanup.
-  const blocker = useBlocker(isCounting || isRecording)
+  const blocker = useBlocker(isCounting)
   useEffect(() => {
     if (blocker.state === "blocked") {
       blocker.reset()
-      if (isRecording) {
-        toast.warning("Detén la grabación antes de salir")
-      } else if (isCounting) {
-        toast.warning("Detén el conteo antes de salir")
+      if (isCounting) {
+        toast.warning("Detén la sesión antes de salir")
       }
     }
-  }, [blocker, isCounting, isRecording])
+  }, [blocker, isCounting])
 
   // Show inference errors as toast (debounced to avoid spam)
   const lastErrorRef = useRef<string | null>(null)
@@ -210,9 +174,11 @@ export default function VisionPage() {
     try {
       const cfg = await getCountingConfig()
       setCountingConfig(cfg)
-      await counting.startCounting(selectedClass)
+      setDurationStr("0s")
+      // No detector configured -> null: the session records without inference.
+      await counting.startCounting(hasDetector ? selectedClass : null)
     } catch (e) {
-      toast.error("Error al iniciar conteo: " + (e instanceof Error ? e.message : "desconocido"))
+      toast.error("Error al iniciar la sesión: " + (e instanceof Error ? e.message : "desconocido"))
     }
   }
 
@@ -221,7 +187,7 @@ export default function VisionPage() {
     try {
       await counting.stopCounting()
     } catch (e) {
-      toast.error("Error al detener conteo: " + (e instanceof Error ? e.message : "desconocido"))
+      toast.error("Error al detener la sesión: " + (e instanceof Error ? e.message : "desconocido"))
     }
   }
 
@@ -249,9 +215,9 @@ export default function VisionPage() {
         mediaRef={mediaRef}
         connected={connected}
         detections={frameData?.detections}
-        showDetections={isCounting && !!frameData}
+        showDetections={isCounting && hasDetector && !!frameData}
         countingLine={
-          connected && countingConfig
+          connected && hasDetector && countingConfig
             ? {
                 mode: countingConfig.count_mode,
                 threshold: countingConfig.threshold,
@@ -259,9 +225,9 @@ export default function VisionPage() {
               }
             : null
         }
-        showRoi={countingConfig?.roi_mode === "square"}
+        showRoi={hasDetector && countingConfig?.roi_mode === "square"}
       >
-        {isCounting && frameData && (
+        {isCounting && hasDetector && frameData && (
           <CountOverlay
             count={frameData.detections?.length ?? 0}
             targetClass={selectedClass}
@@ -273,31 +239,35 @@ export default function VisionPage() {
               <Badge variant="outline" className="bg-black/60 text-white border-none text-xs">
                 Stream: {fps.streamFps} FPS
               </Badge>
-              {isCounting && (
+              {isCounting && hasDetector && (
                 <Badge variant="outline" className="bg-black/60 text-white border-none text-xs">
                   YOLO: {fps.inferenceFps} FPS
                 </Badge>
               )}
             </div>
-            {isRecording && (
+            {isCounting && (
               <Badge
                 variant="destructive"
                 className="bg-red-600/90 text-white border-none text-xs flex items-center gap-1.5 animate-pulse"
               >
                 <Circle className="size-2 fill-current" />
-                REC {recording.durationStr}
+                REC {durationStr}
               </Badge>
             )}
-            {selectedClass && (
-              <Badge
-                variant="outline"
-                className="bg-black/60 text-white border-none text-xs flex items-center gap-1.5"
-              >
-                <ScanEye className="size-3" />
-                <span className="opacity-70">Detectando</span>
-                <span className="font-medium capitalize">{selectedClass}</span>
-              </Badge>
-            )}
+            <Badge
+              variant="outline"
+              className="bg-black/60 text-white border-none text-xs flex items-center gap-1.5"
+            >
+              <ScanEye className="size-3" />
+              {hasDetector ? (
+                <>
+                  <span className="opacity-70">Detectando</span>
+                  <span className="font-medium capitalize">{selectedClass}</span>
+                </>
+              ) : (
+                <span className="opacity-70">Sin detector — solo video</span>
+              )}
+            </Badge>
             {mode === "robot" && resolution.preset && (
               <Badge
                 variant="outline"
@@ -315,7 +285,8 @@ export default function VisionPage() {
       {!hasModels && (
         <div className="absolute bottom-4 left-2 z-10 flex max-w-[60%] flex-col items-start gap-2 rounded-md bg-background/80 px-3 py-2 text-xs backdrop-blur-sm sm:flex-row sm:items-center">
           <span className="text-muted-foreground">
-            No hay modelos asignados a este robot — el conteo está deshabilitado.
+            No hay modelos asignados a este robot — la sesión se grabará sin
+            detector y se podrá contar después.
           </span>
           <Button
             variant="outline"
@@ -342,44 +313,18 @@ export default function VisionPage() {
           </Button>
         )}
 
-        {connected && isRecording && (
-          <Button
-            variant="destructive"
-            onClick={handleStopRecording}
-            disabled={recording.loading || counting.state === "SAVING"}
-            title="Detener grabación"
-            className="size-16 flex-col gap-1 p-1 text-[10px] leading-tight bg-destructive backdrop-blur-sm hover:bg-destructive"
-          >
-            <Square className="size-5" />
-            <span>{recording.durationStr}</span>
-          </Button>
-        )}
-
-        {connected && !isRecording && counting.state === "IDLE" && (
-          <Button
-            onClick={handleStartRecording}
-            disabled={recording.loading}
-            title="Iniciar grabación"
-            className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-primary/85 backdrop-blur-sm hover:bg-primary"
-          >
-            <Circle className="size-5 fill-red-500 text-red-500" />
-            <span>Grabar</span>
-          </Button>
-        )}
-
-        {connected && counting.state === "IDLE" && !isRecording && (
+        {connected && counting.state === "IDLE" && (
           <Button
             onClick={handleStart}
-            disabled={!hasModels}
             title={
-              hasModels
-                ? "Iniciar conteo"
-                : "Sin modelos asignados a este robot"
+              hasDetector
+                ? `Iniciar sesión con detector (${selectedClass})`
+                : "Iniciar sesión sin detector — solo graba el video"
             }
             className="size-16 flex-col gap-1 p-1 text-[11px] leading-tight bg-primary/85 backdrop-blur-sm hover:bg-primary"
           >
-            <ScanEye className="size-5" />
-            <span>Contar</span>
+            <Play className="size-5 fill-current" />
+            <span>Iniciar</span>
           </Button>
         )}
 

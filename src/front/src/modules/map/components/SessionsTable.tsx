@@ -187,7 +187,12 @@ export default function SessionsTable({
                   )}
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
-                  <Badge variant="outline">{s.target_class}</Badge>
+                  <Badge
+                    variant="outline"
+                    className={s.target_class ? undefined : "text-muted-foreground"}
+                  >
+                    {s.target_class ?? "sin detector"}
+                  </Badge>
                 </TableCell>
                 <TableCell>
                   {s.count_status === "counting" || s.count_status === "pending" ? (

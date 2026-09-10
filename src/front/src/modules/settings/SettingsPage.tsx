@@ -32,6 +32,12 @@ import {
   selectLabel,
   type AvailableLabelItem,
 } from "@/api/vision"
+import {
+  NO_DETECTOR,
+  SELECTED_LABEL_KEY,
+  fromSelectKey,
+  toSelectKey,
+} from "@/lib/detectorSelection"
 import { useCameraResolution } from "@/hooks/useCameraResolution"
 import { useAppMode } from "@/context/AppModeContext"
 import { forceSyncPull, forceSyncPush } from "@/api/sync"
@@ -39,17 +45,7 @@ import ModelStatusInline from "./components/ModelStatusInline"
 import CountingMethodsPanel from "./components/CountingMethodsPanel"
 import AssignedModelsCard from "./components/AssignedModelsCard"
 
-const SELECTED_LABEL_KEY = "vision.selectedLabel.v3"
 const PREFERRED_DEFAULT_LABEL = "blueberry"
-
-function toSelectKey(l: AvailableLabelItem) {
-  return `${l.label}::${l.model_filename}`
-}
-function fromSelectKey(key: string) {
-  const idx = key.indexOf("::")
-  if (idx === -1) return { label: key, model_filename: "" }
-  return { label: key.slice(0, idx), model_filename: key.slice(idx + 2) }
-}
 
 // ApiError.message carries the raw response body; FastAPI HTTPException bodies
 // are {"detail": "..."}. Surface that detail when present so guards like
@@ -173,7 +169,9 @@ export default function SettingsPage() {
     setSaving(true)
     let anyError = false
 
-    if (draftKey) {
+    if (draftKey === NO_DETECTOR) {
+      localStorage.setItem(SELECTED_LABEL_KEY, NO_DETECTOR)
+    } else if (draftKey) {
       const { label, model_filename } = fromSelectKey(draftKey)
       const item = labels.find((l) => l.label === label && l.model_filename === model_filename)
       if (item) {
@@ -394,6 +392,12 @@ export default function SettingsPage() {
                       <SelectValue placeholder="Selecciona un objeto" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value={NO_DETECTOR}>
+                        <span>Sin detector</span>
+                        <span className="ml-2 text-xs text-muted-foreground font-normal normal-case">
+                          solo graba el video
+                        </span>
+                      </SelectItem>
                       {(["local", "uploaded", "library"] as const).map((src) => {
                         const group = labels.filter((l) => l.source === src)
                         if (group.length === 0) return null
@@ -425,7 +429,7 @@ export default function SettingsPage() {
                       })}
                     </SelectContent>
                   </Select>
-                  {mode === "robot" && (
+                  {mode === "robot" && draftKey !== NO_DETECTOR && (
                     <ModelStatusInline
                       filename={fromSelectKey(draftKey).model_filename || null}
                     />

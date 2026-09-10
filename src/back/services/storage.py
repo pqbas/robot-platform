@@ -215,9 +215,14 @@ async def create_session(
 
 
 async def create_completed_session(
-    db: AsyncSession, camellon_id: int | None, target_class: str, total_count: int
+    db: AsyncSession,
+    camellon_id: int | None,
+    target_class: str | None,
+    total_count: int,
 ) -> Session:
-    """Create a session that is already finished (start_time == end_time)."""
+    """Create a session that is already finished (start_time == end_time).
+
+    ``target_class`` is None for a session recorded without a detector."""
     now = datetime.now(timezone.utc).isoformat()
     sess = Session(
         camellon_id=camellon_id,
@@ -417,8 +422,12 @@ async def get_dashboard_stats(
             {"camellon_id": r.camellon_id, "nombre": r.nombre, "count": r.count}
             for r in cam_rows
         ],
+        # Detector-less sessions (target_class NULL) have no class to break
+        # down by — they only show up in the KPIs.
         "by_class": [
-            {"target_class": r.target_class, "count": r.count} for r in cls_rows
+            {"target_class": r.target_class, "count": r.count}
+            for r in cls_rows
+            if r.target_class is not None
         ],
     }
 

@@ -59,7 +59,8 @@ class SessionOut(BaseModel):
     device_id: str
     start_time: str
     end_time: str | None
-    target_class: str
+    # None: the session was recorded without a detector configured.
+    target_class: str | None = None
     total_count: int
     recording_uuid: str | None = None
     # Offline counting status/number derived from the linked recording (the
@@ -88,7 +89,8 @@ class SessionStopOut(BaseModel):
 class SessionSave(BaseModel):
     # Optional: save now, assign the location later (see SessionUpdate).
     camellon_id: int | None = None
-    target_class: str
+    # None when the session ran without a detector (video only).
+    target_class: str | None = None
     total_count: int
 
 
@@ -100,7 +102,9 @@ class SessionUpdate(BaseModel):
 # --- Counting (live) ---
 
 class CountingStartRequest(BaseModel):
-    target_class: str = "person"
+    # None starts a detector-less session: it records the video without
+    # running live inference.
+    target_class: str | None = None
 
 
 class CountingStatusOut(BaseModel):
@@ -112,7 +116,7 @@ class CountingStatusOut(BaseModel):
 
 class CountingStopOut(BaseModel):
     total_count: int
-    target_class: str
+    target_class: str | None = None
 
 
 # --- Event ---
@@ -349,7 +353,8 @@ class SyncSession(BaseModel):
     camellon_uuid: str | None = None
     start_time: str
     end_time: str | None = None
-    target_class: str
+    # None when the session ran without a detector.
+    target_class: str | None = None
     total_count: int = 0
     recording_uuid: str | None = None
 

@@ -61,8 +61,11 @@ export default function SidePanel({
     return map
   }, [camellones, locations])
 
+  // Detector-less sessions have no class — they aren't an option in the filter.
   const targetClasses = useMemo(() => {
-    const classes = new Set(sessions.map((s) => s.target_class))
+    const classes = new Set(
+      sessions.map((s) => s.target_class).filter((c): c is string => c != null),
+    )
     return Array.from(classes).sort()
   }, [sessions])
 
